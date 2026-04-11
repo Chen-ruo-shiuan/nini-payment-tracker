@@ -36,29 +36,41 @@ function formatDate(d: string) {
 }
 
 function formatAmount(n: number) {
-  return `$${n.toLocaleString()}`
+  return `$ ${n.toLocaleString()}`
 }
 
-function PaymentCard({ item, urgent }: { item: DashboardItem; urgent?: boolean }) {
+function Section({ label, items, urgent }: { label: string; items: DashboardItem[]; urgent?: boolean }) {
+  if (!items.length) return null
   return (
-    <Link href={`/customers/${item.customer_id}`}>
-      <div className={`bg-white rounded-xl p-4 border ${urgent ? 'border-red-300' : 'border-pink-200'} hover:shadow-md transition-shadow`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="font-semibold text-gray-800">{item.customer_name}</div>
-            <div className="text-sm text-gray-500 mt-0.5">
-              第 {item.period_number} 期 · {formatDate(item.due_date)}
+    <section className="space-y-2">
+      <p style={{ color: '#9a8f84', fontSize: '0.7rem', letterSpacing: '0.12em' }} className="uppercase">
+        {label}
+      </p>
+      {items.map(item => (
+        <Link key={item.id} href={`/customers/${item.customer_id}`}>
+          <div style={{
+            background: '#faf8f5',
+            border: `1px solid ${urgent ? '#c9a882' : '#e0d9d0'}`,
+            borderRadius: '6px',
+          }} className="p-4 hover:opacity-80 transition-opacity">
+            <div className="flex items-center justify-between">
+              <div>
+                <div style={{ color: '#2c2825', fontSize: '1rem' }}>{item.customer_name}</div>
+                <div style={{ color: '#9a8f84', fontSize: '0.78rem', marginTop: '2px' }}>
+                  第 {item.period_number} 期　{formatDate(item.due_date)}
+                </div>
+              </div>
+              <div className="text-right space-y-1">
+                <div style={{ color: urgent ? '#9a6a4a' : '#4a6b52', fontSize: '1.05rem', fontWeight: 500 }}>
+                  {formatAmount(item.amount)}
+                </div>
+                <MembershipBadge tier={item.membership_tier} />
+              </div>
             </div>
           </div>
-          <div className="text-right">
-            <div className={`font-bold text-lg ${urgent ? 'text-red-600' : 'text-pink-600'}`}>
-              {formatAmount(item.amount)}
-            </div>
-            <MembershipBadge tier={item.membership_tier} />
-          </div>
-        </div>
-      </div>
-    </Link>
+        </Link>
+      ))}
+    </section>
   )
 }
 
@@ -67,59 +79,30 @@ export default async function Dashboard() {
   const total = todayDue.length + weekDue.length + overdue.length
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between pt-2">
+    <div className="space-y-8">
+      <div className="flex items-start justify-between pt-2">
         <div>
-          <h1 className="text-2xl font-bold text-pink-700">付款總覽</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {total === 0 ? '本週無待繳款項 🎉' : `共 ${total} 筆待繳`}
+          <h1 style={{ color: '#2c2825', fontSize: '1.4rem', letterSpacing: '0.05em', fontWeight: 500 }}>
+            付款總覽
+          </h1>
+          <p style={{ color: '#9a8f84', fontSize: '0.8rem', marginTop: '4px' }}>
+            {total === 0 ? '本週無待繳款項' : `共 ${total} 筆待繳`}
           </p>
         </div>
         <PushSubscribeButton />
       </div>
 
-      {/* Overdue */}
-      {overdue.length > 0 && (
-        <section>
-          <h2 className="text-base font-bold text-red-600 mb-2 flex items-center gap-1">
-            ⚠️ 已逾期 ({overdue.length})
-          </h2>
-          <div className="space-y-2">
-            {overdue.map(item => <PaymentCard key={item.id} item={item} urgent />)}
-          </div>
-        </section>
-      )}
-
-      {/* Today */}
-      {todayDue.length > 0 && (
-        <section>
-          <h2 className="text-base font-bold text-orange-600 mb-2 flex items-center gap-1">
-            🔴 今天到期 ({todayDue.length})
-          </h2>
-          <div className="space-y-2">
-            {todayDue.map(item => <PaymentCard key={item.id} item={item} urgent />)}
-          </div>
-        </section>
-      )}
-
-      {/* This week */}
-      {weekDue.length > 0 && (
-        <section>
-          <h2 className="text-base font-bold text-amber-600 mb-2 flex items-center gap-1">
-            📅 本週到期 ({weekDue.length})
-          </h2>
-          <div className="space-y-2">
-            {weekDue.map(item => <PaymentCard key={item.id} item={item} />)}
-          </div>
-        </section>
-      )}
+      <Section label="已逾期" items={overdue} urgent />
+      <Section label="今日到期" items={todayDue} urgent />
+      <Section label="本週到期" items={weekDue} />
 
       {total === 0 && (
-        <div className="text-center py-16 text-gray-400">
-          <div className="text-5xl mb-3">🌸</div>
-          <p>本週沒有待繳款項</p>
-          <Link href="/customers/new" className="mt-4 inline-block text-pink-500 underline text-sm">
+        <div className="text-center py-20" style={{ color: '#c4b8aa' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>— 無 —</div>
+          <p style={{ fontSize: '0.85rem', letterSpacing: '0.08em' }}>本週沒有待繳款項</p>
+          <Link href="/customers/new"
+            style={{ color: '#9a8f84', fontSize: '0.8rem', marginTop: '16px', display: 'inline-block' }}
+            className="underline underline-offset-4">
             新增客人
           </Link>
         </div>

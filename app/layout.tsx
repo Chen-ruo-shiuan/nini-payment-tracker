@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist } from 'next/font/google'
+import { Noto_Serif_TC } from 'next/font/google'
 import './globals.css'
 import NavBar from '@/components/NavBar'
 
-const geist = Geist({ subsets: ['latin'] })
+const notoSerif = Noto_Serif_TC({ subsets: ['latin'], weight: ['400', '500', '700'] })
 
 export const metadata: Metadata = {
-  title: 'NINI 分期管理',
+  title: 'NINI 分期',
   description: 'NINIの皮膚療癒所 — 客人分期繳納系統',
   manifest: '/manifest.json',
   appleWebApp: {
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#f9a8d4',
+  themeColor: '#f7f4ef',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -30,9 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
-      <body className={`${geist.className} bg-pink-50 min-h-screen`}>
+      <body className={notoSerif.className} style={{ background: '#f7f4ef', minHeight: '100vh' }}>
         <NavBar />
-        <main className="max-w-2xl mx-auto px-4 pb-20 pt-4">
+        <main className="max-w-xl mx-auto px-5 pb-24 pt-5">
           {children}
         </main>
       </body>

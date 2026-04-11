@@ -30,9 +30,7 @@ export default function PushSubscribeButton() {
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(
-          process.env.NEXT_PUBLIC_VAPID_KEY || ''
-        ),
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_KEY || ''),
       })
       await fetch('/api/push/subscribe', {
         method: 'POST',
@@ -70,25 +68,18 @@ export default function PushSubscribeButton() {
   }
 
   if (status === 'unsupported') return null
-  if (status === 'denied') return (
-    <p className="text-sm text-red-500">⚠️ 通知已被封鎖，請到瀏覽器設定允許通知</p>
-  )
+  if (status === 'denied') return <p style={{ color: '#9a6a4a', fontSize: '0.75rem' }}>請到設定允許通知</p>
 
   return status === 'subscribed' ? (
-    <button
-      onClick={unsubscribe}
-      disabled={loading}
-      className="text-sm text-gray-500 hover:text-red-500 underline"
-    >
-      {loading ? '處理中...' : '🔕 關閉推播通知'}
+    <button onClick={unsubscribe} disabled={loading}
+      style={{ color: '#9a8f84', fontSize: '0.75rem' }} className="underline">
+      {loading ? '...' : '關閉通知'}
     </button>
   ) : (
-    <button
-      onClick={subscribe}
-      disabled={loading}
-      className="flex items-center gap-2 bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
-    >
-      {loading ? '開啟中...' : '🔔 開啟推播通知'}
+    <button onClick={subscribe} disabled={loading}
+      style={{ background: '#6b5f54', color: '#faf8f5', fontSize: '0.8rem', letterSpacing: '0.03em' }}
+      className="px-4 py-1.5 rounded text-sm transition-opacity hover:opacity-80">
+      {loading ? '開啟中…' : '開啟通知'}
     </button>
   )
 }

@@ -5,25 +5,27 @@ import { usePathname } from 'next/navigation'
 export default function NavBar() {
   const pathname = usePathname()
   const links = [
-    { href: '/', label: '首頁', icon: '🏠' },
-    { href: '/customers', label: '客人', icon: '👥' },
-    { href: '/customers/new', label: '新增', icon: '➕' },
+    { href: '/', label: '總覽' },
+    { href: '/customers', label: '客人' },
+    { href: '/customers/new', label: '新增' },
   ]
   return (
-    <nav className="bg-white border-b border-pink-200 sticky top-0 z-50">
-      <div className="max-w-2xl mx-auto px-4 flex items-center justify-between h-14">
-        <span className="font-bold text-pink-600 text-lg">🌸 NINI 分期</span>
+    <nav style={{ background: '#faf8f5', borderBottom: '1px solid #e0d9d0' }} className="sticky top-0 z-50">
+      <div className="max-w-xl mx-auto px-5 flex items-center justify-between h-14">
+        <span style={{ color: '#6b5f54', letterSpacing: '0.08em', fontSize: '0.95rem' }} className="font-medium">
+          NINI の 療癒所
+        </span>
         <div className="flex gap-1">
           {links.map(l => (
             <Link
               key={l.href}
               href={l.href}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors
-                ${pathname === l.href
-                  ? 'bg-pink-500 text-white'
-                  : 'text-pink-600 hover:bg-pink-100'}`}
+              style={pathname === l.href
+                ? { background: '#6b5f54', color: '#faf8f5' }
+                : { color: '#9a8f84' }}
+              className="px-3 py-1.5 rounded text-sm transition-colors hover:opacity-80"
             >
-              {l.icon} {l.label}
+              {l.label}
             </Link>
           ))}
         </div>

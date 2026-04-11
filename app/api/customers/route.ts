@@ -3,7 +3,6 @@ import { getDb } from '@/lib/db'
 
 export const runtime = 'nodejs'
 
-// GET /api/customers
 export async function GET() {
   const db = getDb()
   const customers = db.prepare(`
@@ -16,22 +15,17 @@ export async function GET() {
   return NextResponse.json(customers)
 }
 
-// POST /api/customers
 export async function POST(req: NextRequest) {
   const db = getDb()
   const body = await req.json()
   const {
-    name,
-    total_amount,
-    installment_amount,
-    payment_method,
-    total_periods,
-    membership_tier,
-    notes,
-    due_dates, // array of ISO date strings, one per period
+    name, total_amount, installment_amount, payment_method,
+    total_periods, membership_tier, notes,
+    due_dates,       // string[]
+    period_amounts,  // number[] — per-period amounts (new)
   } = body
 
-  if (!name || !total_amount || !installment_amount || !due_dates?.length) {
+  if (!name || !due_dates?.length) {
     return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
   }
 
@@ -39,7 +33,6 @@ export async function POST(req: NextRequest) {
     INSERT INTO customers (name, total_amount, installment_amount, payment_method, total_periods, membership_tier, notes)
     VALUES (@name, @total_amount, @installment_amount, @payment_method, @total_periods, @membership_tier, @notes)
   `)
-
   const insertInstallment = db.prepare(`
     INSERT INTO installments (customer_id, period_number, due_date, amount)
     VALUES (@customer_id, @period_number, @due_date, @amount)
@@ -48,21 +41,21 @@ export async function POST(req: NextRequest) {
   const transaction = db.transaction(() => {
     const result = insertCustomer.run({
       name,
-      total_amount,
-      installment_amount,
+      total_amount: total_amount || 0,
+      installment_amount: installment_amount || 0,
       payment_method: payment_method || 'cash',
       total_periods: total_periods || due_dates.length,
       membership_tier: membership_tier || '甜癒米',
       notes: notes || null,
     })
-
     const customerId = result.lastInsertRowid
     for (let i = 0; i < due_dates.length; i++) {
       insertInstallment.run({
         customer_id: customerId,
         period_number: i + 1,
         due_date: due_dates[i],
-        amount: installment_amount,
+        // Use per-period amount if provided, else fall back to installment_amount
+        amount: (period_amounts && period_amounts[i]) ? period_amounts[i] : (installment_amount || 0),
       })
     }
     return customerId
