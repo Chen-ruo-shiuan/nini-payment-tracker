@@ -24,10 +24,14 @@ export default function NavBar() {
       {/* Top header */}
       <header style={{ background: '#faf8f5', borderBottom: '1px solid #e0d9d0' }}
         className="sticky top-0 z-40">
-        <div className="max-w-xl mx-auto px-5 h-11 flex items-center">
+        <div className="max-w-xl mx-auto px-5 h-11 flex items-center justify-between">
           <span style={{ color: '#9a8f84', fontSize: '0.7rem', letterSpacing: '0.15em' }}>
             NINI の 療癒所　管理系統
           </span>
+          <Link href="/import"
+            style={{ color: '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
+            匯入
+          </Link>
         </div>
       </header>
 
