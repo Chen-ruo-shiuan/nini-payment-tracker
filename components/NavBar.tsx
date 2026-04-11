@@ -2,34 +2,59 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+const tabs = [
+  { href: '/',            label: '總覽',  icon: '⊡' },
+  { href: '/checkout',    label: '結帳',  icon: '⊟' },
+  { href: '/clients',     label: '客人',  icon: '⊛' },
+  { href: '/packages',    label: '套組',  icon: '⊕' },
+  { href: '/installments',label: '分期',  icon: '⊘' },
+  { href: '/expenses',    label: '支出',  icon: '⊖' },
+]
+
 export default function NavBar() {
   const pathname = usePathname()
-  const links = [
-    { href: '/', label: '總覽' },
-    { href: '/customers', label: '客人' },
-    { href: '/customers/new', label: '新增' },
-  ]
+
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/'
+    return pathname.startsWith(href)
+  }
+
   return (
-    <nav style={{ background: '#faf8f5', borderBottom: '1px solid #e0d9d0' }} className="sticky top-0 z-50">
-      <div className="max-w-xl mx-auto px-5 flex items-center justify-between h-14">
-        <span style={{ color: '#6b5f54', letterSpacing: '0.08em', fontSize: '0.95rem' }} className="font-medium">
-          NINI の 療癒所
-        </span>
-        <div className="flex gap-1">
-          {links.map(l => (
-            <Link
-              key={l.href}
-              href={l.href}
-              style={pathname === l.href
-                ? { background: '#6b5f54', color: '#faf8f5' }
-                : { color: '#9a8f84' }}
-              className="px-3 py-1.5 rounded text-sm transition-colors hover:opacity-80"
-            >
-              {l.label}
-            </Link>
-          ))}
+    <>
+      {/* Top header */}
+      <header style={{ background: '#faf8f5', borderBottom: '1px solid #e0d9d0' }}
+        className="sticky top-0 z-40">
+        <div className="max-w-xl mx-auto px-5 h-11 flex items-center">
+          <span style={{ color: '#9a8f84', fontSize: '0.7rem', letterSpacing: '0.15em' }}>
+            NINI の 療癒所　管理系統
+          </span>
         </div>
-      </div>
-    </nav>
+      </header>
+
+      {/* Bottom tab bar */}
+      <nav style={{ background: '#faf8f5', borderTop: '1px solid #e0d9d0' }}
+        className="fixed bottom-0 left-0 right-0 z-40 pb-safe">
+        <div className="max-w-xl mx-auto grid grid-cols-6">
+          {tabs.map(t => {
+            const active = isActive(t.href)
+            return (
+              <Link key={t.href} href={t.href}
+                style={{ color: active ? '#2c2825' : '#b4aa9e' }}
+                className="flex flex-col items-center py-2 gap-0.5 transition-colors">
+                <span style={{ fontSize: '1rem' }}>{t.icon}</span>
+                <span style={{
+                  fontSize: '0.6rem', letterSpacing: '0.04em',
+                  fontWeight: active ? 500 : 400,
+                  borderBottom: active ? '1px solid #6b5f54' : 'none',
+                  paddingBottom: active ? '1px' : '2px',
+                }}>
+                  {t.label}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+    </>
   )
 }

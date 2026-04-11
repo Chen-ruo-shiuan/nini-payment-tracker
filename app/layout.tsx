@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={notoSerif.className} style={{ background: '#f7f4ef', minHeight: '100vh' }}>
         <NavBar />
-        <main className="max-w-xl mx-auto px-5 pb-24 pt-5">
+        <main className="max-w-xl mx-auto px-5 pb-28 pt-4">
           {children}
         </main>
       </body>

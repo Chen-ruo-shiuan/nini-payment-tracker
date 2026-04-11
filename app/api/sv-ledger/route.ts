@@ -1,0 +1,45 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getDb } from '@/lib/db'
+
+export const runtime = 'nodejs'
+
+// GET /api/sv-ledger?client_id=
+export async function GET(req: NextRequest) {
+  const db = getDb()
+  const clientId = req.nextUrl.searchParams.get('client_id')
+  if (!clientId) return NextResponse.json({ error: '請提供 client_id' }, { status: 400 })
+
+  const entries = db.prepare(`
+    SELECT * FROM sv_ledger WHERE client_id = ? ORDER BY date DESC, created_at DESC
+  `).all(clientId)
+
+  const balance = (db.prepare(
+    'SELECT COALESCE(SUM(amount), 0) as total FROM sv_ledger WHERE client_id = ?'
+  ).get(clientId) as { total: number }).total
+
+  return NextResponse.json({ entries, balance })
+}
+
+// POST /api/sv-ledger
+export async function POST(req: NextRequest) {
+  const db = getDb()
+  const body = await req.json()
+  const { client_id, amount, note, date } = body
+
+  if (!client_id) return NextResponse.json({ error: '請提供 client_id' }, { status: 400 })
+  if (amount === undefined || amount === null) return NextResponse.json({ error: '請輸入金額' }, { status: 400 })
+
+  const result = db.prepare(`
+    INSERT INTO sv_ledger (client_id, amount, note, date)
+    VALUES (@client_id, @amount, @note, @date)
+  `).run({
+    client_id: Number(client_id),
+    amount: Number(amount),
+    note: note || null,
+    date: date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }),
+  })
+
+  return NextResponse.json({ id: result.lastInsertRowid }, { status: 201 })
+}
+
+// DELETE /api/sv-ledger/[id] — handled separately
