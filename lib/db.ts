@@ -12,9 +12,31 @@ export function getDb(): Database.Database {
     db = new Database(DB_PATH)
     db.pragma('journal_mode = WAL')
     db.pragma('foreign_keys = ON')
+    // Must rename old installments BEFORE initSchema creates the new one
+    renameOldInstallmentsIfNeeded(db)
     initSchema(db)
+    migrateLegacyCustomers(db)
+    migrateOldInstallments(db)
   }
   return db
+}
+
+// ─── 遷移：舊 installments 表（有 customer_id，無 client_id）→ 重新命名 ────────
+// 必須在 initSchema 之前執行，讓 CREATE TABLE IF NOT EXISTS 能建立新表
+function renameOldInstallmentsIfNeeded(db: Database.Database) {
+  const tableExists = db.prepare(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name='installments'`
+  ).get()
+  if (!tableExists) return
+
+  const cols = (db.prepare('PRAGMA table_info(installments)').all() as { name: string }[])
+    .map(c => c.name)
+
+  // Old schema has customer_id, new schema has client_id + contract_id
+  if (cols.includes('customer_id') && !cols.includes('client_id')) {
+    db.exec('ALTER TABLE installments RENAME TO installments_old')
+    console.log('[DB] Renamed old installments → installments_old')
+  }
 }
 
 function initSchema(db: Database.Database) {
@@ -186,8 +208,6 @@ function initSchema(db: Database.Database) {
     );
   `)
 
-  // 自動遷移：把舊 customers 資料搬到新 clients + installment_contracts
-  migrateLegacyCustomers(db)
 }
 
 function migrateLegacyCustomers(db: Database.Database) {
@@ -209,24 +229,18 @@ function migrateLegacyCustomers(db: Database.Database) {
 
   const clientsCount = db.prepare('SELECT COUNT(*) as n FROM clients').get() as { n: number }
   if (clientsCount.n > 0) {
+    // Clients already migrated, just drop old table
     db.prepare('DROP TABLE IF EXISTS customers').run()
     return
   }
 
   const insertClient = db.prepare(`
-    INSERT INTO clients (name, level, notes, created_at)
-    VALUES (@name, @level, @notes, @created_at)
+    INSERT INTO clients (name, level, note, legacy_id, created_at)
+    VALUES (@name, @level, @note, @legacy_id, @created_at)
   `)
   const insertContract = db.prepare(`
     INSERT INTO installment_contracts (client_id, total_amount, payment_method, total_periods, note, is_completed, created_at)
     VALUES (@client_id, @total_amount, @payment_method, @total_periods, @note, @is_completed, @created_at)
-  `)
-  const getOldInstallments = db.prepare(
-    'SELECT * FROM installments WHERE customer_id = ? ORDER BY period_number ASC'
-  )
-  const insertInstallment = db.prepare(`
-    INSERT INTO installments (contract_id, client_id, period_number, due_date, paid_at, amount, created_at)
-    VALUES (@contract_id, @client_id, @period_number, @due_date, @paid_at, @amount, @created_at)
   `)
 
   const migrate = db.transaction(() => {
@@ -234,46 +248,102 @@ function migrateLegacyCustomers(db: Database.Database) {
       const clientRes = insertClient.run({
         name: c.name,
         level: c.membership_tier || '甜癒米',
-        notes: c.notes || null,
+        note: c.notes || null,
+        legacy_id: String(c.id),
         created_at: c.created_at,
       })
       const clientId = clientRes.lastInsertRowid
 
-      const contractRes = insertContract.run({
+      insertContract.run({
         client_id: clientId,
         total_amount: c.total_amount,
-        payment_method: c.payment_method,
+        payment_method: c.payment_method || '現金',
         total_periods: c.total_periods,
         note: c.notes || null,
         is_completed: c.is_completed,
         created_at: c.created_at,
       })
-      const contractId = contractRes.lastInsertRowid
-
-      // Check if old installments table has customer_id column
-      try {
-        const oldInsts = getOldInstallments.all(c.id) as {
-          id: number; period_number: number; due_date: string;
-          paid_at: string | null; amount: number; created_at: string
-        }[]
-        for (const inst of oldInsts) {
-          insertInstallment.run({
-            contract_id: contractId,
-            client_id: clientId,
-            period_number: inst.period_number,
-            due_date: inst.due_date,
-            paid_at: inst.paid_at,
-            amount: inst.amount,
-            created_at: inst.created_at,
-          })
-        }
-      } catch {
-        // old installments table might not exist or have different schema
-      }
+      // installments are migrated separately in migrateOldInstallments()
     }
   })
 
   migrate()
   db.prepare('DROP TABLE IF EXISTS customers').run()
   console.log(`[DB] Migrated ${oldCustomers.length} legacy customers → clients`)
+}
+
+// ─── 遷移：installments_old（舊欄位）→ installments（新欄位） ─────────────────
+function migrateOldInstallments(db: Database.Database) {
+  const hasOldTable = db.prepare(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name='installments_old'`
+  ).get()
+  if (!hasOldTable) return
+
+  const oldInsts = db.prepare(
+    'SELECT * FROM installments_old ORDER BY customer_id, period_number ASC'
+  ).all() as {
+    customer_id: number; period_number: number; due_date: string;
+    paid_at: string | null; amount: number; created_at: string
+  }[]
+
+  if (oldInsts.length === 0) {
+    db.prepare('DROP TABLE IF EXISTS installments_old').run()
+    return
+  }
+
+  const insertInstallment = db.prepare(`
+    INSERT OR IGNORE INTO installments
+      (contract_id, client_id, period_number, due_date, paid_at, amount, created_at)
+    VALUES
+      (@contract_id, @client_id, @period_number, @due_date, @paid_at, @amount, @created_at)
+  `)
+
+  // Group installments by customer_id
+  const byCustomer = new Map<number, typeof oldInsts>()
+  for (const inst of oldInsts) {
+    const arr = byCustomer.get(inst.customer_id) ?? []
+    arr.push(inst)
+    byCustomer.set(inst.customer_id, arr)
+  }
+
+  const migrate = db.transaction(() => {
+    for (const [customerId, insts] of byCustomer) {
+      // Find the migrated client by legacy_id
+      const client = db.prepare(
+        `SELECT id FROM clients WHERE legacy_id = ?`
+      ).get(String(customerId)) as { id: number } | undefined
+      if (!client) continue
+
+      // Find (or create) contract for this client
+      let contract = db.prepare(
+        `SELECT id FROM installment_contracts WHERE client_id = ? ORDER BY created_at ASC LIMIT 1`
+      ).get(client.id) as { id: number } | undefined
+
+      if (!contract) {
+        const totalAmount = insts.reduce((s, i) => s + i.amount, 0)
+        const contractRes = db.prepare(`
+          INSERT INTO installment_contracts
+            (client_id, total_amount, payment_method, total_periods, is_completed)
+          VALUES (?, ?, '現金', ?, ?)
+        `).run(client.id, totalAmount, insts.length, insts.every(i => i.paid_at) ? 1 : 0)
+        contract = { id: Number(contractRes.lastInsertRowid) }
+      }
+
+      for (const inst of insts) {
+        insertInstallment.run({
+          contract_id: contract.id,
+          client_id: client.id,
+          period_number: inst.period_number,
+          due_date: inst.due_date,
+          paid_at: inst.paid_at,
+          amount: inst.amount,
+          created_at: inst.created_at,
+        })
+      }
+    }
+  })
+
+  migrate()
+  db.prepare('DROP TABLE IF EXISTS installments_old').run()
+  console.log(`[DB] Migrated ${oldInsts.length} legacy installments → new schema`)
 }
