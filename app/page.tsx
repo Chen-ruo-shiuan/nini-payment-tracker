@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import MembershipBadge from '@/components/MembershipBadge'
 import PushSubscribeButton from '@/components/PushSubscribeButton'
@@ -30,28 +30,89 @@ interface OverviewData {
   monthCheckouts: RecentCheckout[]
 }
 
+// Report types
+interface DailyReport {
+  type: 'daily'; date: string; total: number
+  checkouts: { id: number; date: string; total_amount: number; note: string | null; client_name: string | null; client_level: string | null; items: { category: string; label: string; price: number; qty: number }[] }[]
+  payBreakdown: { method: string; total: number }[]
+}
+interface MonthlyReport {
+  type: 'monthly'; month: string; monthTotal: number; monthCount: number
+  byDay: { date: string; count: number; total: number }[]
+  byMethod: { method: string; total: number; count: number }[]
+  byCategory: { category: string; total: number; qty: number }[]
+  topServices: { label: string; category: string; total: number; qty: number }[]
+}
+interface YearlyReport {
+  type: 'yearly'; year: string; yearTotal: number
+  byMonth: { month: string; count: number; total: number }[]
+  pkgStats: { prepaid: number; realized: number }
+}
+type ReportData = DailyReport | MonthlyReport | YearlyReport | null
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtAmt = (n: number) => `$\u00a0${n.toLocaleString()}`
 const fmtShort = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
 const fmtDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'short' })
+const fmtMonth = (m: string) => {
+  const [y, mo] = m.split('-')
+  return `${y} 年 ${parseInt(mo)} 月`
+}
 function thisMonthLabel() {
   return new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: 'long' })
 }
+function todayLocal() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+function thisMonthStr() {
+  return todayLocal().slice(0, 7)
+}
+function thisYearStr() {
+  return todayLocal().slice(0, 4)
+}
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, color, bg, border }: {
+// ─── Stat Card (expandable) ───────────────────────────────────────────────────
+function StatCard({ label, value, sub, color, bg, border, expanded, onClick, children }: {
   label: string; value: string; sub?: string
   color: string; bg: string; border: string
+  expanded?: boolean; onClick?: () => void
+  children?: React.ReactNode
 }) {
   return (
-    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: '8px', padding: '14px' }}>
-      <div style={{ color: '#9a8f84', fontSize: '0.68rem', letterSpacing: '0.08em' }}>{label}</div>
-      <div style={{ color, fontSize: '1.25rem', fontWeight: 600, marginTop: '4px', letterSpacing: '-0.01em' }}>
-        {value}
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: '8px', overflow: 'hidden' }}>
+      <div
+        style={{ padding: '14px', cursor: onClick ? 'pointer' : 'default' }}
+        onClick={onClick}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ color: '#9a8f84', fontSize: '0.68rem', letterSpacing: '0.08em' }}>{label}</div>
+          {onClick && (
+            <span style={{ color: '#b4aa9e', fontSize: '0.65rem', marginTop: '1px' }}>
+              {expanded ? '▲' : '▼'}
+            </span>
+          )}
+        </div>
+        <div style={{ color, fontSize: '1.25rem', fontWeight: 600, marginTop: '4px', letterSpacing: '-0.01em' }}>
+          {value}
+        </div>
+        {sub && <div style={{ color: '#b4aa9e', fontSize: '0.7rem', marginTop: '3px' }}>{sub}</div>}
       </div>
-      {sub && <div style={{ color: '#b4aa9e', fontSize: '0.7rem', marginTop: '3px' }}>{sub}</div>}
+      {expanded && children && (
+        <div style={{ borderTop: `1px solid ${border}`, padding: '10px 14px', background: 'rgba(255,255,255,0.5)' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DetailRow({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
+      <span style={{ color: muted ? '#b4aa9e' : '#6b5f54', fontSize: '0.75rem' }}>{label}</span>
+      <span style={{ color: muted ? '#b4aa9e' : '#2c2825', fontSize: '0.78rem', fontWeight: 500 }}>{value}</span>
     </div>
   )
 }
@@ -110,7 +171,6 @@ function PackageRow({ pkg }: { pkg: ActivePackage }) {
               {pkg.client_level && <MembershipBadge tier={pkg.client_level as MembershipLevel} />}
             </div>
             <div style={{ color: '#6b5f54', fontSize: '0.8rem', marginTop: '2px' }}>{pkg.service_name}</div>
-            {/* Progress bar */}
             <div style={{ marginTop: '6px' }}>
               <div style={{ background: '#f0ebe4', borderRadius: '4px', height: '5px', overflow: 'hidden' }}>
                 <div style={{ background: '#9ab89e', width: `${pct}%`, height: '100%', borderRadius: '4px' }} />
@@ -120,7 +180,7 @@ function PackageRow({ pkg }: { pkg: ActivePackage }) {
               </div>
             </div>
           </div>
-          <div style={{ textAlign: 'right', shrink: 0 } as React.CSSProperties}>
+          <div style={{ textAlign: 'right' } as React.CSSProperties}>
             <div style={{ color: '#4a6b52', fontSize: '0.82rem', fontWeight: 500 }}>剩 {remaining} 次</div>
             {pending > 0 && (
               <div style={{ color: '#9a6a4a', fontSize: '0.72rem', marginTop: '2px' }}>
@@ -142,11 +202,266 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
+// ─── Report Views ─────────────────────────────────────────────────────────────
+function DailyReportView({ data }: { data: DailyReport }) {
+  return (
+    <div className="space-y-4">
+      {/* Summary */}
+      <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }}
+        className="space-y-1">
+        <DetailRow label="結帳筆數" value={`${data.checkouts.length} 筆`} />
+        <DetailRow label="合計金額" value={fmtAmt(data.total)} />
+        {data.payBreakdown.map(p => (
+          <DetailRow key={p.method} label={`　└ ${p.method}`} value={fmtAmt(p.total)} muted />
+        ))}
+      </div>
+
+      {/* Checkout list */}
+      {data.checkouts.length === 0 ? (
+        <p style={{ color: '#c4b8aa', textAlign: 'center', fontSize: '0.85rem', padding: '20px 0' }}>無結帳記錄</p>
+      ) : (
+        <div className="space-y-2">
+          {data.checkouts.map(co => (
+            <div key={co.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ color: '#2c2825', fontSize: '0.9rem' }}>{co.client_name ?? '（未綁定）'}</span>
+                    {co.client_level && <MembershipBadge tier={co.client_level as MembershipLevel} />}
+                  </div>
+                  {co.note && <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '2px' }}>{co.note}</div>}
+                  <div style={{ marginTop: '4px' }} className="space-y-0.5">
+                    {co.items.map((it, i) => (
+                      <div key={i} style={{ color: '#9a8f84', fontSize: '0.72rem' }}>
+                        {it.label}　×{it.qty}　{fmtAmt(it.price * it.qty)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <span style={{ color: '#4a6b52', fontSize: '0.95rem', fontWeight: 500, flexShrink: 0, marginLeft: '8px' }}>
+                  {fmtAmt(co.total_amount)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MonthlyReportView({ data }: { data: MonthlyReport }) {
+  return (
+    <div className="space-y-4">
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+        <div style={{ background: '#edf3eb', border: '1px solid #9ab89e', borderRadius: '8px', padding: '12px' }}>
+          <div style={{ color: '#9a8f84', fontSize: '0.68rem' }}>月結帳總額</div>
+          <div style={{ color: '#4a6b52', fontSize: '1.1rem', fontWeight: 600, marginTop: '3px' }}>{fmtAmt(data.monthTotal)}</div>
+          <div style={{ color: '#b4aa9e', fontSize: '0.68rem', marginTop: '2px' }}>{data.monthCount} 筆</div>
+        </div>
+        <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px' }}>
+          <div style={{ color: '#9a8f84', fontSize: '0.68rem' }}>日均</div>
+          <div style={{ color: '#2c2825', fontSize: '1.1rem', fontWeight: 600, marginTop: '3px' }}>
+            {data.byDay.length > 0 ? fmtAmt(Math.round(data.monthTotal / data.byDay.length)) : '$\u00a00'}
+          </div>
+          <div style={{ color: '#b4aa9e', fontSize: '0.68rem', marginTop: '2px' }}>{data.byDay.length} 個結帳日</div>
+        </div>
+      </div>
+
+      {/* By method */}
+      {data.byMethod.length > 0 && (
+        <div>
+          <SectionLabel>付款方式</SectionLabel>
+          <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px', marginTop: '6px' }}
+            className="space-y-1">
+            {data.byMethod.map(m => (
+              <DetailRow key={m.method} label={m.method} value={`${fmtAmt(m.total)}　(${m.count} 筆)`} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* By category */}
+      {data.byCategory.length > 0 && (
+        <div>
+          <SectionLabel>消費類別</SectionLabel>
+          <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px', marginTop: '6px' }}
+            className="space-y-1">
+            {data.byCategory.map(c => (
+              <DetailRow key={c.category} label={c.category} value={`${fmtAmt(c.total)}　×${c.qty}`} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top services */}
+      {data.topServices.length > 0 && (
+        <div>
+          <SectionLabel>熱門服務</SectionLabel>
+          <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px', marginTop: '6px' }}
+            className="space-y-1">
+            {data.topServices.map((s, i) => (
+              <DetailRow key={i} label={`${i + 1}. ${s.label}`} value={`${fmtAmt(s.total)}　×${s.qty}`} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* By day */}
+      {data.byDay.length > 0 && (
+        <div>
+          <SectionLabel>每日明細</SectionLabel>
+          <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px', marginTop: '6px' }}
+            className="space-y-1">
+            {data.byDay.map(d => (
+              <DetailRow key={d.date} label={fmtShort(d.date)} value={`${fmtAmt(d.total)}　${d.count} 筆`} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {data.byDay.length === 0 && (
+        <p style={{ color: '#c4b8aa', textAlign: 'center', fontSize: '0.85rem', padding: '20px 0' }}>本月無結帳記錄</p>
+      )}
+    </div>
+  )
+}
+
+function YearlyReportView({ data }: { data: YearlyReport }) {
+  const maxVal = Math.max(...data.byMonth.map(m => m.total), 1)
+  return (
+    <div className="space-y-4">
+      {/* Summary */}
+      <div style={{ background: '#fdf5e0', border: '1px solid #e0c055', borderRadius: '8px', padding: '14px' }}>
+        <div style={{ color: '#9a8f84', fontSize: '0.68rem' }}>{data.year} 年結帳總額</div>
+        <div style={{ color: '#7a5a00', fontSize: '1.25rem', fontWeight: 600, marginTop: '4px' }}>{fmtAmt(data.yearTotal)}</div>
+        {data.pkgStats && (
+          <div style={{ color: '#b4aa9e', fontSize: '0.7rem', marginTop: '4px' }}>
+            套組預收 {fmtAmt(data.pkgStats.prepaid ?? 0)}　已核銷 {fmtAmt(data.pkgStats.realized ?? 0)}
+          </div>
+        )}
+      </div>
+
+      {/* Bar chart by month */}
+      {data.byMonth.length > 0 ? (
+        <div>
+          <SectionLabel>每月結帳</SectionLabel>
+          <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px', marginTop: '6px' }}
+            className="space-y-2">
+            {data.byMonth.map(m => (
+              <div key={m.month}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                  <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>{fmtMonth(m.month)}</span>
+                  <span style={{ color: '#2c2825', fontSize: '0.75rem', fontWeight: 500 }}>{fmtAmt(m.total)}</span>
+                </div>
+                <div style={{ background: '#f0ebe4', borderRadius: '3px', height: '6px', overflow: 'hidden' }}>
+                  <div style={{
+                    background: '#9ab89e',
+                    width: `${(m.total / maxVal) * 100}%`,
+                    height: '100%', borderRadius: '3px',
+                  }} />
+                </div>
+                <div style={{ color: '#b4aa9e', fontSize: '0.68rem', marginTop: '1px' }}>{m.count} 筆</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p style={{ color: '#c4b8aa', textAlign: 'center', fontSize: '0.85rem', padding: '20px 0' }}>本年無結帳記錄</p>
+      )}
+    </div>
+  )
+}
+
+// ─── Reports Tab ──────────────────────────────────────────────────────────────
+function ReportsTab() {
+  const [reportType, setReportType] = useState<'daily' | 'monthly' | 'yearly'>('monthly')
+  const [reportDate, setReportDate] = useState(todayLocal())
+  const [reportMonth, setReportMonth] = useState(thisMonthStr())
+  const [reportYear, setReportYear] = useState(thisYearStr())
+  const [reportData, setReportData] = useState<ReportData>(null)
+  const [loading, setLoading] = useState(false)
+
+  const fetchReport = useCallback(async () => {
+    setLoading(true)
+    let url = `/api/reports?type=${reportType}`
+    if (reportType === 'daily')   url += `&date=${reportDate}`
+    if (reportType === 'monthly') url += `&month=${reportMonth}`
+    if (reportType === 'yearly')  url += `&year=${reportYear}`
+    const res = await fetch(url)
+    const d = await res.json()
+    setReportData(d)
+    setLoading(false)
+  }, [reportType, reportDate, reportMonth, reportYear])
+
+  useEffect(() => { fetchReport() }, [fetchReport])
+
+  const subtabs: { key: 'daily' | 'monthly' | 'yearly'; label: string }[] = [
+    { key: 'daily',   label: '日報' },
+    { key: 'monthly', label: '月報' },
+    { key: 'yearly',  label: '年報' },
+  ]
+
+  return (
+    <div className="space-y-4">
+      {/* Sub-tab picker */}
+      <div style={{ display: 'flex', gap: '6px' }}>
+        {subtabs.map(t => (
+          <button key={t.key} onClick={() => setReportType(t.key)}
+            style={{
+              background: reportType === t.key ? '#6b5f54' : '#f0ebe4',
+              color: reportType === t.key ? '#f7f4ef' : '#6b5f54',
+              border: 'none', borderRadius: '4px',
+              fontSize: '0.78rem', padding: '5px 16px', cursor: 'pointer',
+            }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Date picker */}
+      {reportType === 'daily' && (
+        <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)}
+          style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', color: '#2c2825', fontSize: '0.9rem', padding: '8px 12px', width: '100%', outline: 'none' }} />
+      )}
+      {reportType === 'monthly' && (
+        <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)}
+          style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', color: '#2c2825', fontSize: '0.9rem', padding: '8px 12px', width: '100%', outline: 'none' }} />
+      )}
+      {reportType === 'yearly' && (
+        <select value={reportYear} onChange={e => setReportYear(e.target.value)}
+          style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', color: '#2c2825', fontSize: '0.9rem', padding: '8px 12px', width: '100%', outline: 'none' }}>
+          {Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i)).map(y => (
+            <option key={y} value={y}>{y} 年</option>
+          ))}
+        </select>
+      )}
+
+      {/* Report content */}
+      {loading ? (
+        <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '30px 0', fontSize: '0.85rem' }}>載入中…</div>
+      ) : reportData && reportData.type === 'daily' ? (
+        <DailyReportView data={reportData as DailyReport} />
+      ) : reportData && reportData.type === 'monthly' ? (
+        <MonthlyReportView data={reportData as MonthlyReport} />
+      ) : reportData && reportData.type === 'yearly' ? (
+        <YearlyReportView data={reportData as YearlyReport} />
+      ) : null}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function OverviewPage() {
   const [data, setData] = useState<OverviewData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'套組' | '分期' | '本月'>('套組')
+  const [activeTab, setActiveTab] = useState<'套組' | '分期' | '本月' | '報表'>('套組')
+  const [expandedCard, setExpandedCard] = useState<'prepaid' | 'realized' | 'pending' | 'month' | null>(null)
+
+  function toggleCard(card: typeof expandedCard) {
+    setExpandedCard(prev => prev === card ? null : card)
+  }
 
   useEffect(() => {
     fetch('/api/overview')
@@ -193,30 +508,115 @@ export default function OverviewPage() {
       <div className="space-y-2">
         <SectionLabel>預收 vs 實收</SectionLabel>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+
+          {/* 預收總額 */}
           <StatCard
             label="預收總額"
             value={fmtAmt(data.pkg_prepaid + data.sv_deposited)}
-            sub={`套組 ${fmtAmt(data.pkg_prepaid)}　儲值 ${fmtAmt(data.sv_deposited)}`}
+            sub={`套組 ＋ 儲值`}
             color="#7a5a00" bg="#fdf5e0" border="#e0c055"
-          />
+            expanded={expandedCard === 'prepaid'}
+            onClick={() => toggleCard('prepaid')}
+          >
+            <div className="space-y-1">
+              <DetailRow label="套組預收" value={fmtAmt(data.pkg_prepaid)} />
+              <DetailRow label="儲值加值" value={fmtAmt(data.sv_deposited)} />
+              <DetailRow label="儲值餘額" value={fmtAmt(data.sv_balance)} muted />
+            </div>
+          </StatCard>
+
+          {/* 已實收 */}
           <StatCard
             label="已實收"
             value={fmtAmt(data.pkg_realized + data.sv_used)}
-            sub={`核銷 ${fmtAmt(data.pkg_realized)}　儲值 ${fmtAmt(data.sv_used)}`}
+            sub={`核銷 ＋ 儲值消費`}
             color="#4a6b52" bg="#edf3eb" border="#9ab89e"
-          />
+            expanded={expandedCard === 'realized'}
+            onClick={() => toggleCard('realized')}
+          >
+            <div className="space-y-1">
+              <DetailRow label="課程核銷" value={fmtAmt(data.pkg_realized)} />
+              <DetailRow label="儲值消費" value={fmtAmt(data.sv_used)} />
+              <DetailRow label="合計" value={fmtAmt(data.pkg_realized + data.sv_used)} muted />
+            </div>
+          </StatCard>
+
+          {/* 待履行 */}
           <StatCard
             label="待履行"
             value={fmtAmt(data.pkg_pending)}
             sub={`${data.pkg_active} 件套組進行中`}
             color="#9a4a4a" bg="#fdf0f0" border="#e8a8a8"
-          />
+            expanded={expandedCard === 'pending'}
+            onClick={() => toggleCard('pending')}
+          >
+            <div className="space-y-2">
+              {data.activePackages.length === 0 ? (
+                <p style={{ color: '#c4b8aa', fontSize: '0.75rem', textAlign: 'center', padding: '8px 0' }}>無進行中套組</p>
+              ) : (
+                data.activePackages.slice(0, 5).map(pkg => {
+                  const pending = pkg.prepaid_amount - pkg.used_sessions * pkg.unit_price
+                  return (
+                    <Link key={pkg.id} href={`/clients/${pkg.client_id}`}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #f0ebe4' }}>
+                        <div>
+                          <div style={{ color: '#2c2825', fontSize: '0.78rem' }}>{pkg.client_name}</div>
+                          <div style={{ color: '#9a8f84', fontSize: '0.7rem' }}>{pkg.service_name}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ color: '#4a6b52', fontSize: '0.75rem' }}>
+                            剩 {pkg.total_sessions - pkg.used_sessions} 次
+                          </div>
+                          {pending > 0 && (
+                            <div style={{ color: '#9a4a4a', fontSize: '0.7rem' }}>{fmtAmt(pending)}</div>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })
+              )}
+              {data.activePackages.length > 5 && (
+                <p style={{ color: '#b4aa9e', fontSize: '0.7rem', textAlign: 'center' }}>
+                  還有 {data.activePackages.length - 5} 件…
+                </p>
+              )}
+            </div>
+          </StatCard>
+
+          {/* 本月結帳 */}
           <StatCard
             label={`${thisMonthLabel().slice(-2)} 結帳`}
             value={fmtAmt(data.month_total)}
             sub={`共 ${data.month_count} 筆記錄`}
             color="#2d4f9a" bg="#e8f0fc" border="#9ab0e8"
-          />
+            expanded={expandedCard === 'month'}
+            onClick={() => toggleCard('month')}
+          >
+            <div className="space-y-1">
+              {data.monthCheckouts.slice(0, 6).map(co => (
+                <div key={co.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #d0dcf0' }}>
+                  <div>
+                    <span style={{ color: '#2c2825', fontSize: '0.75rem' }}>{co.client_name ?? '—'}</span>
+                    {co.note && <span style={{ color: '#9a8f84', fontSize: '0.7rem', marginLeft: '6px' }}>{co.note}</span>}
+                    <span style={{ color: '#9ab0e8', fontSize: '0.68rem', marginLeft: '6px' }}>{fmtShort(co.date)}</span>
+                  </div>
+                  <span style={{ color: '#2d4f9a', fontSize: '0.75rem', fontWeight: 500 }}>{fmtAmt(co.total_amount)}</span>
+                </div>
+              ))}
+              {data.monthCheckouts.length > 6 && (
+                <p style={{ color: '#b4aa9e', fontSize: '0.7rem', textAlign: 'center' }}>
+                  還有 {data.monthCheckouts.length - 6} 筆…
+                </p>
+              )}
+              <div style={{ paddingTop: '4px' }}>
+                <button onClick={() => { setExpandedCard(null); setActiveTab('報表') }}
+                  style={{ color: '#2d4f9a', fontSize: '0.7rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  查看月報 →
+                </button>
+              </div>
+            </div>
+          </StatCard>
         </div>
         <p style={{ color: '#c4b8aa', fontSize: '0.68rem', paddingLeft: '2px' }}>
           ＊ 預收含套組預購及儲值加值；實收含課程核銷及儲值消費
@@ -241,10 +641,10 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {/* ── 三分頁切換 ── */}
+      {/* ── 四分頁切換 ── */}
       <div className="space-y-3">
-        <div style={{ display: 'flex', gap: '6px' }}>
-          {(['套組', '分期', '本月'] as const).map(tab => (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {((['套組', '分期', '本月', '報表'] as const)).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               style={{
                 background: activeTab === tab ? '#2c2825' : '#f0ebe4',
@@ -252,7 +652,7 @@ export default function OverviewPage() {
                 border: 'none', borderRadius: '4px',
                 fontSize: '0.78rem', padding: '5px 14px', cursor: 'pointer',
               }}>
-              {tab === '套組' ? `套組 (${data.pkg_active})` : tab === '分期' ? `分期待繳 (${totalDue})` : '本月結帳'}
+              {tab === '套組' ? `套組 (${data.pkg_active})` : tab === '分期' ? `分期 (${totalDue})` : tab}
             </button>
           ))}
         </div>
@@ -296,7 +696,6 @@ export default function OverviewPage() {
               </p>
             ) : (
               (() => {
-                // Group by date
                 const byDate = new Map<string, RecentCheckout[]>()
                 for (const co of data.monthCheckouts) {
                   const arr = byDate.get(co.date) ?? []
@@ -332,6 +731,9 @@ export default function OverviewPage() {
             )}
           </div>
         )}
+
+        {/* 報表 */}
+        {activeTab === '報表' && <ReportsTab />}
       </div>
 
       {/* ── 快速操作 ── */}
