@@ -62,10 +62,12 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // Convert teaUsage: {"YYYY-MM": [date, date]} → {"YYYY-MM": count}
-      const teaUsageConverted: Record<string, number> = {}
+      // Keep teaUsage as date arrays: {"YYYY-MM": ["YYYY-MM-DD", ...]}
+      const teaUsageConverted: Record<string, string[]> = {}
       for (const [month, val] of Object.entries(c.teaUsage ?? {})) {
-        teaUsageConverted[month] = Array.isArray(val) ? val.length : (val as number)
+        teaUsageConverted[month] = Array.isArray(val)
+          ? val.filter(v => typeof v === 'string')
+          : []
       }
 
       const res = insertClient.run({

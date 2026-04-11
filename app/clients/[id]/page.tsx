@@ -9,11 +9,9 @@ import {
 } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
 interface ContractWithInstallments extends InstallmentContract {
   installments: Installment[]
 }
-
 interface ClientDetail extends Client {
   stored_value: number
   active_contracts: number
@@ -25,45 +23,45 @@ interface ClientDetail extends Client {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const fmtDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })
-
 const fmtShort = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
-
 const fmtAmt = (n: number) => `$ ${n.toLocaleString()}`
-
-function today() {
+function todayStr() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
 }
+function thisMonth() {
+  return todayStr().slice(0, 7)
+}
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Level colors ─────────────────────────────────────────────────────────────
+const LEVEL_COLOR: Record<string, { bg: string; color: string; border: string }> = {
+  '甜癒米': { bg: '#fce8f0', color: '#9a3060', border: '#e8a0c0' },
+  '療癒米': { bg: '#e8f0fc', color: '#2d4f9a', border: '#9ab0e8' },
+  '悟癒米': { bg: '#fdf5e0', color: '#7a5a00', border: '#e0c055' },
+}
 
+// ─── Tab Button ───────────────────────────────────────────────────────────────
 function TabBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick}
-      style={{
-        color: active ? '#2c2825' : '#9a8f84',
-        borderBottom: active ? '2px solid #6b5f54' : '2px solid transparent',
-        background: 'none', border: 'none',
-        fontSize: '0.82rem', letterSpacing: '0.06em',
-        padding: '6px 10px', cursor: 'pointer',
-        whiteSpace: 'nowrap',
-      }}>
-      {label}
-    </button>
+    <button onClick={onClick} style={{
+      color: active ? '#2c2825' : '#9a8f84',
+      borderBottom: active ? '2px solid #6b5f54' : '2px solid transparent',
+      background: 'none', border: 'none',
+      fontSize: '0.82rem', letterSpacing: '0.06em',
+      padding: '6px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
+    }}>{label}</button>
   )
 }
 
+// ─── Installment Row ──────────────────────────────────────────────────────────
 function InstallmentRow({ inst, onPay, onUnpay }: {
-  inst: Installment
-  onPay: (id: number) => void
-  onUnpay: (id: number) => void
+  inst: Installment; onPay: (id: number) => void; onUnpay: (id: number) => void
 }) {
   const [loading, setLoading] = useState(false)
   const isPaid = !!inst.paid_at
-  const isOverdue = !isPaid && inst.due_date < today()
+  const isOverdue = !isPaid && inst.due_date < todayStr()
 
   async function toggle() {
     setLoading(true)
@@ -78,17 +76,10 @@ function InstallmentRow({ inst, onPay, onUnpay }: {
   }
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '8px 0', borderBottom: '1px solid #f0ebe4',
-    }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0ebe4' }}>
       <div>
         <span style={{ color: '#9a8f84', fontSize: '0.75rem', marginRight: '8px' }}>第 {inst.period_number} 期</span>
-        <span style={{
-          color: isPaid ? '#9a8f84' : isOverdue ? '#9a4a4a' : '#2c2825',
-          fontSize: '0.85rem',
-          textDecoration: isPaid ? 'line-through' : 'none',
-        }}>
+        <span style={{ color: isPaid ? '#9a8f84' : isOverdue ? '#9a4a4a' : '#2c2825', fontSize: '0.85rem', textDecoration: isPaid ? 'line-through' : 'none' }}>
           {fmtShort(inst.due_date)}
         </span>
         {inst.paid_at && (
@@ -98,33 +89,23 @@ function InstallmentRow({ inst, onPay, onUnpay }: {
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ color: isPaid ? '#9a8f84' : '#2c2825', fontSize: '0.9rem' }}>
-          {fmtAmt(inst.amount)}
-        </span>
-        <button onClick={toggle} disabled={loading}
-          style={{
-            background: isPaid ? '#f0ebe4' : '#2c2825',
-            color: isPaid ? '#9a8f84' : '#f7f4ef',
-            border: 'none', borderRadius: '4px',
-            fontSize: '0.72rem', padding: '4px 10px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}>
-          {isPaid ? '取消' : '繳納'}
-        </button>
+        <span style={{ color: isPaid ? '#9a8f84' : '#2c2825', fontSize: '0.9rem' }}>{fmtAmt(inst.amount)}</span>
+        <button onClick={toggle} disabled={loading} style={{
+          background: isPaid ? '#f0ebe4' : '#2c2825', color: isPaid ? '#9a8f84' : '#f7f4ef',
+          border: 'none', borderRadius: '4px', fontSize: '0.72rem', padding: '4px 10px',
+          cursor: loading ? 'not-allowed' : 'pointer',
+        }}>{isPaid ? '取消' : '繳納'}</button>
       </div>
     </div>
   )
 }
 
 function ContractCard({ contract, onChange }: {
-  contract: ContractWithInstallments
-  onChange: () => void
+  contract: ContractWithInstallments; onChange: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [insts, setInsts] = useState(contract.installments)
-
   const paidCount = insts.filter(i => i.paid_at).length
-  const totalCount = insts.length
   const remaining = insts.filter(i => !i.paid_at).reduce((s, i) => s + i.amount, 0)
 
   function handlePay(id: number) {
@@ -135,7 +116,6 @@ function ContractCard({ contract, onChange }: {
     setInsts(prev => prev.map(i => i.id === id ? { ...i, paid_at: null } : i))
     onChange()
   }
-
   async function deleteContract() {
     if (!confirm('確定要刪除此分期合約？')) return
     await fetch(`/api/contracts/${contract.id}`, { method: 'DELETE' })
@@ -146,133 +126,266 @@ function ContractCard({ contract, onChange }: {
     <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', marginBottom: '10px' }}>
       <div className="p-3 cursor-pointer flex items-center justify-between" onClick={() => setOpen(o => !o)}>
         <div>
-          <div style={{ color: '#2c2825', fontSize: '0.9rem' }}>
-            {contract.payment_method}　{fmtAmt(contract.total_amount)}
-          </div>
+          <div style={{ color: '#2c2825', fontSize: '0.9rem' }}>{contract.payment_method}　{fmtAmt(contract.total_amount)}</div>
           <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '2px' }}>
-            {paidCount}/{totalCount} 期已繳
-            {remaining > 0 && `　剩餘 ${fmtAmt(remaining)}`}
-            {contract.is_completed ? '　✓ 完成' : ''}
+            {paidCount}/{insts.length} 期已繳{remaining > 0 && `　剩餘 ${fmtAmt(remaining)}`}{contract.is_completed ? '　✓ 完成' : ''}
           </div>
         </div>
-        <div style={{ color: '#9a8f84', fontSize: '0.9rem' }}>{open ? '▲' : '▼'}</div>
+        <div style={{ color: '#9a8f84' }}>{open ? '▲' : '▼'}</div>
       </div>
-
       {open && (
         <div style={{ borderTop: '1px solid #e0d9d0', padding: '0 12px 12px' }}>
-          {insts.map(inst => (
-            <InstallmentRow key={inst.id} inst={inst} onPay={handlePay} onUnpay={handleUnpay} />
-          ))}
-          {contract.note && (
-            <p style={{ color: '#9a8f84', fontSize: '0.78rem', marginTop: '8px' }}>{contract.note}</p>
-          )}
-          <button onClick={deleteContract}
-            style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '8px', background: 'none', border: 'none', cursor: 'pointer' }}>
-            刪除合約
-          </button>
+          {insts.map(inst => <InstallmentRow key={inst.id} inst={inst} onPay={handlePay} onUnpay={handleUnpay} />)}
+          {contract.note && <p style={{ color: '#9a8f84', fontSize: '0.78rem', marginTop: '8px' }}>{contract.note}</p>}
+          <button onClick={deleteContract} style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '8px', background: 'none', border: 'none', cursor: 'pointer' }}>刪除合約</button>
         </div>
       )}
     </div>
   )
 }
 
-// ─── Benefits Tab ─────────────────────────────────────────────────────────────
-
-function BenefitsTab({ client }: { client: ClientDetail }) {
-  const level = client.level as MembershipLevel
+// ─── Benefits Tab (interactive) ───────────────────────────────────────────────
+function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
+  const id = client.id
+  const level = (client.level || '甜癒米') as MembershipLevel
+  const lc = LEVEL_COLOR[level] ?? LEVEL_COLOR['甜癒米']
   const teaQuota = TEA_QUOTA[level]
   const pointRate = LEVEL_POINTS[level]
-  const teaUsage: Record<string, number> = JSON.parse(client.tea_usage || '{}')
-  const thisMonth = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }).slice(0, 7)
-  const teaThisMonth = teaUsage[thisMonth] || 0
-  const yedomoRedeemed: number[] = JSON.parse(client.yodomo_redeemed || '[]')
 
-  // Membership duration
+  // tea_usage: {"YYYY-MM": ["YYYY-MM-DD", ...]}
+  const teaUsage: Record<string, string[]> = (() => {
+    try {
+      const raw = JSON.parse(client.tea_usage || '{}')
+      // Support both old (count) and new (array) format
+      const result: Record<string, string[]> = {}
+      for (const [k, v] of Object.entries(raw)) {
+        result[k] = Array.isArray(v) ? v : []
+      }
+      return result
+    } catch { return {} }
+  })()
+  const month = thisMonth()
+  const teaDates = teaUsage[month] ?? []
+  const [teaLoading, setTeaLoading] = useState<number | null>(null)
+
+  // membership duration
   const since = client.level_since
   let duration = ''
   if (since) {
     const start = new Date(since)
     const now = new Date()
     const months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
-    const years = Math.floor(months / 12)
-    const rem = months % 12
-    duration = years > 0 ? `${years} 年 ${rem} 個月` : `${rem} 個月`
+    const y = Math.floor(months / 12); const m = months % 12
+    duration = y > 0 ? `${y} 年 ${m} 個月` : `${m} 個月`
   }
 
+  // yodomo
   const cardPoints = client.yodomo_card_points
-  const nextMilestone = YODOMO_MILESTONES.find(m => m > (yedomoRedeemed.length * 2 > 0 ? Math.max(...yedomoRedeemed) : 0) && cardPoints < m)
+  const yodomoRedeemed: number[] = (() => {
+    try { return JSON.parse(client.yodomo_redeemed || '[]') } catch { return [] }
+  })()
+  const [yodomoLoading, setYodomoLoading] = useState(false)
+
+  // points adjust
+  const [ptDelta, setPtDelta] = useState('')
+  const [ptNote, setPtNote] = useState('')
+  const [ptLoading, setPtLoading] = useState(false)
+  const [showPtForm, setShowPtForm] = useState(false)
+
+  // yodomo adjust
+  const [ydDelta, setYdDelta] = useState('')
+  const [ydNote, setYdNote] = useState('')
+  const [showYdForm, setShowYdForm] = useState(false)
+
+  async function recordTea(slotIndex: number) {
+    setTeaLoading(slotIndex)
+    const date = prompt('請輸入日期（YYYY-MM-DD）', todayStr())
+    if (!date) { setTeaLoading(null); return }
+    await fetch(`/api/clients/${id}/tea`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date }),
+    })
+    setTeaLoading(null)
+    refresh()
+  }
+
+  async function cancelTea(date: string) {
+    if (!confirm(`確定取消 ${fmtShort(date)} 的下午茶記錄？`)) return
+    await fetch(`/api/clients/${id}/tea`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date }),
+    })
+    refresh()
+  }
+
+  async function adjustPoints(e: React.FormEvent) {
+    e.preventDefault()
+    if (!ptDelta) return
+    setPtLoading(true)
+    await fetch(`/api/clients/${id}/points`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delta: Number(ptDelta), note: ptNote }),
+    })
+    setPtDelta(''); setPtNote(''); setShowPtForm(false); setPtLoading(false)
+    refresh()
+  }
+
+  async function adjustYodomo(e: React.FormEvent) {
+    e.preventDefault()
+    if (!ydDelta) return
+    setYodomoLoading(true)
+    await fetch(`/api/clients/${id}/yodomo`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delta: Number(ydDelta), note: ydNote }),
+    })
+    setYdDelta(''); setYdNote(''); setShowYdForm(false); setYodomoLoading(false)
+    refresh()
+  }
+
+  async function redeemYodomo(milestone: number) {
+    if (!confirm(`確定兌換癒多多 ${milestone} 次里程碑？`)) return
+    setYodomoLoading(true)
+    const res = await fetch(`/api/clients/${id}/yodomo`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ redeem: milestone }),
+    })
+    const data = await res.json()
+    if (!res.ok) alert(data.error)
+    setYodomoLoading(false)
+    refresh()
+  }
 
   return (
     <div className="space-y-5">
-      {/* 會員期間 */}
-      <Section label="會員期間">
+
+      {/* ── 會員期間 ── */}
+      <BenefitSection label="會員期間">
         <div style={{ color: '#2c2825', fontSize: '0.9rem' }}>
-          {since ? `${fmtDate(since)} 入會` : '未設定升等日期'}
+          {since ? `${fmtDate(since)} 起` : '未設定升等日期'}
           {duration && <span style={{ color: '#9a8f84', marginLeft: '10px', fontSize: '0.82rem' }}>（{duration}）</span>}
         </div>
-      </Section>
+      </BenefitSection>
 
-      {/* 金米 */}
-      <Section label={`金米　（${pointRate} 點 / 千元）`}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-          <span style={{ color: '#2c2825', fontSize: '1.5rem', fontWeight: 500 }}>{client.points}</span>
-          <span style={{ color: '#9a8f84', fontSize: '0.82rem' }}>點</span>
+      {/* ── 金米 ── */}
+      <BenefitSection label={`金米　千元 ${pointRate} 點`} color="#c49a00" bg="#fdf5e0" border="#e0c055">
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+            <span style={{ color: '#7a5a00', fontSize: '1.6rem', fontWeight: 600 }}>{client.points}</span>
+            <span style={{ color: '#9a8f84', fontSize: '0.82rem' }}>點</span>
+          </div>
+          <button onClick={() => setShowPtForm(v => !v)} style={{
+            background: 'none', border: '1px solid #e0c055', color: '#7a5a00',
+            borderRadius: '4px', fontSize: '0.72rem', padding: '3px 10px', cursor: 'pointer',
+          }}>調整</button>
         </div>
-      </Section>
+        {showPtForm && (
+          <form onSubmit={adjustPoints} style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <input value={ptDelta} onChange={e => setPtDelta(e.target.value)}
+              placeholder="增減點數（負數為扣除）" type="number" style={{ ...miniInput, flex: '1', minWidth: '140px' }} />
+            <input value={ptNote} onChange={e => setPtNote(e.target.value)}
+              placeholder="備註（選填）" style={{ ...miniInput, flex: '1', minWidth: '100px' }} />
+            <button type="submit" disabled={ptLoading} style={miniBtn}>確認</button>
+          </form>
+        )}
+      </BenefitSection>
 
-      {/* 下午茶 */}
-      <Section label={`下午茶　（每月 ${teaQuota} 次）`}>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {Array.from({ length: teaQuota }).map((_, i) => (
-            <div key={i} style={{
-              width: '36px', height: '36px', borderRadius: '50%',
-              background: i < teaThisMonth ? '#d4b896' : '#f0ebe4',
-              border: `1px solid ${i < teaThisMonth ? '#c4a882' : '#e0d9d0'}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1rem',
-            }}>
-              {i < teaThisMonth ? '☕' : '○'}
-            </div>
-          ))}
+      {/* ── 迎賓下午茶 ── */}
+      <BenefitSection label={`迎賓下午茶　本月 ${teaQuota} 次`} color={lc.color} bg={lc.bg} border={lc.border}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+          {Array.from({ length: teaQuota }).map((_, i) => {
+            const date = teaDates[i]
+            return date ? (
+              // Used slot
+              <div key={i} style={{
+                background: lc.bg, border: `1px solid ${lc.border}`,
+                borderRadius: '8px', padding: '6px 10px', fontSize: '0.75rem',
+                display: 'flex', alignItems: 'center', gap: '6px',
+              }}>
+                <span style={{ color: lc.color }}>☕ {fmtShort(date)}</span>
+                <button onClick={() => cancelTea(date)} style={{
+                  background: 'none', border: 'none', color: '#c4b8aa',
+                  cursor: 'pointer', fontSize: '0.8rem', lineHeight: 1, padding: '0 2px',
+                }}>✕</button>
+              </div>
+            ) : (
+              // Empty slot
+              <button key={i} onClick={() => recordTea(i)}
+                disabled={teaLoading === i}
+                style={{
+                  background: '#faf8f5', border: '1px dashed #d9d0c5',
+                  borderRadius: '8px', padding: '6px 12px', fontSize: '0.75rem',
+                  color: '#9a8f84', cursor: 'pointer',
+                }}>
+                第 {i + 1} 次　＋記錄
+              </button>
+            )
+          })}
         </div>
-        <p style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '4px' }}>
-          本月已使用 {teaThisMonth}/{teaQuota} 次
+        <p style={{ color: '#9a8f84', fontSize: '0.72rem' }}>
+          本月已使用 {teaDates.length}/{teaQuota} 次
+          　{new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' })}
         </p>
-      </Section>
+      </BenefitSection>
 
-      {/* 癒多多 */}
-      <Section label="癒多多　（集點卡）">
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+      {/* ── 癒多多集點 ── */}
+      <BenefitSection label="癒多多集點卡" color="#7a3d8a" bg="#f5eaf8" border="#d4a8e0">
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+            <span style={{ color: '#7a3d8a', fontSize: '1.6rem', fontWeight: 600 }}>{cardPoints}</span>
+            <span style={{ color: '#9a8f84', fontSize: '0.82rem' }}>點</span>
+            <span style={{ color: '#b4aa9e', fontSize: '0.75rem' }}>（第 {client.yodomo_total_cards + 1} 輪）</span>
+          </div>
+          <button onClick={() => setShowYdForm(v => !v)} style={{
+            background: 'none', border: '1px solid #d4a8e0', color: '#7a3d8a',
+            borderRadius: '4px', fontSize: '0.72rem', padding: '3px 10px', cursor: 'pointer',
+          }}>調整</button>
+        </div>
+
+        {showYdForm && (
+          <form onSubmit={adjustYodomo} style={{ marginBottom: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <input value={ydDelta} onChange={e => setYdDelta(e.target.value)}
+              placeholder="增減點數（負數為扣除）" type="number" style={{ ...miniInput, flex: '1', minWidth: '140px' }} />
+            <input value={ydNote} onChange={e => setYdNote(e.target.value)}
+              placeholder="備註（選填）" style={{ ...miniInput, flex: '1', minWidth: '100px' }} />
+            <button type="submit" disabled={yodomoLoading} style={miniBtn}>確認</button>
+          </form>
+        )}
+
+        {/* Milestones */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {YODOMO_MILESTONES.map(m => {
-            const redeemed = yedomoRedeemed.includes(m)
-            const reached = cardPoints >= m
+            const redeemed = yodomoRedeemed.includes(m)
+            const reachable = cardPoints >= m && !redeemed
             return (
               <div key={m} style={{
-                padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem',
-                background: redeemed ? '#9ab89e' : reached ? '#d4b896' : '#f0ebe4',
-                color: redeemed ? '#fff' : reached ? '#6b4a2a' : '#9a8f84',
-                border: `1px solid ${redeemed ? '#9ab89e' : reached ? '#c4a882' : '#e0d9d0'}`,
+                borderRadius: '20px', fontSize: '0.78rem', padding: '5px 14px',
+                background: redeemed ? '#c4a8d0' : reachable ? '#e8c8f0' : '#f0ebe4',
+                color: redeemed ? '#fff' : reachable ? '#7a3d8a' : '#b4aa9e',
+                border: `1px solid ${redeemed ? '#b898c8' : reachable ? '#d4a8e0' : '#e0d9d0'}`,
+                display: 'flex', alignItems: 'center', gap: '6px',
               }}>
-                {m} 次 {redeemed ? '✓ 已兌換' : reached ? '可兌換' : ''}
+                <span>{m} 點</span>
+                {redeemed && <span>✓ 已兌換</span>}
+                {reachable && (
+                  <button onClick={() => redeemYodomo(m)} disabled={yodomoLoading} style={{
+                    background: '#7a3d8a', color: '#fff', border: 'none',
+                    borderRadius: '10px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer',
+                  }}>兌換</button>
+                )}
               </div>
             )
           })}
         </div>
-        <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '6px' }}>
-          累積 {cardPoints} 次（第 {client.yodomo_total_cards} 張卡）
-          {nextMilestone && `　下個里程碑：${nextMilestone} 次`}
-        </div>
-      </Section>
+      </BenefitSection>
     </div>
   )
 }
 
 // ─── Stored Value Tab ─────────────────────────────────────────────────────────
-
 function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
-  const [date, setDate] = useState(today())
+  const [date, setDate] = useState(todayStr())
   const [saving, setSaving] = useState(false)
 
   async function addEntry(e: React.FormEvent) {
@@ -280,59 +393,37 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
     if (!amount) return
     setSaving(true)
     await fetch('/api/sv-ledger', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: client.id, amount: Number(amount), note, date }),
     })
-    setAmount('')
-    setNote('')
-    setSaving(false)
+    setAmount(''); setNote(''); setSaving(false)
     refresh()
   }
 
   return (
     <div className="space-y-4">
-      <div style={{
-        background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px',
-        padding: '16px', textAlign: 'center',
-      }}>
+      <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '16px', textAlign: 'center' }}>
         <div style={{ color: '#9a8f84', fontSize: '0.78rem', letterSpacing: '0.08em' }}>儲值餘額</div>
-        <div style={{ color: '#2c2825', fontSize: '1.8rem', fontWeight: 500, marginTop: '4px' }}>
-          {fmtAmt(client.stored_value)}
-        </div>
+        <div style={{ color: '#2c2825', fontSize: '1.8rem', fontWeight: 500, marginTop: '4px' }}>{fmtAmt(client.stored_value)}</div>
       </div>
-
-      <form onSubmit={addEntry} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '14px' }}
-        className="space-y-3">
+      <form onSubmit={addEntry} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '14px' }} className="space-y-3">
         <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>新增儲值 / 扣款</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          <input value={amount} onChange={e => setAmount(e.target.value)}
-            placeholder="金額（負數為扣款）" type="number" {...inputProps} />
-          <input value={date} onChange={e => setDate(e.target.value)} type="date" {...inputProps} />
+          <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="金額（負數為扣款）" type="number" style={inputStyle} />
+          <input value={date} onChange={e => setDate(e.target.value)} type="date" style={inputStyle} />
         </div>
-        <input value={note} onChange={e => setNote(e.target.value)}
-          placeholder="備註（選填）" {...inputProps} />
-        <button type="submit" disabled={saving || !amount}
-          style={{
-            background: saving || !amount ? '#c4b8aa' : '#2c2825',
-            color: '#f7f4ef', border: 'none', borderRadius: '5px',
-            fontSize: '0.85rem', padding: '8px 20px', cursor: 'pointer',
-          }}>
-          {saving ? '儲存中…' : '新增'}
-        </button>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={inputStyle} />
+        <button type="submit" disabled={saving || !amount} style={{
+          background: saving || !amount ? '#c4b8aa' : '#2c2825', color: '#f7f4ef',
+          border: 'none', borderRadius: '5px', fontSize: '0.85rem', padding: '8px 20px', cursor: 'pointer',
+        }}>{saving ? '儲存中…' : '新增'}</button>
       </form>
-
       <div className="space-y-1">
         {client.sv_ledger.length === 0 && (
-          <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
-            尚無儲值記錄
-          </p>
+          <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無儲值記錄</p>
         )}
         {client.sv_ledger.map(e => (
-          <div key={e.id} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '8px 0', borderBottom: '1px solid #f0ebe4',
-          }}>
+          <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0ebe4' }}>
             <div>
               <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(e.date)}</span>
               {e.note && <span style={{ color: '#6b5f54', fontSize: '0.8rem', marginLeft: '8px' }}>{e.note}</span>}
@@ -348,33 +439,42 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
 }
 
 // ─── Packages Tab ─────────────────────────────────────────────────────────────
-
 function PackagesTab({ client }: { client: ClientDetail }) {
   return (
     <div className="space-y-2">
       {client.packages.length === 0 && (
-        <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
-          尚無套組
-        </p>
+        <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無套組</p>
       )}
       {client.packages.map(pkg => {
         const remaining = pkg.total_sessions - pkg.used_sessions
+        const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
         return (
           <div key={pkg.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
+              <div style={{ flex: 1 }}>
                 <div style={{ color: '#2c2825', fontSize: '0.9rem' }}>{pkg.service_name}</div>
                 <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '2px' }}>
                   {fmtShort(pkg.date)}　{pkg.payment_method}
                 </div>
+                {/* Progress bar */}
+                <div style={{ marginTop: '8px' }}>
+                  <div style={{ background: '#f0ebe4', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                    <div style={{
+                      background: remaining > 0 ? '#9ab89e' : '#c4b8aa',
+                      width: `${pct}%`, height: '100%', borderRadius: '4px',
+                      transition: 'width 0.3s',
+                    }} />
+                  </div>
+                  <div style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '3px' }}>
+                    已用 {pkg.used_sessions} / {pkg.total_sessions} 次
+                  </div>
+                </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ color: remaining > 0 ? '#2c2825' : '#9a8f84', fontSize: '0.9rem' }}>
-                  剩 {remaining} / {pkg.total_sessions} 次
+              <div style={{ textAlign: 'right', marginLeft: '12px' }}>
+                <div style={{ color: remaining > 0 ? '#4a6b52' : '#9a8f84', fontSize: '0.9rem', fontWeight: 500 }}>
+                  剩 {remaining} 次
                 </div>
-                <div style={{ color: '#9a8f84', fontSize: '0.75rem' }}>
-                  {fmtAmt(pkg.prepaid_amount)}
-                </div>
+                <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '2px' }}>{fmtAmt(pkg.prepaid_amount)}</div>
               </div>
             </div>
           </div>
@@ -385,9 +485,7 @@ function PackagesTab({ client }: { client: ClientDetail }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-
 type Tab = '分期' | '福利' | '套組' | '儲值'
-
 const TABS: Tab[] = ['分期', '福利', '套組', '儲值']
 
 export default function ClientDetailPage() {
@@ -403,8 +501,7 @@ export default function ClientDetailPage() {
     try {
       const res = await fetch(`/api/clients/${id}`)
       if (!res.ok) { router.push('/clients'); return }
-      const data = await res.json()
-      setClient(data)
+      setClient(await res.json())
     } finally {
       setLoading(false)
     }
@@ -418,12 +515,11 @@ export default function ClientDetailPage() {
     router.push('/clients')
   }
 
-  if (loading) {
-    return <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '60px 0' }}>載入中…</div>
-  }
+  if (loading) return <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '60px 0' }}>載入中…</div>
   if (!client) return null
 
-  const level = client.level as MembershipLevel
+  const level = (client.level || '甜癒米') as MembershipLevel
+  const lc = LEVEL_COLOR[level] ?? LEVEL_COLOR['甜癒米']
 
   return (
     <div className="space-y-5">
@@ -434,35 +530,26 @@ export default function ClientDetailPage() {
             <Link href="/clients" style={{ color: '#9a8f84', fontSize: '0.82rem' }}>← 客人</Link>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
               <h1 style={{ color: '#2c2825', fontSize: '1.4rem', fontWeight: 500 }}>{client.name}</h1>
-              <MembershipBadge tier={level} />
+              {client.level && <MembershipBadge tier={level} />}
             </div>
-            {client.phone && (
-              <div style={{ color: '#9a8f84', fontSize: '0.82rem', marginTop: '2px' }}>{client.phone}</div>
-            )}
-            {client.note && (
-              <div style={{ color: '#6b5f54', fontSize: '0.8rem', marginTop: '4px' }}>{client.note}</div>
-            )}
+            {client.phone && <div style={{ color: '#9a8f84', fontSize: '0.82rem', marginTop: '2px' }}>{client.phone}</div>}
+            {client.note && <div style={{ color: '#6b5f54', fontSize: '0.8rem', marginTop: '4px' }}>{client.note}</div>}
+            {client.birthday && <div style={{ color: '#b4aa9e', fontSize: '0.75rem', marginTop: '2px' }}>🎂 {client.birthday}</div>}
           </div>
-          <Link href={`/clients/${id}/edit`}
-            style={{ color: '#9a8f84', fontSize: '0.8rem', marginTop: '28px' }}>
-            編輯
-          </Link>
+          <Link href={`/clients/${id}/edit`} style={{ color: '#9a8f84', fontSize: '0.8rem', marginTop: '28px' }}>編輯</Link>
         </div>
 
         {/* Quick stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '14px' }}>
           {[
-            { label: '金米', value: `${client.points} 點` },
-            { label: '儲值', value: fmtAmt(client.stored_value) },
-            { label: '分期中', value: `${client.active_contracts} 件` },
-            { label: '套組', value: `${client.active_packages} 件` },
-          ].map(({ label, value }) => (
-            <div key={label} style={{
-              background: '#faf8f5', border: '1px solid #e0d9d0',
-              borderRadius: '5px', padding: '8px', textAlign: 'center',
-            }}>
+            { label: '金米', value: `${client.points} 點`, color: '#7a5a00', bg: '#fdf5e0', border: '#e0c055' },
+            { label: '儲值', value: fmtAmt(client.stored_value), color: '#2d4f9a', bg: '#e8f0fc', border: '#9ab0e8' },
+            { label: '分期中', value: `${client.active_contracts} 件`, color: '#9a6a4a', bg: '#fdf0e6', border: '#e8cba8' },
+            { label: '套組', value: `${client.active_packages} 件`, color: '#4a6b52', bg: '#edf3eb', border: '#9ab89e' },
+          ].map(({ label, value, color, bg, border }) => (
+            <div key={label} style={{ background: bg, border: `1px solid ${border}`, borderRadius: '5px', padding: '8px', textAlign: 'center' }}>
               <div style={{ color: '#9a8f84', fontSize: '0.65rem', letterSpacing: '0.05em' }}>{label}</div>
-              <div style={{ color: '#2c2825', fontSize: '0.82rem', marginTop: '2px' }}>{value}</div>
+              <div style={{ color, fontSize: '0.82rem', marginTop: '2px', fontWeight: 500 }}>{value}</div>
             </div>
           ))}
         </div>
@@ -473,57 +560,55 @@ export default function ClientDetailPage() {
         {TABS.map(t => <TabBtn key={t} label={t} active={tab === t} onClick={() => setTab(t)} />)}
       </div>
 
-      {/* Tab content */}
       {tab === '分期' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ color: '#9a8f84', fontSize: '0.78rem', letterSpacing: '0.06em' }}>
-              分期合約 {client.contracts.length} 件
-            </span>
+            <span style={{ color: '#9a8f84', fontSize: '0.78rem' }}>分期合約 {client.contracts.length} 件</span>
             <Link href={`/installments/new?client_id=${id}`}
               style={{ color: '#2c2825', fontSize: '0.78rem', background: '#f0ebe4', border: '1px solid #d9d0c5', borderRadius: '4px' }}
-              className="px-3 py-1.5">
-              ＋ 新增合約
-            </Link>
+              className="px-3 py-1.5">＋ 新增合約</Link>
           </div>
-          {client.contracts.length === 0 ? (
-            <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
-              尚無分期合約
-            </p>
-          ) : (
-            client.contracts.map(c => (
-              <ContractCard key={c.id} contract={c} onChange={load} />
-            ))
-          )}
+          {client.contracts.length === 0
+            ? <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無分期合約</p>
+            : client.contracts.map(c => <ContractCard key={c.id} contract={c} onChange={load} />)}
         </div>
       )}
 
-      {tab === '福利' && <BenefitsTab client={client} />}
+      {tab === '福利' && <BenefitsTab client={client} refresh={load} />}
       {tab === '套組' && <PackagesTab client={client} />}
       {tab === '儲值' && <StoredValueTab client={client} refresh={load} />}
 
       {/* Delete */}
       <div style={{ borderTop: '1px solid #f0ebe4', paddingTop: '16px', marginTop: '8px' }}>
-        <button onClick={deleteClient}
-          style={{ color: '#9a8f84', fontSize: '0.75rem', background: 'none', border: 'none', cursor: 'pointer' }}>
-          刪除此客人
-        </button>
+        <button onClick={deleteClient} style={{ color: '#9a8f84', fontSize: '0.75rem', background: 'none', border: 'none', cursor: 'pointer' }}>刪除此客人</button>
       </div>
     </div>
   )
 }
 
+// ─── Shared styles ─────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
   width: '100%', background: '#faf8f5', border: '1px solid #e0d9d0',
   borderRadius: '6px', color: '#2c2825', fontSize: '0.88rem',
   outline: 'none', padding: '9px 12px',
 }
-const inputProps = { style: inputStyle }
+const miniInput: React.CSSProperties = {
+  background: '#faf8f5', border: '1px solid #e0d9d0',
+  borderRadius: '5px', color: '#2c2825', fontSize: '0.82rem',
+  outline: 'none', padding: '6px 10px',
+}
+const miniBtn: React.CSSProperties = {
+  background: '#2c2825', color: '#f7f4ef', border: 'none',
+  borderRadius: '5px', fontSize: '0.82rem', padding: '6px 14px', cursor: 'pointer',
+}
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function BenefitSection({ label, children, color = '#6b5f54', bg = '#faf8f5', border = '#e0d9d0' }: {
+  label: string; children: React.ReactNode
+  color?: string; bg?: string; border?: string
+}) {
   return (
-    <div>
-      <p style={{ color: '#9a8f84', fontSize: '0.72rem', letterSpacing: '0.1em', marginBottom: '8px' }}>{label}</p>
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: '8px', padding: '14px' }}>
+      <p style={{ color, fontSize: '0.72rem', letterSpacing: '0.1em', marginBottom: '10px', fontWeight: 500 }}>{label}</p>
       {children}
     </div>
   )
