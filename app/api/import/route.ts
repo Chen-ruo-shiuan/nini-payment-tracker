@@ -30,6 +30,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── 計算每個 client 的歷史儲值金消費（從 checkouts 的付款中算）──────
+  // 因為 storedValue 是「扣除歷史消費後的餘額」，匯入時需要把
+  // 初始存入設為「餘額 + 歷史消費」，並為每筆歷史消費建立負數 ledger
+  const svUsedByClient = new Map<string, number>()
+  for (const co of rawCheckouts) {
+    if (!co.clientId) continue
+    for (const pay of co.payments ?? []) {
+      if (pay.method === '儲值金' && pay.amount > 0) {
+        svUsedByClient.set(co.clientId, (svUsedByClient.get(co.clientId) ?? 0) + pay.amount)
+      }
+    }
+  }
+
   const stats = { clients: 0, sv: 0, packages: 0, checkouts: 0, expenses: 0, skipped: 0 }
 
   const run = db.transaction(() => {
@@ -90,10 +103,13 @@ export async function POST(req: NextRequest) {
       stats.clients++
 
       // 儲值金 → sv_ledger
-      if ((c.storedValue ?? 0) > 0) {
+      // storedValue 是扣除歷史消費後的「餘額」；初始存入 = 餘額 + 歷史消費總和
+      const svHistorical = svUsedByClient.get(c.id) ?? 0
+      const svDeposit = (c.storedValue ?? 0) + svHistorical
+      if (svDeposit > 0) {
         insertSv.run({
           client_id: newId,
-          amount: c.storedValue,
+          amount: svDeposit,
           note: '匯入初始儲值金',
           date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }),
           legacy_id: `sv_${c.id}`,
@@ -155,6 +171,10 @@ export async function POST(req: NextRequest) {
       INSERT INTO checkout_payments (checkout_id, method, amount)
       VALUES (@checkout_id, @method, @amount)
     `)
+    const insertSvDeduct = db.prepare(`
+      INSERT OR IGNORE INTO sv_ledger (client_id, amount, note, date, legacy_id)
+      VALUES (@client_id, @amount, @note, @date, @legacy_id)
+    `)
 
     for (const co of rawCheckouts) {
       const existing = db.prepare('SELECT id FROM checkouts WHERE legacy_id = ?').get(co.id)
@@ -190,6 +210,17 @@ export async function POST(req: NextRequest) {
           method: pay.method,
           amount: pay.amount ?? 0,
         })
+
+        // 儲值金付款 → 建立負數 ledger（歷史消費記錄）
+        if (pay.method === '儲值金' && clientId && (pay.amount ?? 0) > 0) {
+          insertSvDeduct.run({
+            client_id: clientId,
+            amount: -(pay.amount),
+            note: `歷史結帳消費 (${co.date})`,
+            date: co.date,
+            legacy_id: `sv_deduct_${co.id}_${pay.id ?? pay.method}`,
+          })
+        }
       }
       stats.checkouts++
     }

@@ -19,6 +19,7 @@ export default function PackagesPage() {
   const [packages, setPackages] = useState<PkgRow[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'active' | 'all'>('active')
+  const [search, setSearch] = useState('')
   const [using, setUsing] = useState<number | null>(null)
 
   function load() {
@@ -28,6 +29,13 @@ export default function PackagesPage() {
       .then(d => { setPackages(d); setLoading(false) })
   }
   useEffect(load, [filter])
+
+  const filtered = search.trim()
+    ? packages.filter(p =>
+        p.client_name.toLowerCase().includes(search.toLowerCase()) ||
+        p.service_name.toLowerCase().includes(search.toLowerCase())
+      )
+    : packages
 
   async function quickUse(pkg: PkgRow) {
     if (!confirm(`核銷「${pkg.client_name}｜${pkg.service_name}」一次？`)) return
@@ -55,6 +63,9 @@ export default function PackagesPage() {
           <h1 style={{ color: '#2c2825', fontSize: '1.4rem', letterSpacing: '0.05em', fontWeight: 500 }}>套組</h1>
           <p style={{ color: '#9a8f84', fontSize: '0.78rem', marginTop: '2px' }}>
             {filter === 'active' ? '進行中套組' : '全部套組'}　共 {packages.length} 件
+            {search && filtered.length !== packages.length && (
+              <span style={{ color: '#c4b8aa' }}>　搜尋結果 {filtered.length} 件</span>
+            )}
           </p>
         </div>
         <Link href="/packages/new">
@@ -63,31 +74,45 @@ export default function PackagesPage() {
         </Link>
       </div>
 
-      {/* Filter */}
-      <div style={{ display: 'flex', gap: '6px' }}>
-        {(['active', 'all'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            style={{
-              background: filter === f ? '#2c2825' : '#f0ebe4',
-              color: filter === f ? '#f7f4ef' : '#6b5f54',
-              border: 'none', borderRadius: '4px',
-              fontSize: '0.78rem', padding: '5px 14px', cursor: 'pointer',
-            }}>
-            {f === 'active' ? '進行中' : '全部'}
-          </button>
-        ))}
+      {/* Filter + Search */}
+      <div className="space-y-2">
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {(['active', 'all'] as const).map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              style={{
+                background: filter === f ? '#2c2825' : '#f0ebe4',
+                color: filter === f ? '#f7f4ef' : '#6b5f54',
+                border: 'none', borderRadius: '4px',
+                fontSize: '0.78rem', padding: '5px 14px', cursor: 'pointer',
+              }}>
+              {f === 'active' ? '進行中' : '全部'}
+            </button>
+          ))}
+        </div>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="搜尋客人姓名 / 服務名稱…"
+          style={{
+            width: '100%', background: '#faf8f5', border: '1px solid #e0d9d0',
+            borderRadius: '6px', color: '#2c2825', fontSize: '0.88rem',
+            outline: 'none', padding: '9px 12px',
+          }}
+        />
       </div>
 
       {loading ? (
         <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '40px 0', fontSize: '0.85rem' }}>載入中…</div>
-      ) : packages.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '40px 0' }}>
           <div style={{ fontSize: '1.8rem', marginBottom: '10px' }}>— 無 —</div>
-          <p style={{ fontSize: '0.85rem' }}>{filter === 'active' ? '目前無進行中套組' : '尚無套組記錄'}</p>
+          <p style={{ fontSize: '0.85rem' }}>
+            {search ? `找不到「${search}」相關套組` : filter === 'active' ? '目前無進行中套組' : '尚無套組記錄'}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {packages.map(pkg => {
+          {filtered.map(pkg => {
             const remaining = pkg.total_sessions - pkg.used_sessions
             const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
             const pending = pkg.prepaid_amount - pkg.used_sessions * pkg.unit_price
