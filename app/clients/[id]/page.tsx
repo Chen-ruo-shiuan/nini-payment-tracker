@@ -57,9 +57,10 @@ function TabBtn({ label, active, onClick }: { label: string; active: boolean; on
 
 // ─── Installment Row ──────────────────────────────────────────────────────────
 function InstallmentRow({ inst, onPay, onUnpay }: {
-  inst: Installment; onPay: (id: number) => void; onUnpay: (id: number) => void
+  inst: Installment; onPay: (id: number, paidAt: string) => void; onUnpay: (id: number) => void
 }) {
   const [loading, setLoading] = useState(false)
+  const [payDate, setPayDate] = useState(todayStr)
   const isPaid = !!inst.paid_at
   const isOverdue = !isPaid && inst.due_date < todayStr()
 
@@ -69,8 +70,12 @@ function InstallmentRow({ inst, onPay, onUnpay }: {
       await fetch(`/api/installments/${inst.id}/pay`, { method: 'DELETE' })
       onUnpay(inst.id)
     } else {
-      await fetch(`/api/installments/${inst.id}/pay`, { method: 'POST' })
-      onPay(inst.id)
+      await fetch(`/api/installments/${inst.id}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paid_at: payDate }),
+      })
+      onPay(inst.id, payDate)
     }
     setLoading(false)
   }
@@ -88,8 +93,16 @@ function InstallmentRow({ inst, onPay, onUnpay }: {
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ color: isPaid ? '#9a8f84' : '#2c2825', fontSize: '0.9rem' }}>{fmtAmt(inst.amount)}</span>
+        {!isPaid && (
+          <input
+            type="date"
+            value={payDate}
+            onChange={e => setPayDate(e.target.value)}
+            style={{ border: '1px solid #ddd8d0', borderRadius: '4px', fontSize: '0.72rem', padding: '3px 6px', color: '#4a4642', background: '#faf8f5' }}
+          />
+        )}
         <button onClick={toggle} disabled={loading} style={{
           background: isPaid ? '#f0ebe4' : '#2c2825', color: isPaid ? '#9a8f84' : '#f7f4ef',
           border: 'none', borderRadius: '4px', fontSize: '0.72rem', padding: '4px 10px',
@@ -108,8 +121,8 @@ function ContractCard({ contract, onChange }: {
   const paidCount = insts.filter(i => i.paid_at).length
   const remaining = insts.filter(i => !i.paid_at).reduce((s, i) => s + i.amount, 0)
 
-  function handlePay(id: number) {
-    setInsts(prev => prev.map(i => i.id === id ? { ...i, paid_at: new Date().toISOString() } : i))
+  function handlePay(id: number, paidAt: string) {
+    setInsts(prev => prev.map(i => i.id === id ? { ...i, paid_at: paidAt } : i))
     onChange()
   }
   function handleUnpay(id: number) {

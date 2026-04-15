@@ -4,7 +4,7 @@ import { getDb } from '@/lib/db'
 export const runtime = 'nodejs'
 
 // POST /api/installments/[id]/pay
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const db = getDb()
 
@@ -15,7 +15,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!installment) return NextResponse.json({ error: '找不到分期' }, { status: 404 })
   if (installment.paid_at) return NextResponse.json({ error: '已繳納' }, { status: 400 })
 
-  db.prepare(`UPDATE installments SET paid_at = datetime('now') WHERE id = ?`).run(id)
+  let paidAt: string
+  try {
+    const body = await req.json()
+    paidAt = body.paid_at && /^\d{4}-\d{2}-\d{2}$/.test(body.paid_at) ? body.paid_at : new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  } catch {
+    paidAt = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  }
+
+  db.prepare(`UPDATE installments SET paid_at = ? WHERE id = ?`).run(paidAt, id)
 
   // Check if all installments for this contract are paid
   const unpaid = db.prepare(
