@@ -49,7 +49,7 @@ function initSchema(db: Database.Database) {
       name                TEXT NOT NULL,
       phone               TEXT,
       note                TEXT,
-      level               TEXT NOT NULL DEFAULT '甜癒米',
+      level               TEXT NOT NULL DEFAULT '癒米',
       level_since         TEXT,
       birthday            TEXT,
       points              INTEGER NOT NULL DEFAULT 0,
@@ -247,7 +247,7 @@ function migrateLegacyCustomers(db: Database.Database) {
     for (const c of oldCustomers) {
       const clientRes = insertClient.run({
         name: c.name,
-        level: c.membership_tier || '甜癒米',
+        level: c.membership_tier || '癒米',
         note: c.notes || null,
         legacy_id: String(c.id),
         created_at: c.created_at,

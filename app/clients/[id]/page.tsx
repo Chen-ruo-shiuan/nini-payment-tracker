@@ -37,6 +37,7 @@ function thisMonth() {
 
 // ─── Level colors ─────────────────────────────────────────────────────────────
 const LEVEL_COLOR: Record<string, { bg: string; color: string; border: string }> = {
+  '癒米':   { bg: '#f0ede8', color: '#706c68', border: '#c8c4be' },
   '甜癒米': { bg: '#fce8f0', color: '#9a3060', border: '#e8a0c0' },
   '療癒米': { bg: '#e8f0fc', color: '#2d4f9a', border: '#9ab0e8' },
   '悟癒米': { bg: '#fdf5e0', color: '#7a5a00', border: '#e0c055' },
@@ -160,8 +161,8 @@ function ContractCard({ contract, onChange }: {
 // ─── Benefits Tab (interactive) ───────────────────────────────────────────────
 function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
   const id = client.id
-  const level = (client.level || '甜癒米') as MembershipLevel
-  const lc = LEVEL_COLOR[level] ?? LEVEL_COLOR['甜癒米']
+  const level = (client.level || '癒米') as MembershipLevel
+  const lc = LEVEL_COLOR[level] ?? LEVEL_COLOR['癒米']
   const teaQuota = TEA_QUOTA[level]
   const pointRate = LEVEL_POINTS[level]
 
@@ -531,8 +532,8 @@ export default function ClientDetailPage() {
   if (loading) return <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '60px 0' }}>載入中…</div>
   if (!client) return null
 
-  const level = (client.level || '甜癒米') as MembershipLevel
-  const lc = LEVEL_COLOR[level] ?? LEVEL_COLOR['甜癒米']
+  const level = (client.level || '癒米') as MembershipLevel
+  const lc = LEVEL_COLOR[level] ?? LEVEL_COLOR['癒米']
 
   return (
     <div className="space-y-5">

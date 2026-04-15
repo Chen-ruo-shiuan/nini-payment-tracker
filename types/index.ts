@@ -1,20 +1,20 @@
 // ═══════════════════════════════
 //  Constants
 // ═══════════════════════════════
-export const MEMBERSHIP_LEVELS = ['甜癒米', '療癒米', '悟癒米'] as const
+export const MEMBERSHIP_LEVELS = ['癒米', '甜癒米', '療癒米', '悟癒米'] as const
 export type MembershipLevel = typeof MEMBERSHIP_LEVELS[number]
 
 export const LEVEL_POINTS: Record<MembershipLevel, number> = {
-  '甜癒米': 2, '療癒米': 4, '悟癒米': 5
+  '癒米': 1, '甜癒米': 2, '療癒米': 4, '悟癒米': 5
 }
 export const LEVEL_THRESHOLDS: Record<MembershipLevel, number> = {
-  '甜癒米': 38000, '療癒米': 48000, '悟癒米': 58000
+  '癒米': 0, '甜癒米': 38000, '療癒米': 48000, '悟癒米': 58000
 }
 export const NEXT_LEVEL: Partial<Record<MembershipLevel, MembershipLevel>> = {
-  '甜癒米': '療癒米', '療癒米': '悟癒米'
+  '癒米': '甜癒米', '甜癒米': '療癒米', '療癒米': '悟癒米'
 }
 export const TEA_QUOTA: Record<MembershipLevel, number> = {
-  '甜癒米': 1, '療癒米': 2, '悟癒米': 3
+  '癒米': 0, '甜癒米': 1, '療癒米': 2, '悟癒米': 3
 }
 export const YODOMO_THRESHOLD = 3000
 export const YODOMO_MILESTONES = [2, 4, 6]

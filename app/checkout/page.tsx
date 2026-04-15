@@ -105,7 +105,7 @@ export default function CheckoutPage() {
     .reduce((s, i) => s + (Number(i.price) || 0) * i.qty, 0)
 
   const level = selectedClient?.level as MembershipLevel
-  const ptRate = LEVEL_POINTS[level] ?? 2
+  const ptRate = LEVEL_POINTS[level] ?? 1
   const ptPreview = inclPoints ? Math.floor(qualifyingAmt / 1000) * ptRate : 0
   const ydPreview = inclYodomo ? Math.floor(qualifyingAmt / YODOMO_THRESHOLD) : 0
 

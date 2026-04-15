@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
         name: c.name,
         phone: c.phone || null,
         note: c.note || null,
-        level: c.level || '甜癒米',
+        level: (['癒米','甜癒米','療癒米','悟癒米'].includes(c.level) ? c.level : (c.level === '非會員' ? '癒米' : '癒米')) || '癒米',
         level_since: c.levelSince || null,
         birthday: c.birthday || null,
         points: c.points ?? 0,
