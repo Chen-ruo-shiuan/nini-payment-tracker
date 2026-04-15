@@ -164,6 +164,8 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
   const id = client.id
   const level = (client.level || '癒米') as MembershipLevel
   const lc = LEVEL_COLOR[level] ?? LEVEL_COLOR['癒米']
+  const isPendingUpgrade = !!(client.level_since && client.level_since > todayStr())
+  const effectiveLevel: MembershipLevel = isPendingUpgrade ? '癒米' : level
   const teaQuota = TEA_QUOTA[effectiveLevel]
   const pointRate = LEVEL_POINTS[effectiveLevel]
 
@@ -185,9 +187,6 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
 
   // membership duration
   const since = client.level_since
-  const isPendingUpgrade = !!(since && since > todayStr())
-  // 若尚未到升等日，福利依照「癒米」計算（待升等期間不享有上層福利）
-  const effectiveLevel: MembershipLevel = isPendingUpgrade ? '癒米' : level
   let duration = ''
   if (since && !isPendingUpgrade) {
     const start = new Date(since)
