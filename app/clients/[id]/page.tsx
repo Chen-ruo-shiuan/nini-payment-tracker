@@ -5,7 +5,8 @@ import Link from 'next/link'
 import MembershipBadge from '@/components/MembershipBadge'
 import {
   Client, MembershipLevel, InstallmentContract, Installment,
-  Package, SvLedgerEntry, TEA_QUOTA, LEVEL_POINTS, YODOMO_MILESTONES
+  Package, SvLedgerEntry, TEA_QUOTA, LEVEL_POINTS, YODOMO_MILESTONES,
+  BIRTHDAY_GIFT, HARVEST_GIFT
 } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -163,8 +164,8 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
   const id = client.id
   const level = (client.level || '癒米') as MembershipLevel
   const lc = LEVEL_COLOR[level] ?? LEVEL_COLOR['癒米']
-  const teaQuota = TEA_QUOTA[level]
-  const pointRate = LEVEL_POINTS[level]
+  const teaQuota = TEA_QUOTA[effectiveLevel]
+  const pointRate = LEVEL_POINTS[effectiveLevel]
 
   // tea_usage: {"YYYY-MM": ["YYYY-MM-DD", ...]}
   const teaUsage: Record<string, string[]> = (() => {
@@ -184,13 +185,50 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
 
   // membership duration
   const since = client.level_since
+  const isPendingUpgrade = !!(since && since > todayStr())
+  // 若尚未到升等日，福利依照「癒米」計算（待升等期間不享有上層福利）
+  const effectiveLevel: MembershipLevel = isPendingUpgrade ? '癒米' : level
   let duration = ''
-  if (since) {
+  if (since && !isPendingUpgrade) {
     const start = new Date(since)
     const now = new Date()
     const months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
     const y = Math.floor(months / 12); const m = months % 12
     duration = y > 0 ? `${y} 年 ${m} 個月` : `${m} 個月`
+  }
+
+  // 生日福利
+  const bdayPerks: Record<string, Record<string, string>> = (() => {
+    try { return JSON.parse(client.birthday_perks || '{}') } catch { return {} }
+  })()
+  const thisYear = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }).slice(0, 4)
+  const thisYearPerks = bdayPerks[thisYear] ?? {}
+  const [bdLoading, setBdLoading] = useState<string | null>(null)
+
+  async function recordBdPerk(action: string, undo = false) {
+    setBdLoading(action)
+    const date = undo ? undefined : (prompt('請輸入日期（YYYY-MM-DD）', todayStr()) || todayStr())
+    if (!undo && !date) { setBdLoading(null); return }
+    await fetch(`/api/clients/${id}/birthday-perk`, {
+      method: undo ? 'DELETE' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, date, year: thisYear }),
+    })
+    setBdLoading(null)
+    refresh()
+  }
+
+  async function recordHarvest(undo = false) {
+    setBdLoading('harvest')
+    const date = undo ? undefined : (prompt('請輸入日期（YYYY-MM-DD）', todayStr()) || todayStr())
+    if (!undo && !date) { setBdLoading(null); return }
+    await fetch(`/api/clients/${id}/birthday-perk`, {
+      method: undo ? 'DELETE' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'harvest', date }),
+    })
+    setBdLoading(null)
+    refresh()
   }
 
   // yodomo
@@ -391,6 +429,89 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
           })}
         </div>
       </BenefitSection>
+
+      {/* ── 生日福利 ── */}
+      {client.birthday && (
+        <BenefitSection label={`🎂 生日福利　${client.birthday.replace('-', '月').replace(/(\d+)$/, '$1日')}`} color="#9a5060" bg="#fce8f0" border="#e8a0b8">
+          {isPendingUpgrade && (
+            <p style={{ color: '#b4aa9e', fontSize: '0.75rem', marginBottom: '8px' }}>⚠ 升等日期尚未到，福利依「癒米」等級計算</p>
+          )}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {/* 公益捐款（甜癒米以上） */}
+            {['甜癒米','療癒米','悟癒米'].includes(effectiveLevel) && (
+              <PerkBtn
+                label="公益捐款" done={!!thisYearPerks.donation} doneDate={thisYearPerks.donation}
+                loading={bdLoading === 'donation'}
+                onRecord={() => recordBdPerk('donation')}
+                onUndo={() => recordBdPerk('donation', true)}
+              />
+            )}
+            {/* 生日金 $100（甜癒米以上） */}
+            {['甜癒米','療癒米','悟癒米'].includes(effectiveLevel) && (
+              <PerkBtn
+                label="生日金 $100" done={!!thisYearPerks.cash} doneDate={thisYearPerks.cash}
+                loading={bdLoading === 'cash'}
+                onRecord={() => recordBdPerk('cash')}
+                onUndo={() => recordBdPerk('cash', true)}
+              />
+            )}
+            {/* 生日禮（全等級） */}
+            <PerkBtn
+              label={`生日禮：${BIRTHDAY_GIFT[effectiveLevel]}`} done={!!thisYearPerks.gift} doneDate={thisYearPerks.gift}
+              loading={bdLoading === 'gift'}
+              onRecord={() => recordBdPerk('gift')}
+              onUndo={() => recordBdPerk('gift', true)}
+            />
+          </div>
+        </BenefitSection>
+      )}
+
+      {/* ── 慶祝收成 ── */}
+      {HARVEST_GIFT[effectiveLevel] && (
+        <BenefitSection label="🌾 慶祝收成" color="#6b7a4a" bg="#f0f5e8" border="#c0d098">
+          <PerkBtn
+            label={`收成禮：${HARVEST_GIFT[effectiveLevel]}`}
+            done={!!client.harvest_given} doneDate={client.harvest_given ?? undefined}
+            loading={bdLoading === 'harvest'}
+            onRecord={() => recordHarvest()}
+            onUndo={() => recordHarvest(true)}
+          />
+          <p style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '6px' }}>於會員期滿時發放</p>
+        </BenefitSection>
+      )}
+    </div>
+  )
+}
+
+// ─── Perk Button ──────────────────────────────────────────────────────────────
+function PerkBtn({ label, done, doneDate, loading, onRecord, onUndo }: {
+  label: string; done: boolean; doneDate?: string;
+  loading: boolean; onRecord: () => void; onUndo: () => void
+}) {
+  return (
+    <div style={{
+      borderRadius: '8px', border: `1px solid ${done ? '#9ab89e' : '#ddd8d0'}`,
+      background: done ? '#edf3eb' : '#faf8f5',
+      padding: '8px 12px', minWidth: '120px',
+    }}>
+      <div style={{ fontSize: '0.78rem', color: done ? '#4a6b52' : '#706c68', marginBottom: '4px' }}>
+        {done ? '✓ ' : ''}{label}
+      </div>
+      {done && doneDate && (
+        <div style={{ fontSize: '0.68rem', color: '#9a8f84', marginBottom: '4px' }}>{fmtShort(doneDate)}</div>
+      )}
+      <button
+        onClick={done ? onUndo : onRecord}
+        disabled={loading}
+        style={{
+          fontSize: '0.68rem', padding: '2px 8px', border: `1px solid ${done ? '#c4b8aa' : '#4a6b52'}`,
+          borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer',
+          background: done ? '#f0ede8' : '#2c2825', color: done ? '#9a8f84' : '#f7f4ef',
+          fontFamily: 'inherit',
+        }}
+      >
+        {loading ? '…' : done ? '取消' : '記錄'}
+      </button>
     </div>
   )
 }
@@ -544,11 +665,23 @@ export default function ClientDetailPage() {
             <Link href="/clients" style={{ color: '#9a8f84', fontSize: '0.82rem' }}>← 客人</Link>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
               <h1 style={{ color: '#2c2825', fontSize: '1.4rem', fontWeight: 500 }}>{client.name}</h1>
-              {client.level && <MembershipBadge tier={level} />}
+              {client.level && (() => {
+                const isPending = !!(client.level_since && client.level_since > todayStr())
+                return (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span style={{ opacity: isPending ? 0.4 : 1 }}><MembershipBadge tier={level} /></span>
+                    {isPending && (
+                      <span style={{ fontSize: '0.68rem', color: '#b4aa9e', background: '#f0ede8', border: '1px solid #ddd8d0', borderRadius: '4px', padding: '1px 6px' }}>
+                        待升等 {client.level_since}
+                      </span>
+                    )}
+                  </span>
+                )
+              })()}
             </div>
             {client.phone && <div style={{ color: '#9a8f84', fontSize: '0.82rem', marginTop: '2px' }}>{client.phone}</div>}
             {client.note && <div style={{ color: '#6b5f54', fontSize: '0.8rem', marginTop: '4px' }}>{client.note}</div>}
-            {client.birthday && <div style={{ color: '#b4aa9e', fontSize: '0.75rem', marginTop: '2px' }}>🎂 {client.birthday}</div>}
+            {client.birthday && <div style={{ color: '#b4aa9e', fontSize: '0.75rem', marginTop: '2px' }}>🎂 {client.birthday.replace('-', '月').replace(/(\d+)$/, '$1日')}</div>}
           </div>
           <Link href={`/clients/${id}/edit`} style={{ color: '#9a8f84', fontSize: '0.8rem', marginTop: '28px' }}>編輯</Link>
         </div>

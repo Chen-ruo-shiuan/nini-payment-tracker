@@ -73,7 +73,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       birthday = @birthday,
       updated_at = datetime('now')
     WHERE id = @id
-  `).run({ id: Number(id), name, phone: phone || null, note: note || null, level: level || '甜癒米', level_since: level_since || null, birthday: birthday || null })
+  `).run({ id: Number(id), name, phone: phone || null, note: note || null, level: level || '癒米', level_since: level_since || null, birthday: birthday || null })
 
   return NextResponse.json({ success: true })
 }

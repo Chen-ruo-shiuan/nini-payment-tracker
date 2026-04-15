@@ -17,6 +17,7 @@ export function getDb(): Database.Database {
     initSchema(db)
     migrateLegacyCustomers(db)
     migrateOldInstallments(db)
+    migrateClientColumns(db)
   }
   return db
 }
@@ -206,8 +207,37 @@ function initSchema(db: Database.Database) {
       sent_at         TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(installment_id, days_before)
     );
+
+    CREATE TABLE IF NOT EXISTS birthday_notification_log (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      year        INTEGER NOT NULL,
+      days_before INTEGER NOT NULL,
+      sent_at     TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(client_id, year, days_before)
+    );
   `)
 
+}
+
+// ─── 遷移：新增 birthday_perks、harvest_given 欄位，並將生日格式轉換為 MM-DD ────
+function migrateClientColumns(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(clients)').all() as { name: string }[]).map(c => c.name)
+
+  if (!cols.includes('birthday_perks')) {
+    db.exec(`ALTER TABLE clients ADD COLUMN birthday_perks TEXT NOT NULL DEFAULT '{}'`)
+  }
+  if (!cols.includes('harvest_given')) {
+    db.exec(`ALTER TABLE clients ADD COLUMN harvest_given TEXT`)
+  }
+
+  // 生日格式：YYYY-MM-DD → MM-DD（僅對長度為 10 的值做轉換）
+  const rows = db.prepare(
+    `SELECT id, birthday FROM clients WHERE birthday IS NOT NULL AND length(birthday) = 10`
+  ).all() as { id: number; birthday: string }[]
+  for (const r of rows) {
+    db.prepare(`UPDATE clients SET birthday = ? WHERE id = ?`).run(r.birthday.slice(5), r.id)
+  }
 }
 
 function migrateLegacyCustomers(db: Database.Database) {

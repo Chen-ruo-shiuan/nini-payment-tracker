@@ -21,14 +21,16 @@ export async function POST(req: NextRequest) {
   const db = getDb()
   const today = getTaipeiDate(0)
   const in2days = getTaipeiDate(2)
+  const in3days = getTaipeiDate(3)
   const in4days = getTaipeiDate(4)
+  const in5days = getTaipeiDate(5)
 
   const targetDates = [in4days, in2days]
 
   const installments = db.prepare(`
     SELECT i.id, i.due_date, i.period_number, c.name as customer_name, c.id as customer_id
     FROM installments i
-    JOIN customers c ON c.id = i.customer_id
+    JOIN clients c ON c.id = i.client_id
     WHERE i.paid_at IS NULL
       AND i.due_date IN (${targetDates.map(() => '?').join(',')})
   `).all(...targetDates) as Array<{
@@ -50,33 +52,67 @@ export async function POST(req: NextRequest) {
     const daysBefore = daysUntil === 4 ? 4 : daysUntil === 2 ? 2 : null
     if (!daysBefore) continue
 
-    // Idempotency check
     const alreadySent = db.prepare(`
       INSERT OR IGNORE INTO notification_log (installment_id, days_before)
       VALUES (?, ?)
     `).run(inst.id, daysBefore)
 
-    if (alreadySent.changes === 0) continue // already sent
+    if (alreadySent.changes === 0) continue
 
     const payload = {
       title: 'NINI 付款提醒',
       body: `${inst.customer_name} 的第 ${inst.period_number} 期款項將於 ${daysBefore} 天後到期`,
-      url: `/customers/${inst.customer_id}`,
+      url: `/clients/${inst.customer_id}`,
       tag: `installment-${inst.id}-${daysBefore}d`,
     }
 
     for (const sub of subscriptions) {
       const result = await sendPushNotification(sub, payload)
-      if (result.gone) {
-        goneEndpoints.push(sub.endpoint)
-      } else if (result.success) {
-        sent++
-      }
+      if (result.gone) goneEndpoints.push(sub.endpoint)
+      else if (result.success) sent++
+    }
+  }
+
+  // ── 生日提醒（甜癒米以上，前 5 天 & 前 3 天）──────────────────────────────
+  const bdayMmdd5 = in5days.slice(5)  // "MM-DD"
+  const bdayMmdd3 = in3days.slice(5)
+  const bdayYear  = today.slice(0, 4)
+
+  const birthdayClients = db.prepare(`
+    SELECT id, name, birthday, level FROM clients
+    WHERE birthday IS NOT NULL
+      AND level IN ('甜癒米','療癒米','悟癒米')
+      AND birthday IN (?, ?)
+  `).all(bdayMmdd5, bdayMmdd3) as Array<{
+    id: number; name: string; birthday: string; level: string
+  }>
+
+  for (const c of birthdayClients) {
+    const daysBefore = c.birthday === bdayMmdd5 ? 5 : 3
+
+    const alreadySent = db.prepare(`
+      INSERT OR IGNORE INTO birthday_notification_log (client_id, year, days_before)
+      VALUES (?, ?, ?)
+    `).run(c.id, bdayYear, daysBefore)
+
+    if (alreadySent.changes === 0) continue
+
+    const payload = {
+      title: '🎂 生日快到了',
+      body: `${c.name}（${c.level}）生日還有 ${daysBefore} 天，記得準備生日福利！`,
+      url: `/clients/${c.id}`,
+      tag: `birthday-${c.id}-${bdayYear}-${daysBefore}d`,
+    }
+
+    for (const sub of subscriptions) {
+      const result = await sendPushNotification(sub, payload)
+      if (result.gone) goneEndpoints.push(sub.endpoint)
+      else if (result.success) sent++
     }
   }
 
   // Clean up expired subscriptions
-  for (const ep of goneEndpoints) {
+  for (const ep of [...new Set(goneEndpoints)]) {
     db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(ep)
   }
 

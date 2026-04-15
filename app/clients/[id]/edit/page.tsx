@@ -13,7 +13,7 @@ export default function EditClientPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
-    name: '', phone: '', note: '', level: '甜癒米', level_since: '', birthday: '',
+    name: '', phone: '', note: '', level: '癒米', level_since: '', birthday: '',
   })
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function EditClientPage() {
           name: data.name || '',
           phone: data.phone || '',
           note: data.note || '',
-          level: data.level || '甜癒米',
+          level: data.level || '癒米',
           level_since: data.level_since || '',
           birthday: data.birthday || '',
         })
@@ -88,9 +88,9 @@ export default function EditClientPage() {
             type="date" {...inputProps} />
         </Field>
 
-        <Field label="生日">
+        <Field label="生日（月-日）">
           <input value={form.birthday} onChange={e => set('birthday', e.target.value)}
-            type="date" {...inputProps} />
+            type="text" placeholder="03-15" pattern="\d{2}-\d{2}" maxLength={5} {...inputProps} />
         </Field>
 
         <Field label="備註">
