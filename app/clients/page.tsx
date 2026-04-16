@@ -12,59 +12,55 @@ const ALL_LEVELS = ['全部', ...MEMBERSHIP_LEVELS] as const
 
 function ClientCard({ client, onDelete }: { client: ClientWithStats; onDelete: (id: number) => void }) {
   return (
-    <div style={{ position: 'relative', background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px' }}>
-      <Link href={`/clients/${client.id}`} style={{ display: 'block', padding: '14px 16px' }}
+    <div style={{ display: 'flex', background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px' }}>
+      {/* Main clickable area */}
+      <Link href={`/clients/${client.id}`} style={{ flex: 1, minWidth: 0, padding: '14px 16px' }}
         className="hover:opacity-80 transition-opacity">
-        <div className="flex items-start justify-between gap-8">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span style={{ color: '#2c2825', fontSize: '1rem' }}>{client.name}</span>
-              <MembershipBadge tier={client.level as MembershipLevel} />
-            </div>
-            {client.phone && (
-              <div style={{ color: '#9a8f84', fontSize: '0.78rem', marginTop: '2px' }}>{client.phone}</div>
-            )}
-            <div className="flex gap-3 mt-2 flex-wrap">
-              {client.active_contracts > 0 && (
-                <span style={{ color: '#9a6a4a', fontSize: '0.72rem', background: '#fdf0e6', border: '1px solid #e8cba8', borderRadius: '4px' }}
-                  className="px-2 py-0.5">
-                  分期 {client.active_contracts} 件
-                </span>
-              )}
-              {client.active_packages > 0 && (
-                <span style={{ color: '#4a6b52', fontSize: '0.72rem', background: '#edf3eb', border: '1px solid #9ab89e', borderRadius: '4px' }}
-                  className="px-2 py-0.5">
-                  套組 {client.active_packages} 件
-                </span>
-              )}
-              {client.stored_value > 0 && (
-                <span style={{ color: '#5a4a6b', fontSize: '0.72rem', background: '#eeedf5', border: '1px solid #a89ab8', borderRadius: '4px' }}
-                  className="px-2 py-0.5">
-                  儲值 {formatAmount(client.stored_value)}
-                </span>
-              )}
-            </div>
-          </div>
-          {client.next_due_date && (
-            <div className="text-right shrink-0">
-              <div style={{ color: '#9a8f84', fontSize: '0.68rem' }}>下期到期</div>
-              <div style={{ color: '#9a6a4a', fontSize: '0.8rem' }}>
-                {new Date(client.next_due_date + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-              </div>
-            </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span style={{ color: '#2c2825', fontSize: '1rem' }}>{client.name}</span>
+          <MembershipBadge tier={client.level as MembershipLevel} />
+        </div>
+        {client.phone && (
+          <div style={{ color: '#9a8f84', fontSize: '0.78rem', marginTop: '2px' }}>{client.phone}</div>
+        )}
+        <div className="flex gap-3 mt-2 flex-wrap">
+          {client.active_contracts > 0 && (
+            <span style={{ color: '#9a6a4a', fontSize: '0.72rem', background: '#fdf0e6', border: '1px solid #e8cba8', borderRadius: '4px' }}
+              className="px-2 py-0.5">
+              分期 {client.active_contracts} 件
+            </span>
+          )}
+          {client.active_packages > 0 && (
+            <span style={{ color: '#4a6b52', fontSize: '0.72rem', background: '#edf3eb', border: '1px solid #9ab89e', borderRadius: '4px' }}
+              className="px-2 py-0.5">
+              套組 {client.active_packages} 件
+            </span>
+          )}
+          {client.stored_value > 0 && (
+            <span style={{ color: '#5a4a6b', fontSize: '0.72rem', background: '#eeedf5', border: '1px solid #a89ab8', borderRadius: '4px' }}
+              className="px-2 py-0.5">
+              儲值 {formatAmount(client.stored_value)}
+            </span>
           )}
         </div>
       </Link>
-      {/* Delete button – outside the link so it doesn't navigate */}
-      <button
-        onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete(client.id) }}
-        style={{
-          position: 'absolute', top: '10px', right: '10px',
-          color: '#c4b8aa', background: 'none', border: '1px solid #e0d9d0',
-          borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer',
-        }}>
-        刪除
-      </button>
+
+      {/* Right column: next due date + delete — separate from the link */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', padding: '10px 10px 10px 0', flexShrink: 0, gap: '6px' }}>
+        {client.next_due_date ? (
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ color: '#9a8f84', fontSize: '0.68rem' }}>下期到期</div>
+            <div style={{ color: '#9a6a4a', fontSize: '0.8rem' }}>
+              {new Date(client.next_due_date + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+            </div>
+          </div>
+        ) : <div />}
+        <button
+          onClick={() => onDelete(client.id)}
+          style={{ color: '#c4b8aa', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer' }}>
+          刪除
+        </button>
+      </div>
     </div>
   )
 }
