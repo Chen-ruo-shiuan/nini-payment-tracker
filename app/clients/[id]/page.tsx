@@ -13,6 +13,17 @@ import {
 interface ContractWithInstallments extends InstallmentContract {
   installments: Installment[]
 }
+interface CheckoutItem {
+  id: number; checkout_id: number; category: string; label: string; price: number; qty: number; pkg_id?: number
+}
+interface CheckoutPayment {
+  id: number; checkout_id: number; method: string; amount: number
+}
+interface Checkout {
+  id: number; client_id: number | null; date: string; note: string | null
+  total_amount: number; created_at: string
+  items: CheckoutItem[]; payments: CheckoutPayment[]
+}
 interface ClientDetail extends Client {
   stored_value: number
   active_contracts: number
@@ -21,6 +32,7 @@ interface ClientDetail extends Client {
   contracts: ContractWithInstallments[]
   packages: Package[]
   sv_ledger: SvLedgerEntry[]
+  checkouts: Checkout[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -618,9 +630,73 @@ function PackagesTab({ client }: { client: ClientDetail }) {
   )
 }
 
+// ─── Checkouts Tab ───────────────────────────────────────────────────────────
+function CheckoutsTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
+  const [deleting, setDeleting] = useState<number | null>(null)
+
+  async function deleteCheckout(co: Checkout) {
+    if (!confirm(`確定刪除 ${fmtShort(co.date)} 的結帳記錄（${fmtAmt(co.total_amount)}）？\n套組核銷堂數將一併還原。`)) return
+    setDeleting(co.id)
+    await fetch(`/api/checkouts/${co.id}`, { method: 'DELETE' })
+    setDeleting(null)
+    refresh()
+  }
+
+  if (client.checkouts.length === 0) {
+    return (
+      <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
+        尚無結帳記錄
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {client.checkouts.map(co => (
+        <div key={co.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(co.date)}</span>
+                <span style={{ color: '#2c2825', fontSize: '0.9rem', fontWeight: 500 }}>{fmtAmt(co.total_amount)}</span>
+                {co.note && <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{co.note}</span>}
+              </div>
+              {/* Items */}
+              <div className="space-y-0.5">
+                {co.items.map(item => (
+                  <div key={item.id} style={{ display: 'flex', gap: '6px', fontSize: '0.78rem' }}>
+                    <span style={{ color: '#b4aa9e', minWidth: '48px' }}>{item.category}</span>
+                    <span style={{ color: '#4a4642' }}>{item.label}</span>
+                    {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
+                    <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Payments */}
+              <div style={{ marginTop: '4px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {co.payments.map(pay => (
+                  <span key={pay.id} style={{ fontSize: '0.7rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '10px', padding: '1px 8px' }}>
+                    {pay.method} {fmtAmt(pay.amount)}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => deleteCheckout(co)}
+              disabled={deleting === co.id}
+              style={{ color: '#c4b8aa', fontSize: '0.72rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '3px 8px', cursor: 'pointer', flexShrink: 0 }}>
+              {deleting === co.id ? '…' : '刪除'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = '分期' | '福利' | '套組' | '儲值'
-const TABS: Tab[] = ['分期', '福利', '套組', '儲值']
+type Tab = '分期' | '福利' | '套組' | '儲值' | '結帳'
+const TABS: Tab[] = ['分期', '福利', '套組', '儲值', '結帳']
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -723,6 +799,7 @@ export default function ClientDetailPage() {
       {tab === '福利' && <BenefitsTab client={client} refresh={load} />}
       {tab === '套組' && <PackagesTab client={client} />}
       {tab === '儲值' && <StoredValueTab client={client} refresh={load} />}
+      {tab === '結帳' && <CheckoutsTab client={client} refresh={load} />}
 
       {/* Delete */}
       <div style={{ borderTop: '1px solid #f0ebe4', paddingTop: '16px', marginTop: '8px' }}>

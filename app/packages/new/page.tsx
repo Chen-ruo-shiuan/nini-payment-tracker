@@ -5,6 +5,11 @@ import Link from 'next/link'
 import { PAYMENT_METHODS, ClientWithStats, MembershipLevel } from '@/types'
 import MembershipBadge from '@/components/MembershipBadge'
 
+const SERVICE_NAMES = [
+  '精細光彩', '原液調理', '泡光氧彗', '雨林頭療',
+  '小顏骨氣', '森林癒撥筋', '深皮超導', '全臉粉清',
+]
+
 function NewPackageForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -17,8 +22,15 @@ function NewPackageForm() {
   const [selectedClient, setSelectedClient] = useState<ClientWithStats | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
 
+  // Service name selection
+  const [serviceSelect, setServiceSelect] = useState('')
+  const [customName, setCustomName] = useState('')
+  const finalServiceName = serviceSelect === 'custom' ? customName : serviceSelect
+
+  // Discounted total for accounting
+  const [discountedTotal, setDiscountedTotal] = useState('')
+
   const [form, setForm] = useState({
-    service_name: '',
     total_sessions: '1',
     unit_price: '',
     prepaid_amount: '',
@@ -53,28 +65,42 @@ function NewPackageForm() {
     setForm(prev => ({ ...prev, [k]: v }))
   }
 
-  // Auto-fill prepaid from unit_price × sessions
+  // When discounted_total is set, override unit_price and prepaid_amount
   useEffect(() => {
+    const d = Number(discountedTotal), s = Number(form.total_sessions)
+    if (d > 0 && s > 0) {
+      set('unit_price', String(Math.round(d / s)))
+      set('prepaid_amount', String(d))
+    }
+  }, [discountedTotal, form.total_sessions])
+
+  // Auto-fill prepaid from unit_price × sessions (only when discounted_total is empty)
+  useEffect(() => {
+    if (discountedTotal) return
     const u = Number(form.unit_price), s = Number(form.total_sessions)
     if (u > 0 && s > 0) set('prepaid_amount', String(u * s))
-  }, [form.unit_price, form.total_sessions])
+  }, [form.unit_price, form.total_sessions, discountedTotal])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedClient) { setError('請選擇客人'); return }
-    if (!form.service_name) { setError('請輸入服務名稱'); return }
+    if (!finalServiceName) { setError('請選擇或輸入服務名稱'); return }
     setSaving(true); setError('')
     try {
       const res = await fetch('/api/packages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, client_id: selectedClient.id }),
+        body: JSON.stringify({ ...form, service_name: finalServiceName, client_id: selectedClient.id }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || '發生錯誤'); return }
       router.push(`/clients/${selectedClient.id}`)
     } catch { setError('網路錯誤') } finally { setSaving(false) }
   }
+
+  const discountedUnitPrice = discountedTotal && Number(form.total_sessions) > 0
+    ? Math.round(Number(discountedTotal) / Number(form.total_sessions))
+    : null
 
   return (
     <div className="space-y-6">
@@ -118,33 +144,60 @@ function NewPackageForm() {
           )}
         </Field>
 
+        {/* Service name */}
         <Field label="服務名稱 *">
-          <input value={form.service_name} onChange={e => set('service_name', e.target.value)}
-            placeholder="例：泡光氧彗、雨林頭療…" style={inputStyle} />
+          <select value={serviceSelect} onChange={e => setServiceSelect(e.target.value)} style={inputStyle}>
+            <option value="">請選擇服務…</option>
+            {SERVICE_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
+            <option value="custom">自定義…</option>
+          </select>
+          {serviceSelect === 'custom' && (
+            <input value={customName} onChange={e => setCustomName(e.target.value)}
+              placeholder="輸入服務名稱" style={{ ...inputStyle, marginTop: '6px' }} />
+          )}
         </Field>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-          <Field label="總堂數 *">
-            <input value={form.total_sessions} onChange={e => set('total_sessions', e.target.value)}
-              type="number" min="1" style={inputStyle} />
-          </Field>
-          <Field label="單堂單價">
-            <input value={form.unit_price} onChange={e => set('unit_price', e.target.value)}
-              type="number" placeholder="0" style={inputStyle} />
-          </Field>
+        <Field label="總堂數 *">
+          <input value={form.total_sessions} onChange={e => set('total_sessions', e.target.value)}
+            type="number" min="1" style={inputStyle} />
+        </Field>
+
+        {/* Discounted total */}
+        <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }} className="space-y-3">
+          <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>優惠價格（選填）</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <Field label="優惠總價">
+              <input value={discountedTotal} onChange={e => setDiscountedTotal(e.target.value)}
+                type="number" placeholder="套組優惠總金額" style={inputStyle} />
+            </Field>
+            <Field label="記帳單價（自動）">
+              <div style={{ ...inputStyle, color: discountedUnitPrice ? '#4a6b52' : '#c4b8aa', background: '#f0ede8' }}>
+                {discountedUnitPrice ? `$ ${discountedUnitPrice.toLocaleString()}` : '優惠總價 ÷ 堂數'}
+              </div>
+            </Field>
+          </div>
+          <p style={{ color: '#b4aa9e', fontSize: '0.72rem' }}>
+            填入優惠總價後，將自動計算每堂記帳單價，用於套組結帳金額
+          </p>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <Field label={discountedTotal ? '單堂定價（參考）' : '單堂單價'}>
+            <input value={form.unit_price} onChange={e => { if (!discountedTotal) set('unit_price', e.target.value) }}
+              type="number" placeholder="0" style={{ ...inputStyle, opacity: discountedTotal ? 0.5 : 1 }}
+              readOnly={!!discountedTotal} />
+          </Field>
           <Field label="預收金額">
             <input value={form.prepaid_amount} onChange={e => set('prepaid_amount', e.target.value)}
               type="number" placeholder="自動計算" style={inputStyle} />
           </Field>
-          <Field label="付款方式">
-            <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)} style={inputStyle}>
-              {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
-            </select>
-          </Field>
         </div>
+
+        <Field label="付款方式">
+          <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)} style={inputStyle}>
+            {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+          </select>
+        </Field>
 
         <Field label="購買日期">
           <input value={form.date} onChange={e => set('date', e.target.value)} type="date" style={inputStyle} />

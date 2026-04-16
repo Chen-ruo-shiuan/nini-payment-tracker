@@ -2,19 +2,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import MembershipBadge from '@/components/MembershipBadge'
-import { ClientWithStats, MembershipLevel } from '@/types'
+import { ClientWithStats, MembershipLevel, MEMBERSHIP_LEVELS } from '@/types'
 
 function formatAmount(n: number) {
   return `$ ${n.toLocaleString()}`
 }
 
-function ClientCard({ client }: { client: ClientWithStats }) {
+const ALL_LEVELS = ['全部', ...MEMBERSHIP_LEVELS] as const
+
+function ClientCard({ client, onDelete }: { client: ClientWithStats; onDelete: (id: number) => void }) {
   return (
-    <Link href={`/clients/${client.id}`}>
-      <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px' }}
-        className="p-4 hover:opacity-80 transition-opacity">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
+    <div style={{ position: 'relative', background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px' }}>
+      <Link href={`/clients/${client.id}`} style={{ display: 'block', padding: '14px 16px' }}
+        className="hover:opacity-80 transition-opacity">
+        <div className="flex items-start justify-between gap-8">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span style={{ color: '#2c2825', fontSize: '1rem' }}>{client.name}</span>
               <MembershipBadge tier={client.level as MembershipLevel} />
@@ -52,20 +54,34 @@ function ClientCard({ client }: { client: ClientWithStats }) {
             </div>
           )}
         </div>
-      </div>
-    </Link>
+      </Link>
+      {/* Delete button – outside the link so it doesn't navigate */}
+      <button
+        onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete(client.id) }}
+        style={{
+          position: 'absolute', top: '10px', right: '10px',
+          color: '#c4b8aa', background: 'none', border: '1px solid #e0d9d0',
+          borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer',
+        }}>
+        刪除
+      </button>
+    </div>
   )
 }
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<ClientWithStats[]>([])
   const [search, setSearch] = useState('')
+  const [levelFilter, setLevelFilter] = useState<string>('全部')
   const [loading, setLoading] = useState(true)
 
   const fetchClients = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/clients?q=${encodeURIComponent(search)}`)
+      const params = new URLSearchParams()
+      if (search) params.set('q', search)
+      if (levelFilter !== '全部') params.set('level', levelFilter)
+      const res = await fetch(`/api/clients?${params.toString()}`)
       const data = await res.json()
       setClients(data)
     } catch {
@@ -73,15 +89,22 @@ export default function ClientsPage() {
     } finally {
       setLoading(false)
     }
-  }, [search])
+  }, [search, levelFilter])
 
   useEffect(() => {
     const t = setTimeout(fetchClients, 250)
     return () => clearTimeout(t)
   }, [fetchClients])
 
+  async function deleteClient(id: number) {
+    const client = clients.find(c => c.id === id)
+    if (!confirm(`確定要刪除「${client?.name}」？此操作無法復原。`)) return
+    await fetch(`/api/clients/${id}`, { method: 'DELETE' })
+    setClients(prev => prev.filter(c => c.id !== id))
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex items-center justify-between pt-2">
         <h1 style={{ color: '#2c2825', fontSize: '1.4rem', letterSpacing: '0.05em', fontWeight: 500 }}>
           客人
@@ -108,6 +131,21 @@ export default function ClientsPage() {
         }}
       />
 
+      {/* Level filter */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+        {ALL_LEVELS.map(l => (
+          <button key={l} onClick={() => setLevelFilter(l)}
+            style={{
+              background: levelFilter === l ? '#2c2825' : '#faf8f5',
+              color: levelFilter === l ? '#f7f4ef' : '#6b5f54',
+              border: `1px solid ${levelFilter === l ? '#2c2825' : '#e0d9d0'}`,
+              borderRadius: '20px', fontSize: '0.75rem', padding: '4px 12px', cursor: 'pointer',
+            }}>
+            {l}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '40px 0', fontSize: '0.85rem' }}>
           載入中…
@@ -116,9 +154,9 @@ export default function ClientsPage() {
         <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '40px 0' }}>
           <div style={{ fontSize: '1.8rem', marginBottom: '10px' }}>— 無 —</div>
           <p style={{ fontSize: '0.85rem', letterSpacing: '0.08em' }}>
-            {search ? '找不到符合的客人' : '尚無客人資料'}
+            {search || levelFilter !== '全部' ? '找不到符合的客人' : '尚無客人資料'}
           </p>
-          {!search && (
+          {!search && levelFilter === '全部' && (
             <Link href="/clients/new"
               style={{ color: '#9a8f84', fontSize: '0.8rem', marginTop: '12px', display: 'inline-block' }}
               className="underline underline-offset-4">
@@ -131,7 +169,7 @@ export default function ClientsPage() {
           <p style={{ color: '#9a8f84', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
             共 {clients.length} 位客人
           </p>
-          {clients.map(c => <ClientCard key={c.id} client={c} />)}
+          {clients.map(c => <ClientCard key={c.id} client={c} onDelete={deleteClient} />)}
         </div>
       )}
     </div>

@@ -8,6 +8,7 @@ export default function NewClientPage() {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [duplicateWarning, setDuplicateWarning] = useState(false)
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -17,11 +18,12 @@ export default function NewClientPage() {
     birthday: '',
   })
 
-  const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }))
+  const set = (k: string, v: string) => {
+    setForm(prev => ({ ...prev, [k]: v }))
+    if (k === 'name') setDuplicateWarning(false)
+  }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!form.name.trim()) { setError('請輸入姓名'); return }
+  async function submit() {
     setSaving(true)
     setError('')
     try {
@@ -38,6 +40,24 @@ export default function NewClientPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.name.trim()) { setError('請輸入姓名'); return }
+
+    // Check for duplicate name (only if warning not already shown)
+    if (!duplicateWarning) {
+      const res = await fetch(`/api/clients?q=${encodeURIComponent(form.name.trim())}`)
+      const existing = await res.json() as { name: string }[]
+      const exactMatch = existing.some(c => c.name === form.name.trim())
+      if (exactMatch) {
+        setDuplicateWarning(true)
+        return
+      }
+    }
+
+    await submit()
   }
 
   return (
@@ -80,6 +100,25 @@ export default function NewClientPage() {
             style={{ ...inputStyle, resize: 'none' }} />
         </Field>
 
+        {/* Duplicate name warning */}
+        {duplicateWarning && (
+          <div style={{ background: '#fdf5e0', border: '1px solid #e0c055', borderRadius: '6px', padding: '12px 14px' }}>
+            <p style={{ color: '#7a5a00', fontSize: '0.85rem', marginBottom: '10px' }}>
+              已有一筆「{form.name}」的客人資料，是否仍要新增？
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" onClick={submit} disabled={saving}
+                style={{ background: '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '5px', fontSize: '0.82rem', padding: '6px 16px', cursor: 'pointer' }}>
+                {saving ? '建立中…' : '仍要新增'}
+              </button>
+              <button type="button" onClick={() => setDuplicateWarning(false)}
+                style={{ background: 'none', color: '#6b5f54', border: '1px solid #e0d9d0', borderRadius: '5px', fontSize: '0.82rem', padding: '6px 16px', cursor: 'pointer' }}>
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+
         {error && (
           <p style={{ color: '#9a4a4a', fontSize: '0.85rem', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '5px' }}
             className="px-3 py-2">
@@ -87,15 +126,17 @@ export default function NewClientPage() {
           </p>
         )}
 
-        <button type="submit" disabled={saving}
-          style={{
-            width: '100%', background: saving ? '#c4b8aa' : '#2c2825',
-            color: '#f7f4ef', border: 'none', borderRadius: '6px',
-            fontSize: '0.95rem', letterSpacing: '0.06em', padding: '12px',
-            cursor: saving ? 'not-allowed' : 'pointer',
-          }}>
-          {saving ? '儲存中…' : '建立客人'}
-        </button>
+        {!duplicateWarning && (
+          <button type="submit" disabled={saving}
+            style={{
+              width: '100%', background: saving ? '#c4b8aa' : '#2c2825',
+              color: '#f7f4ef', border: 'none', borderRadius: '6px',
+              fontSize: '0.95rem', letterSpacing: '0.06em', padding: '12px',
+              cursor: saving ? 'not-allowed' : 'pointer',
+            }}>
+            {saving ? '儲存中…' : '建立客人'}
+          </button>
+        )}
       </form>
     </div>
   )

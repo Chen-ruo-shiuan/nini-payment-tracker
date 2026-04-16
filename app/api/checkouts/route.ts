@@ -66,9 +66,9 @@ export async function POST(req: NextRequest) {
     // ── 2. Items ─────────────────────────────────────────────────────────────
     for (const item of items as { category: string; label: string; price: number; qty: number; pkg_id?: number }[]) {
       db.prepare(`
-        INSERT INTO checkout_items (checkout_id, category, label, price, qty)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(coId, item.category, item.label, item.price, item.qty)
+        INSERT INTO checkout_items (checkout_id, category, label, price, qty, pkg_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(coId, item.category, item.label, item.price, item.qty, item.pkg_id ?? null)
 
       // 套組核銷: increment used_sessions
       if (item.category === '套組核銷' && item.pkg_id) {

@@ -18,6 +18,7 @@ export function getDb(): Database.Database {
     migrateLegacyCustomers(db)
     migrateOldInstallments(db)
     migrateClientColumns(db)
+    migrateCheckoutItems(db)
   }
   return db
 }
@@ -237,6 +238,14 @@ function migrateClientColumns(db: Database.Database) {
   ).all() as { id: number; birthday: string }[]
   for (const r of rows) {
     db.prepare(`UPDATE clients SET birthday = ? WHERE id = ?`).run(r.birthday.slice(5), r.id)
+  }
+}
+
+// ─── 遷移：checkout_items 新增 pkg_id 欄位 ────────────────────────────────────
+function migrateCheckoutItems(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(checkout_items)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('pkg_id')) {
+    db.exec('ALTER TABLE checkout_items ADD COLUMN pkg_id INTEGER REFERENCES packages(id) ON DELETE SET NULL')
   }
 }
 
