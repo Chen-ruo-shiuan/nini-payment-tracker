@@ -528,10 +528,13 @@ function PerkBtn({ label, done, doneDate, loading, onRecord, onUndo }: {
 }
 
 // ─── Stored Value Tab ─────────────────────────────────────────────────────────
+const SV_PAY_METHODS = ['現金', '匯款', 'LINE Pay', '信用卡', '其他'] as const
+
 function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [date, setDate] = useState(todayStr())
+  const [payMethod, setPayMethod] = useState('現金')
   const [saving, setSaving] = useState(false)
 
   async function addEntry(e: React.FormEvent) {
@@ -540,7 +543,7 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
     setSaving(true)
     await fetch('/api/sv-ledger', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: client.id, amount: Number(amount), note, date }),
+      body: JSON.stringify({ client_id: client.id, amount: Number(amount), note, date, payment_method: Number(amount) > 0 ? payMethod : null }),
     })
     setAmount(''); setNote(''); setSaving(false)
     refresh()
@@ -558,7 +561,12 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
           <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="金額（負數為扣款）" type="number" style={inputStyle} />
           <input value={date} onChange={e => setDate(e.target.value)} type="date" style={inputStyle} />
         </div>
-        <input value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={inputStyle} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <select value={payMethod} onChange={e => setPayMethod(e.target.value)} style={inputStyle}>
+            {SV_PAY_METHODS.map(m => <option key={m}>{m}</option>)}
+          </select>
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={inputStyle} />
+        </div>
         <button type="submit" disabled={saving || !amount} style={{
           background: saving || !amount ? '#c4b8aa' : '#2c2825', color: '#f7f4ef',
           border: 'none', borderRadius: '5px', fontSize: '0.85rem', padding: '8px 20px', cursor: 'pointer',
@@ -568,10 +576,13 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
         {client.sv_ledger.length === 0 && (
           <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無儲值記錄</p>
         )}
-        {client.sv_ledger.map(e => (
+        {(client.sv_ledger as (SvLedgerEntry & { payment_method?: string })[]).map(e => (
           <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0ebe4' }}>
             <div>
               <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(e.date)}</span>
+              {e.payment_method && e.amount > 0 && (
+                <span style={{ color: '#9a8f84', fontSize: '0.72rem', marginLeft: '6px', background: '#f0ebe4', borderRadius: '8px', padding: '1px 6px' }}>{e.payment_method}</span>
+              )}
               {e.note && <span style={{ color: '#6b5f54', fontSize: '0.8rem', marginLeft: '8px' }}>{e.note}</span>}
             </div>
             <span style={{ color: e.amount >= 0 ? '#4a6b52' : '#9a4a4a', fontSize: '0.9rem', fontWeight: 500 }}>
@@ -585,7 +596,16 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
 }
 
 // ─── Packages Tab ─────────────────────────────────────────────────────────────
-function PackagesTab({ client }: { client: ClientDetail }) {
+function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
+  const [recalcing, setRecalcing] = useState<number | null>(null)
+
+  async function recalc(pkgId: number) {
+    setRecalcing(pkgId)
+    await fetch(`/api/packages/${pkgId}/recalc`, { method: 'POST' })
+    setRecalcing(null)
+    refresh()
+  }
+
   return (
     <div className="space-y-2">
       {client.packages.length === 0 && (
@@ -616,11 +636,15 @@ function PackagesTab({ client }: { client: ClientDetail }) {
                   </div>
                 </div>
               </div>
-              <div style={{ textAlign: 'right', marginLeft: '12px' }}>
+              <div style={{ textAlign: 'right', marginLeft: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
                 <div style={{ color: remaining > 0 ? '#4a6b52' : '#9a8f84', fontSize: '0.9rem', fontWeight: 500 }}>
                   剩 {remaining} 次
                 </div>
-                <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '2px' }}>{fmtAmt(pkg.prepaid_amount)}</div>
+                <div style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtAmt(pkg.prepaid_amount)}</div>
+                <button onClick={() => recalc(pkg.id)} disabled={recalcing === pkg.id}
+                  style={{ color: '#9a8f84', fontSize: '0.65rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  {recalcing === pkg.id ? '…' : '重新計算'}
+                </button>
               </div>
             </div>
           </div>
@@ -645,10 +669,13 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
   const currentYear = new Date().getFullYear().toString()
 
   // Aggregate stats from checkout history
-  const totalSpending = client.checkouts.reduce((s, co) => s + co.total_amount, 0)
-  const yearSpending  = client.checkouts
-    .filter(co => co.date.startsWith(currentYear))
-    .reduce((s, co) => s + co.total_amount, 0)
+  const allItems = client.checkouts.flatMap(co => co.items ?? [])
+  const courseSpendig = allItems
+    .filter(i => ['服務', '加購', '活動', '套組核銷'].includes(i.category))
+    .reduce((s, i) => s + i.price * i.qty, 0)
+  const productSpending = allItems
+    .filter(i => i.category === '產品')
+    .reduce((s, i) => s + i.price * i.qty, 0)
   const visitCount = client.checkouts.length
 
   // Service & product frequency maps
@@ -679,8 +706,8 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
       {/* Summary stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
         {[
-          { label: '累計消費', value: fmtAmt(totalSpending), color: '#2c2825' },
-          { label: `${currentYear} 消費`, value: fmtAmt(yearSpending), color: '#4a6b52' },
+          { label: '課程累積', value: fmtAmt(courseSpendig), color: '#4a6b52' },
+          { label: '保養品累積', value: fmtAmt(productSpending), color: '#5a4a6b' },
           { label: '到訪次數', value: `${visitCount} 次`, color: '#6b5f54' },
         ].map(({ label, value, color }) => (
           <div key={label} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px', textAlign: 'center' }}>
@@ -922,7 +949,7 @@ export default function ClientDetailPage() {
       )}
 
       {tab === '福利' && <BenefitsTab client={client} refresh={load} />}
-      {tab === '套組' && <PackagesTab client={client} />}
+      {tab === '套組' && <PackagesTab client={client} refresh={load} />}
       {tab === '儲值' && <StoredValueTab client={client} refresh={load} />}
       {tab === '消費紀錄' && <ConsumptionTab client={client} refresh={load} />}
 

@@ -24,19 +24,20 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const db = getDb()
   const body = await req.json()
-  const { client_id, amount, note, date } = body
+  const { client_id, amount, note, date, payment_method } = body
 
   if (!client_id) return NextResponse.json({ error: '請提供 client_id' }, { status: 400 })
   if (amount === undefined || amount === null) return NextResponse.json({ error: '請輸入金額' }, { status: 400 })
 
   const result = db.prepare(`
-    INSERT INTO sv_ledger (client_id, amount, note, date)
-    VALUES (@client_id, @amount, @note, @date)
+    INSERT INTO sv_ledger (client_id, amount, note, date, payment_method)
+    VALUES (@client_id, @amount, @note, @date, @payment_method)
   `).run({
     client_id: Number(client_id),
     amount: Number(amount),
     note: note || null,
     date: date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }),
+    payment_method: payment_method || null,
   })
 
   return NextResponse.json({ id: result.lastInsertRowid }, { status: 201 })

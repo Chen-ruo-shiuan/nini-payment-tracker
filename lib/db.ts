@@ -19,6 +19,7 @@ export function getDb(): Database.Database {
     migrateOldInstallments(db)
     migrateClientColumns(db)
     migrateCheckoutItems(db)
+    migrateSvLedgerPaymentMethod(db)
   }
   return db
 }
@@ -238,6 +239,14 @@ function migrateClientColumns(db: Database.Database) {
   ).all() as { id: number; birthday: string }[]
   for (const r of rows) {
     db.prepare(`UPDATE clients SET birthday = ? WHERE id = ?`).run(r.birthday.slice(5), r.id)
+  }
+}
+
+// ─── 遷移：sv_ledger 新增 payment_method 欄位 ────────────────────────────────
+function migrateSvLedgerPaymentMethod(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(sv_ledger)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('payment_method')) {
+    db.exec(`ALTER TABLE sv_ledger ADD COLUMN payment_method TEXT`)
   }
 }
 
