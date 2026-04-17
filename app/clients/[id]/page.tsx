@@ -6,7 +6,7 @@ import MembershipBadge from '@/components/MembershipBadge'
 import {
   Client, MembershipLevel, InstallmentContract, Installment,
   Package, SvLedgerEntry, TEA_QUOTA, LEVEL_POINTS, YODOMO_MILESTONES,
-  BIRTHDAY_GIFT, HARVEST_GIFT
+  BIRTHDAY_GIFT, HARVEST_GIFT, NEXT_LEVEL, LEVEL_THRESHOLDS,
 } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ interface CheckoutPayment {
 }
 interface Checkout {
   id: number; client_id: number | null; date: string; note: string | null
-  total_amount: number; created_at: string
+  total_amount: number; incl_course: number; created_at: string
   items: CheckoutItem[]; payments: CheckoutPayment[]
 }
 interface ClientDetail extends Client {
@@ -630,73 +630,153 @@ function PackagesTab({ client }: { client: ClientDetail }) {
   )
 }
 
-// ─── Checkouts Tab ───────────────────────────────────────────────────────────
-function CheckoutsTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
+// ─── Consumption Tab ─────────────────────────────────────────────────────────
+function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
   const [deleting, setDeleting] = useState<number | null>(null)
 
   async function deleteCheckout(co: Checkout) {
-    if (!confirm(`確定刪除 ${fmtShort(co.date)} 的結帳記錄（${fmtAmt(co.total_amount)}）？\n套組核銷堂數將一併還原。`)) return
+    if (!confirm(`確定刪除 ${fmtShort(co.date)} 的消費記錄（${fmtAmt(co.total_amount)}）？\n套組核銷堂數將一併還原。`)) return
     setDeleting(co.id)
     await fetch(`/api/checkouts/${co.id}`, { method: 'DELETE' })
     setDeleting(null)
     refresh()
   }
 
-  if (client.checkouts.length === 0) {
-    return (
-      <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
-        尚無結帳記錄
-      </p>
-    )
+  const currentYear = new Date().getFullYear().toString()
+
+  // Aggregate stats from checkout history
+  const totalSpending = client.checkouts.reduce((s, co) => s + co.total_amount, 0)
+  const yearSpending  = client.checkouts
+    .filter(co => co.date.startsWith(currentYear))
+    .reduce((s, co) => s + co.total_amount, 0)
+  const visitCount = client.checkouts.length
+
+  // Service & product frequency maps
+  const serviceMap: Record<string, { count: number; amount: number }> = {}
+  const productMap: Record<string, { count: number; amount: number }> = {}
+
+  for (const co of client.checkouts) {
+    for (const item of co.items) {
+      const key = item.label
+      const amt = item.price * item.qty
+      if (['服務', '套組核銷', '加購', '活動'].includes(item.category)) {
+        if (!serviceMap[key]) serviceMap[key] = { count: 0, amount: 0 }
+        serviceMap[key].count += item.qty
+        serviceMap[key].amount += amt
+      } else if (item.category === '產品') {
+        if (!productMap[key]) productMap[key] = { count: 0, amount: 0 }
+        productMap[key].count += item.qty
+        productMap[key].amount += amt
+      }
+    }
   }
 
+  const topServices = Object.entries(serviceMap).sort((a, b) => b[1].count - a[1].count).slice(0, 5)
+  const topProducts = Object.entries(productMap).sort((a, b) => b[1].count - a[1].count).slice(0, 5)
+
   return (
-    <div className="space-y-3">
-      {client.checkouts.map(co => (
-        <div key={co.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(co.date)}</span>
-                <span style={{ color: '#2c2825', fontSize: '0.9rem', fontWeight: 500 }}>{fmtAmt(co.total_amount)}</span>
-                {co.note && <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{co.note}</span>}
+    <div className="space-y-4">
+      {/* Summary stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+        {[
+          { label: '累計消費', value: fmtAmt(totalSpending), color: '#2c2825' },
+          { label: `${currentYear} 消費`, value: fmtAmt(yearSpending), color: '#4a6b52' },
+          { label: '到訪次數', value: `${visitCount} 次`, color: '#6b5f54' },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px', textAlign: 'center' }}>
+            <div style={{ color: '#9a8f84', fontSize: '0.65rem', letterSpacing: '0.05em' }}>{label}</div>
+            <div style={{ color, fontSize: '0.88rem', fontWeight: 500, marginTop: '2px' }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Service preferences */}
+      {topServices.length > 0 && (
+        <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
+          <p style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.08em', marginBottom: '8px' }}>常做課程</p>
+          <div className="space-y-2">
+            {topServices.map(([name, { count, amount }]) => (
+              <div key={name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#2c2825', fontSize: '0.82rem' }}>{name}</span>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>{count} 次</span>
+                  <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>{fmtAmt(amount)}</span>
+                </div>
               </div>
-              {/* Items */}
-              <div className="space-y-0.5">
-                {co.items.map(item => (
-                  <div key={item.id} style={{ display: 'flex', gap: '6px', fontSize: '0.78rem' }}>
-                    <span style={{ color: '#b4aa9e', minWidth: '48px' }}>{item.category}</span>
-                    <span style={{ color: '#4a4642' }}>{item.label}</span>
-                    {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
-                    <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Payments */}
-              <div style={{ marginTop: '4px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {co.payments.map(pay => (
-                  <span key={pay.id} style={{ fontSize: '0.7rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '10px', padding: '1px 8px' }}>
-                    {pay.method} {fmtAmt(pay.amount)}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <button
-              onClick={() => deleteCheckout(co)}
-              disabled={deleting === co.id}
-              style={{ color: '#c4b8aa', fontSize: '0.72rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '3px 8px', cursor: 'pointer', flexShrink: 0 }}>
-              {deleting === co.id ? '…' : '刪除'}
-            </button>
+            ))}
           </div>
         </div>
-      ))}
+      )}
+
+      {/* Product preferences */}
+      {topProducts.length > 0 && (
+        <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
+          <p style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.08em', marginBottom: '8px' }}>常購產品</p>
+          <div className="space-y-2">
+            {topProducts.map(([name, { count, amount }]) => (
+              <div key={name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#2c2825', fontSize: '0.82rem' }}>{name}</span>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>{count} 次</span>
+                  <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>{fmtAmt(amount)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Checkout history */}
+      <div>
+        <p style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.08em', marginBottom: '8px' }}>消費明細</p>
+        {client.checkouts.length === 0 ? (
+          <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無消費記錄</p>
+        ) : (
+          <div className="space-y-2">
+            {client.checkouts.map(co => (
+              <div key={co.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px 12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(co.date)}</span>
+                      <span style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500 }}>{fmtAmt(co.total_amount)}</span>
+                      {co.note && <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>{co.note}</span>}
+                    </div>
+                    <div className="space-y-0.5">
+                      {co.items.map(item => (
+                        <div key={item.id} style={{ display: 'flex', gap: '6px', fontSize: '0.75rem' }}>
+                          <span style={{ color: '#b4aa9e', minWidth: '44px' }}>{item.category}</span>
+                          <span style={{ color: '#4a4642' }}>{item.label}</span>
+                          {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
+                          <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: '4px', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                      {co.payments.map(pay => (
+                        <span key={pay.id} style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '10px', padding: '1px 7px' }}>
+                          {pay.method} {fmtAmt(pay.amount)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <button onClick={() => deleteCheckout(co)} disabled={deleting === co.id}
+                    style={{ color: '#c4b8aa', fontSize: '0.68rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}>
+                    {deleting === co.id ? '…' : '刪除'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = '分期' | '福利' | '套組' | '儲值' | '結帳'
-const TABS: Tab[] = ['分期', '福利', '套組', '儲值', '結帳']
+type Tab = '分期' | '福利' | '套組' | '儲值' | '消費紀錄'
+const TABS: Tab[] = ['分期', '福利', '套組', '儲值', '消費紀錄']
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -730,6 +810,21 @@ export default function ClientDetailPage() {
 
   const level = (client.level || '癒米') as MembershipLevel
   const lc = LEVEL_COLOR[level] ?? LEVEL_COLOR['癒米']
+  const isPendingUpgrade = !!(client.level_since && client.level_since > todayStr())
+  const effectiveLevel: MembershipLevel = isPendingUpgrade ? '癒米' : level
+
+  // Annual course spending for upgrade progress (current year, incl_course checkouts)
+  const currentYear = new Date().getFullYear().toString()
+  const annualCourseSpending = client.checkouts
+    .filter(co => co.incl_course && co.date.startsWith(currentYear))
+    .flatMap(co => co.items)
+    .filter(item => ['服務', '加購', '活動', '套組核銷'].includes(item.category))
+    .reduce((s, item) => s + item.price * item.qty, 0)
+
+  const nextLevel = NEXT_LEVEL[effectiveLevel]
+  const nextThreshold = nextLevel ? LEVEL_THRESHOLDS[nextLevel] : null
+  const upgradeGap = nextThreshold ? Math.max(0, nextThreshold - annualCourseSpending) : 0
+  const upgradePct = nextThreshold ? Math.min(100, Math.round((annualCourseSpending / nextThreshold) * 100)) : 100
 
   return (
     <div className="space-y-5">
@@ -775,6 +870,36 @@ export default function ClientDetailPage() {
             </div>
           ))}
         </div>
+
+        {/* Upgrade progress */}
+        {nextLevel ? (
+          <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px 12px', marginTop: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.06em' }}>
+                升等進度　{effectiveLevel} → {nextLevel}
+              </span>
+              <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>
+                {fmtAmt(annualCourseSpending)} / {fmtAmt(nextThreshold!)}
+              </span>
+            </div>
+            <div style={{ background: '#e0d9d0', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+              <div style={{
+                background: upgradePct >= 100 ? '#9ab89e' : lc.border,
+                width: `${upgradePct}%`, height: '100%', borderRadius: '4px',
+                transition: 'width 0.4s',
+              }} />
+            </div>
+            <div style={{ marginTop: '4px', color: '#9a8f84', fontSize: '0.68rem' }}>
+              {upgradeGap > 0
+                ? `還差 ${fmtAmt(upgradeGap)} 可升 ${nextLevel}`
+                : `已達 ${nextLevel} 門檻`}
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: '#fdf5e0', border: '1px solid #e0c055', borderRadius: '6px', padding: '8px 12px', marginTop: '8px', textAlign: 'center' }}>
+            <span style={{ color: '#7a5a00', fontSize: '0.72rem' }}>已是最高等級 悟癒米</span>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -799,7 +924,7 @@ export default function ClientDetailPage() {
       {tab === '福利' && <BenefitsTab client={client} refresh={load} />}
       {tab === '套組' && <PackagesTab client={client} />}
       {tab === '儲值' && <StoredValueTab client={client} refresh={load} />}
-      {tab === '結帳' && <CheckoutsTab client={client} refresh={load} />}
+      {tab === '消費紀錄' && <ConsumptionTab client={client} refresh={load} />}
 
       {/* Delete */}
       <div style={{ borderTop: '1px solid #f0ebe4', paddingTop: '16px', marginTop: '8px' }}>
