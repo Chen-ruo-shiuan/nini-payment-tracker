@@ -670,9 +670,14 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
 
   // Aggregate stats from checkout history
   const allItems = client.checkouts.flatMap(co => co.items ?? [])
-  const courseSpendig = allItems
+  const checkoutCourseAmt = allItems
     .filter(i => ['服務', '加購', '活動'].includes(i.category))
     .reduce((s, i) => s + i.price * i.qty, 0)
+  // Add packages with include_in_accumulation (all time)
+  const pkgAccumAmt = (client.packages ?? [])
+    .filter(pkg => pkg.include_in_accumulation === 1)
+    .reduce((s, pkg) => s + pkg.prepaid_amount, 0)
+  const courseSpendig = checkoutCourseAmt + pkgAccumAmt
   const productSpending = allItems
     .filter(i => i.category === '產品')
     .reduce((s, i) => s + i.price * i.qty, 0)
@@ -840,14 +845,19 @@ export default function ClientDetailPage() {
   const isPendingUpgrade = !!(client.level_since && client.level_since > todayStr())
   const effectiveLevel: MembershipLevel = isPendingUpgrade ? '癒米' : level
 
-  // Annual course spending for upgrade progress (current year, incl_course checkouts)
+  // Annual course spending for upgrade progress (current year)
   const currentYear = new Date().getFullYear().toString()
-  // 套組核銷 is excluded — it was already counted when the package was purchased
-  const annualCourseSpending = client.checkouts
+  // 商品券 excluded from checkouts — already counted at package purchase time
+  const checkoutCourseSpending = client.checkouts
     .filter(co => co.incl_course && co.date.startsWith(currentYear))
     .flatMap(co => co.items ?? [])
     .filter(item => ['服務', '加購', '活動'].includes(item.category))
     .reduce((s, item) => s + item.price * item.qty, 0)
+  // Packages with include_in_accumulation purchased this year
+  const pkgCourseSpending = (client.packages ?? [])
+    .filter(pkg => pkg.include_in_accumulation === 1 && pkg.date.startsWith(currentYear))
+    .reduce((s, pkg) => s + pkg.prepaid_amount, 0)
+  const annualCourseSpending = checkoutCourseSpending + pkgCourseSpending
 
   const nextLevel = NEXT_LEVEL[effectiveLevel]
   const nextThreshold = nextLevel ? LEVEL_THRESHOLDS[nextLevel] : null

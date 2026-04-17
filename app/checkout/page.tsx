@@ -26,7 +26,8 @@ function saveProduct(name: string) {
 interface DailyCheckout {
   id: number; client_id: number | null; client_name: string | null
   date: string; note: string | null; total_amount: number
-  items: { id: number; category: string; label: string; price: number; qty: number }[]
+  incl_course: number; incl_product: number
+  items: { id: number; category: string; label: string; price: number; qty: number; pkg_id?: number }[]
   payments: { id: number; method: string; amount: number }[]
 }
 
@@ -50,6 +51,16 @@ export default function CheckoutPage() {
   const [logLoading, setLogLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
+  // Log edit
+  const [editingLogId, setEditingLogId] = useState<number | null>(null)
+  const [editItems, setEditItems] = useState<Item[]>([])
+  const [editPays, setEditPays] = useState<Pay[]>([])
+  const [editNote, setEditNote] = useState('')
+  const [editDate, setEditDate] = useState('')
+  const [editInclCourse, setEditInclCourse] = useState(true)
+  const [editInclProduct, setEditInclProduct] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
+
   const fetchDailyLog = useCallback(async (d: string) => {
     setLogLoading(true)
     try {
@@ -67,6 +78,46 @@ export default function CheckoutPage() {
     setDeletingId(id)
     await fetch(`/api/checkouts/${id}`, { method: 'DELETE' })
     setDeletingId(null)
+    fetchDailyLog(logDate)
+  }
+
+  function startLogEdit(co: DailyCheckout) {
+    setEditingLogId(co.id)
+    setEditDate(co.date)
+    setEditNote(co.note ?? '')
+    setEditInclCourse(!!(co as DailyCheckout & { incl_course?: number }).incl_course)
+    setEditInclProduct(!!(co as DailyCheckout & { incl_product?: number }).incl_product)
+    setEditItems(co.items.map(i => ({
+      id: uid(), category: i.category, label: i.label,
+      price: String(i.price), qty: i.qty,
+      pkg_id: (i as typeof i & { pkg_id?: number }).pkg_id,
+    })))
+    setEditPays(co.payments.map(p => ({
+      id: uid(), method: p.method, amount: String(p.amount),
+    })))
+  }
+
+  async function saveLogEdit(coId: number) {
+    if (editItems.some(i => !i.label || !i.price)) { alert('請填寫完整品項名稱和金額'); return }
+    const eTot = editItems.reduce((s, i) => s + (Number(i.price) || 0) * i.qty, 0)
+    const pTot = editPays.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    if (Math.round(eTot - pTot) !== 0) { alert(`付款金額與消費金額不符，差距 $${Math.abs(eTot - pTot).toLocaleString()}`); return }
+    setSavingEdit(true)
+    const res = await fetch(`/api/checkouts/${coId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: editDate,
+        note: editNote,
+        incl_course: editInclCourse,
+        incl_product: editInclProduct,
+        items: editItems.map(i => ({ category: i.category, label: i.label, price: Number(i.price), qty: i.qty, pkg_id: i.pkg_id })),
+        payments: editPays.map(p => ({ method: p.method, amount: Number(p.amount) })),
+      }),
+    })
+    setSavingEdit(false)
+    if (!res.ok) { alert('儲存失敗'); return }
+    setEditingLogId(null)
     fetchDailyLog(logDate)
   }
 
@@ -581,48 +632,177 @@ export default function CheckoutPage() {
               </div>
 
               {/* Individual records */}
-              {dailyLog.map(co => (
-                <div key={co.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        {co.client_id ? (
-                          <Link href={`/clients/${co.client_id}`} style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500 }}>
-                            {co.client_name ?? '未知客人'}
-                          </Link>
-                        ) : (
-                          <span style={{ color: '#9a8f84', fontSize: '0.88rem' }}>散客</span>
-                        )}
-                        <span style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500, marginLeft: 'auto' }}>
-                          {fmtAmt(co.total_amount)}
-                        </span>
-                      </div>
-                      <div className="space-y-0.5">
-                        {co.items.map(item => (
-                          <div key={item.id} style={{ display: 'flex', gap: '6px', fontSize: '0.75rem' }}>
-                            <span style={{ color: '#b4aa9e', minWidth: '44px' }}>{item.category}</span>
-                            <span style={{ color: '#4a4642' }}>{item.label}</span>
-                            {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
-                            <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
+              {dailyLog.map(co => {
+                const isEditingThis = editingLogId === co.id
+                const editTotal = editItems.reduce((s, i) => s + (Number(i.price) || 0) * i.qty, 0)
+                const editPayTotal = editPays.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+                const editDiff = editTotal - editPayTotal
+
+                return (
+                  <div key={co.id} style={{ background: '#faf8f5', border: `1px solid ${isEditingThis ? '#9ab89e' : '#e0d9d0'}`, borderRadius: '6px', padding: '10px 12px' }}>
+                    {/* ── View mode ── */}
+                    {!isEditingThis && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            {co.client_id ? (
+                              <Link href={`/clients/${co.client_id}`} style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500 }}>
+                                {co.client_name ?? '未知客人'}
+                              </Link>
+                            ) : (
+                              <span style={{ color: '#9a8f84', fontSize: '0.88rem' }}>散客</span>
+                            )}
+                            <span style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500, marginLeft: 'auto' }}>
+                              {fmtAmt(co.total_amount)}
+                            </span>
                           </div>
-                        ))}
+                          <div className="space-y-0.5">
+                            {co.items.map(item => (
+                              <div key={item.id} style={{ display: 'flex', gap: '6px', fontSize: '0.75rem' }}>
+                                <span style={{ color: '#b4aa9e', minWidth: '44px' }}>{item.category}</span>
+                                <span style={{ color: '#4a4642' }}>{item.label}</span>
+                                {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
+                                <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ marginTop: '4px', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                            {co.payments.map(pay => (
+                              <span key={pay.id} style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '10px', padding: '1px 7px' }}>
+                                {pay.method} {fmtAmt(pay.amount)}
+                              </span>
+                            ))}
+                            {co.note && <span style={{ fontSize: '0.68rem', color: '#9a8f84' }}>{co.note}</span>}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
+                          <button onClick={() => startLogEdit(co)}
+                            style={{ color: '#6b5f54', fontSize: '0.68rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}>
+                            編輯
+                          </button>
+                          <button onClick={() => deleteLog(co.id)} disabled={deletingId === co.id}
+                            style={{ color: '#c4b8aa', fontSize: '0.68rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}>
+                            {deletingId === co.id ? '…' : '刪除'}
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ marginTop: '4px', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                        {co.payments.map(pay => (
-                          <span key={pay.id} style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '10px', padding: '1px 7px' }}>
-                            {pay.method} {fmtAmt(pay.amount)}
+                    )}
+
+                    {/* ── Edit mode ── */}
+                    {isEditingThis && (
+                      <div className="space-y-3">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ color: '#2c2825', fontSize: '0.85rem', fontWeight: 500 }}>
+                            {co.client_name ?? '散客'} 編輯中
                           </span>
-                        ))}
-                        {co.note && <span style={{ fontSize: '0.68rem', color: '#9a8f84' }}>{co.note}</span>}
+                          <input value={editDate} onChange={e => setEditDate(e.target.value)} type="date"
+                            style={{ ...iStyle, width: 'auto', fontSize: '0.8rem', padding: '4px 8px' }} />
+                        </div>
+
+                        {/* Items */}
+                        <div style={{ borderTop: '1px solid #f0ebe4', paddingTop: '8px' }} className="space-y-2">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.05em' }}>消費品項</span>
+                            <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>小計 {fmtAmt(editTotal)}</span>
+                          </div>
+                          {editItems.map((item, idx) => (
+                            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: '4px', alignItems: 'center' }}>
+                              <select value={item.category}
+                                onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, category: e.target.value, label: '', pkg_id: undefined } : i))}
+                                style={{ ...iStyle, fontSize: '0.75rem', padding: '4px 6px', width: 'auto' }}>
+                                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                              </select>
+                              <input value={item.label}
+                                onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, label: e.target.value } : i))}
+                                placeholder="品項名稱" style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px' }} />
+                              <input value={item.price}
+                                onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, price: e.target.value } : i))}
+                                type="number" placeholder="金額" style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px', width: '72px' }} />
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                <button type="button" onClick={() => setEditItems(p => p.map(i => i.id === item.id ? { ...i, qty: Math.max(1, i.qty - 1) } : i))}
+                                  style={{ ...qBtn, background: item.qty > 1 ? '#f0ebe4' : '#faf8f5' }}>−</button>
+                                <span style={{ color: '#2c2825', fontSize: '0.8rem', minWidth: '16px', textAlign: 'center' }}>{item.qty}</span>
+                                <button type="button" onClick={() => setEditItems(p => p.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i))}
+                                  style={{ ...qBtn, background: '#f0ebe4' }}>＋</button>
+                              </div>
+                              {idx > 0 && (
+                                <button type="button" onClick={() => setEditItems(p => p.filter(i => i.id !== item.id))}
+                                  style={{ color: '#c4b8aa', background: 'none', border: 'none', fontSize: '0.9rem', cursor: 'pointer' }}>✕</button>
+                              )}
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => setEditItems(p => [...p, { id: uid(), category: '服務', label: '', price: '', qty: 1 }])}
+                            style={{ color: '#9a8f84', background: 'none', border: '1px dashed #d9d0c5', borderRadius: '4px', fontSize: '0.75rem', padding: '4px 10px', cursor: 'pointer', width: '100%' }}>
+                            ＋ 新增品項
+                          </button>
+                        </div>
+
+                        {/* Payments */}
+                        <div style={{ borderTop: '1px solid #f0ebe4', paddingTop: '8px' }} className="space-y-2">
+                          <span style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.05em' }}>付款方式</span>
+                          {editPays.map((pay, idx) => (
+                            <div key={pay.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '4px', alignItems: 'center' }}>
+                              <select value={pay.method} onChange={e => setEditPays(p => p.map(pp => pp.id === pay.id ? { ...pp, method: e.target.value } : pp))}
+                                style={{ ...iStyle, fontSize: '0.78rem', padding: '4px 6px', width: 'auto' }}>
+                                {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
+                              </select>
+                              <input value={pay.amount} onChange={e => setEditPays(p => p.map(pp => pp.id === pay.id ? { ...pp, amount: e.target.value } : pp))}
+                                type="number" placeholder="金額" style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px' }} />
+                              {idx > 0 && (
+                                <button type="button" onClick={() => setEditPays(p => p.filter(pp => pp.id !== pay.id))}
+                                  style={{ color: '#c4b8aa', background: 'none', border: 'none', fontSize: '0.9rem', cursor: 'pointer' }}>✕</button>
+                              )}
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => setEditPays(p => [...p, { id: uid(), method: '現金', amount: '' }])}
+                            style={{ color: '#9a8f84', background: 'none', border: '1px dashed #d9d0c5', borderRadius: '4px', fontSize: '0.75rem', padding: '4px 10px', cursor: 'pointer', width: '100%' }}>
+                            ＋ 新增付款方式
+                          </button>
+                          {/* Balance check */}
+                          <div style={{
+                            background: Math.round(editDiff) === 0 ? '#edf3eb' : '#fdf0f0',
+                            border: `1px solid ${Math.round(editDiff) === 0 ? '#9ab89e' : '#e8a8a8'}`,
+                            borderRadius: '4px', padding: '6px 10px',
+                            display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem',
+                          }}>
+                            <span style={{ color: '#6b5f54' }}>已分配 {fmtAmt(editPayTotal)}</span>
+                            <span style={{ color: Math.round(editDiff) === 0 ? '#4a6b52' : '#9a4a4a', fontWeight: 500 }}>
+                              {Math.round(editDiff) === 0 ? '✓ 已全額' : editDiff > 0 ? `尚差 ${fmtAmt(editDiff)}` : `超額 ${fmtAmt(-editDiff)}`}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Note + accumulation */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'center' }}>
+                          <input value={editNote} onChange={e => setEditNote(e.target.value)}
+                            placeholder="備註（選填）" style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 10px' }} />
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            <input type="checkbox" checked={editInclCourse} onChange={e => setEditInclCourse(e.target.checked)}
+                              style={{ accentColor: '#6b5f54' }} />
+                            <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>計入年度</span>
+                          </label>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => saveLogEdit(co.id)} disabled={savingEdit || Math.round(editDiff) !== 0}
+                            style={{
+                              flex: 1, background: savingEdit || Math.round(editDiff) !== 0 ? '#c4b8aa' : '#2c2825',
+                              color: '#f7f4ef', border: 'none', borderRadius: '5px',
+                              fontSize: '0.82rem', padding: '8px', cursor: savingEdit ? 'not-allowed' : 'pointer',
+                            }}>
+                            {savingEdit ? '儲存中…' : '儲存'}
+                          </button>
+                          <button onClick={() => setEditingLogId(null)}
+                            style={{ flex: 1, background: 'none', color: '#6b5f54', border: '1px solid #e0d9d0', borderRadius: '5px', fontSize: '0.82rem', padding: '8px', cursor: 'pointer' }}>
+                            取消
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <button onClick={() => deleteLog(co.id)} disabled={deletingId === co.id}
-                      style={{ color: '#c4b8aa', fontSize: '0.68rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}>
-                      {deletingId === co.id ? '…' : '刪除'}
-                    </button>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </>
           )
         })()}
