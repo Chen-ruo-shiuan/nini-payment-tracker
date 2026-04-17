@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import MembershipBadge from '@/components/MembershipBadge'
 import { PAYMENT_METHODS, ClientWithStats, MembershipLevel, LEVEL_POINTS, YODOMO_THRESHOLD } from '@/types'
 
@@ -8,6 +9,12 @@ import { PAYMENT_METHODS, ClientWithStats, MembershipLevel, LEVEL_POINTS, YODOMO
 interface Item  { id: string; category: string; label: string; price: string; qty: number; pkg_id?: number }
 interface Pay   { id: string; method: string; amount: string }
 interface PkgOption { id: number; service_name: string; remaining: number; unit_price: number }
+interface DailyCheckout {
+  id: number; client_id: number | null; client_name: string | null
+  date: string; note: string | null; total_amount: number
+  items: { id: number; category: string; label: string; price: number; qty: number }[]
+  payments: { id: number; method: string; amount: number }[]
+}
 
 const CATEGORIES = ['服務', '套組核銷', '產品', '加購', '活動'] as const
 const PAY_METHODS = PAYMENT_METHODS.filter(m => !['分期', '核銷'].includes(m))
@@ -22,6 +29,32 @@ export default function CheckoutPage() {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<{ id: number; pointsEarned: number; yodomoEarned: number; totalAmount: number } | null>(null)
+
+  // Daily log
+  const [logDate, setLogDate] = useState(today())
+  const [dailyLog, setDailyLog] = useState<DailyCheckout[]>([])
+  const [logLoading, setLogLoading] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+
+  const fetchDailyLog = useCallback(async (d: string) => {
+    setLogLoading(true)
+    try {
+      const res = await fetch(`/api/checkouts?date=${d}&limit=100`)
+      setDailyLog(await res.json())
+    } finally {
+      setLogLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchDailyLog(logDate) }, [logDate, fetchDailyLog])
+
+  async function deleteLog(id: number) {
+    if (!confirm('確定刪除這筆結帳紀錄？')) return
+    setDeletingId(id)
+    await fetch(`/api/checkouts/${id}`, { method: 'DELETE' })
+    setDeletingId(null)
+    fetchDailyLog(logDate)
+  }
 
   // Client
   const [clientSearch, setClientSearch] = useState('')
@@ -131,6 +164,7 @@ export default function CheckoutPage() {
       const data = await res.json()
       if (!res.ok) { alert(data.error || '發生錯誤'); return }
       setResult(data)
+      fetchDailyLog(date)
     } catch { alert('網路錯誤') } finally { setSaving(false) }
   }
 
@@ -422,6 +456,102 @@ export default function CheckoutPage() {
           {saving ? '處理中…' : `確認結帳　${fmtAmt(itemsTotal)}`}
         </button>
       </form>
+
+      {/* ── 當日紀錄 ── */}
+      <div style={{ borderTop: '2px solid #e0d9d0', paddingTop: '20px', marginTop: '8px' }} className="space-y-3">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ color: '#2c2825', fontSize: '1rem', fontWeight: 500, letterSpacing: '0.05em' }}>當日紀錄</h2>
+          <input
+            type="date" value={logDate}
+            onChange={e => setLogDate(e.target.value)}
+            style={{ ...iStyle, width: 'auto', fontSize: '0.85rem', padding: '6px 10px' }}
+          />
+        </div>
+
+        {logLoading ? (
+          <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>載入中…</p>
+        ) : dailyLog.length === 0 ? (
+          <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
+            {logDate} 無結帳紀錄
+          </p>
+        ) : (() => {
+          // Summary by payment method
+          const methodTotals: Record<string, number> = {}
+          let grandTotal = 0
+          for (const co of dailyLog) {
+            grandTotal += co.total_amount
+            for (const pay of co.payments) {
+              methodTotals[pay.method] = (methodTotals[pay.method] ?? 0) + pay.amount
+            }
+          }
+          return (
+            <>
+              {/* Day summary bar */}
+              <div style={{ background: '#2c2825', borderRadius: '8px', padding: '12px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ color: '#c4b8aa', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+                    共 {dailyLog.length} 筆
+                  </span>
+                  <span style={{ color: '#f7f4ef', fontSize: '1.1rem', fontWeight: 600 }}>
+                    {fmtAmt(grandTotal)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {Object.entries(methodTotals).map(([method, amt]) => (
+                    <span key={method} style={{ fontSize: '0.72rem', color: '#c4b8aa', background: 'rgba(255,255,255,0.08)', borderRadius: '10px', padding: '2px 10px' }}>
+                      {method} {fmtAmt(amt)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Individual records */}
+              {dailyLog.map(co => (
+                <div key={co.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        {co.client_id ? (
+                          <Link href={`/clients/${co.client_id}`} style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500 }}>
+                            {co.client_name ?? '未知客人'}
+                          </Link>
+                        ) : (
+                          <span style={{ color: '#9a8f84', fontSize: '0.88rem' }}>散客</span>
+                        )}
+                        <span style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500, marginLeft: 'auto' }}>
+                          {fmtAmt(co.total_amount)}
+                        </span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {co.items.map(item => (
+                          <div key={item.id} style={{ display: 'flex', gap: '6px', fontSize: '0.75rem' }}>
+                            <span style={{ color: '#b4aa9e', minWidth: '44px' }}>{item.category}</span>
+                            <span style={{ color: '#4a4642' }}>{item.label}</span>
+                            {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
+                            <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: '4px', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                        {co.payments.map(pay => (
+                          <span key={pay.id} style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '10px', padding: '1px 7px' }}>
+                            {pay.method} {fmtAmt(pay.amount)}
+                          </span>
+                        ))}
+                        {co.note && <span style={{ fontSize: '0.68rem', color: '#9a8f84' }}>{co.note}</span>}
+                      </div>
+                    </div>
+                    <button onClick={() => deleteLog(co.id)} disabled={deletingId === co.id}
+                      style={{ color: '#c4b8aa', fontSize: '0.68rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}>
+                      {deletingId === co.id ? '…' : '刪除'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )
+        })()}
+      </div>
     </div>
   )
 }

@@ -4,23 +4,28 @@ import { LEVEL_POINTS, YODOMO_THRESHOLD } from '@/types'
 
 export const runtime = 'nodejs'
 
-// GET /api/checkouts?client_id=&limit=20
+// GET /api/checkouts?client_id=&date=YYYY-MM-DD&limit=20
 export async function GET(req: NextRequest) {
   const db = getDb()
   const clientId = req.nextUrl.searchParams.get('client_id')
-  const limit = Number(req.nextUrl.searchParams.get('limit') || '20')
+  const date     = req.nextUrl.searchParams.get('date')
+  const limit    = Number(req.nextUrl.searchParams.get('limit') || '20')
 
-  const checkouts = clientId
-    ? db.prepare(`
-        SELECT co.*, c.name AS client_name
-        FROM checkouts co LEFT JOIN clients c ON c.id = co.client_id
-        WHERE co.client_id = ? ORDER BY co.date DESC, co.created_at DESC LIMIT ?
-      `).all(clientId, limit)
-    : db.prepare(`
-        SELECT co.*, c.name AS client_name
-        FROM checkouts co LEFT JOIN clients c ON c.id = co.client_id
-        ORDER BY co.date DESC, co.created_at DESC LIMIT ?
-      `).all(limit)
+  const conditions: string[] = []
+  const binds: (string | number)[] = []
+
+  if (clientId) { conditions.push('co.client_id = ?'); binds.push(clientId) }
+  if (date)     { conditions.push('co.date = ?');      binds.push(date) }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  binds.push(limit)
+
+  const checkouts = db.prepare(`
+    SELECT co.*, c.name AS client_name
+    FROM checkouts co LEFT JOIN clients c ON c.id = co.client_id
+    ${where}
+    ORDER BY co.created_at DESC LIMIT ?
+  `).all(...binds)
 
   for (const co of checkouts as { id: number; items?: unknown[]; payments?: unknown[] }[]) {
     co.items    = db.prepare('SELECT * FROM checkout_items WHERE checkout_id = ?').all(co.id)
