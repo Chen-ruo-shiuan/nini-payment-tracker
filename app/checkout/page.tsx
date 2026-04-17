@@ -30,7 +30,7 @@ interface DailyCheckout {
   payments: { id: number; method: string; amount: number }[]
 }
 
-const CATEGORIES = ['服務', '套組核銷', '產品', '加購', '活動'] as const
+const CATEGORIES = ['服務', '商品券', '產品', '加購', '活動'] as const
 const PAY_METHODS = PAYMENT_METHODS.filter(m => !['分期', '核銷'].includes(m))
 
 function uid() { return Math.random().toString(36).slice(2) }
@@ -134,7 +134,7 @@ export default function CheckoutPage() {
     const pkg = clientPkgs.find(p => p.id === pkgId)
     if (!pkg) return
     setItems(p => p.map(i => i.id === id ? {
-      ...i, category: '套組核銷', label: pkg.service_name,
+      ...i, category: '商品券', label: pkg.service_name,
       price: String(pkg.unit_price), pkg_id: pkgId,
     } : i))
   }
@@ -146,7 +146,7 @@ export default function CheckoutPage() {
     setPays(p => p.map(pay => pay.id === id ? { ...pay, [k]: v } : pay))
   }
 
-  // Points preview — 套組核銷 excluded (already counted at package purchase)
+  // Points preview — 商品券 excluded (already counted at package purchase)
   const qualifyingAmt = items
     .filter(i => {
       if (['服務', '加購', '活動'].includes(i.category)) return inclCourse
@@ -324,7 +324,7 @@ export default function CheckoutPage() {
               </select>
 
               {/* Name — smart selector per category */}
-              {item.category === '套組核銷' ? (
+              {item.category === '商品券' ? (
                 clientPkgs.length > 0 ? (
                   <select value={item.pkg_id ?? ''} onChange={e => setPkgItem(item.id, Number(e.target.value))}
                     style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>

@@ -31,7 +31,7 @@ export const HARVEST_GIFT: Partial<Record<MembershipLevel, string>> = {
 export const PAYMENT_METHODS = ['現金', '匯款', 'LINE Pay', '分期', '核銷', '儲值金', '金米', '商品券', '優惠折扣'] as const
 export type PaymentMethod = typeof PAYMENT_METHODS[number]
 
-export const ITEM_CATEGORIES = ['服務', '套組核銷', '產品', '加購', '活動'] as const
+export const ITEM_CATEGORIES = ['服務', '商品券', '產品', '加購', '活動'] as const
 export type ItemCategory = typeof ITEM_CATEGORIES[number]
 
 export const EXPENSE_CATEGORIES = ['食材耗材', '設備維護', '行銷廣告', '房租水電', '薪資', '其他'] as const

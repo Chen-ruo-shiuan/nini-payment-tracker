@@ -4,7 +4,7 @@ import { getDb } from '@/lib/db'
 export const runtime = 'nodejs'
 
 // POST /api/packages/[id]/recalc
-// Recalculates used_sessions by counting 套組核銷 checkout items
+// Recalculates used_sessions by counting 商品券 checkout items
 // that match this package's service_name for this client.
 export async function POST(
   _req: NextRequest,
@@ -18,13 +18,13 @@ export async function POST(
   } | undefined
   if (!pkg) return NextResponse.json({ error: '找不到套組' }, { status: 404 })
 
-  // Count all 套組核銷 items for this client matching this service_name
+  // Count all 商品券 items for this client matching this service_name
   const row = db.prepare(`
     SELECT COALESCE(SUM(ci.qty), 0) as total
     FROM checkout_items ci
     JOIN checkouts co ON co.id = ci.checkout_id
     WHERE co.client_id = ?
-      AND ci.category = '套組核銷'
+      AND ci.category = '商品券'
       AND ci.label = ?
   `).get(pkg.client_id, pkg.service_name) as { total: number }
 

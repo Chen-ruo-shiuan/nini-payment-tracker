@@ -30,7 +30,7 @@ export async function DELETE(
   const run = db.transaction(() => {
     // 1. Reverse package session deductions
     for (const item of items) {
-      if (item.category === '套組核銷' && item.pkg_id) {
+      if (item.category === '商品券' && item.pkg_id) {
         db.prepare('UPDATE packages SET used_sessions = MAX(0, used_sessions - ?) WHERE id = ?')
           .run(item.qty, item.pkg_id)
       }

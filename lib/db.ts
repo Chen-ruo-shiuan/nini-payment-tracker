@@ -20,6 +20,7 @@ export function getDb(): Database.Database {
     migrateClientColumns(db)
     migrateCheckoutItems(db)
     migrateSvLedgerPaymentMethod(db)
+    migrateRenameCategory(db)
   }
   return db
 }
@@ -256,6 +257,11 @@ function migrateCheckoutItems(db: Database.Database) {
   if (!cols.includes('pkg_id')) {
     db.exec('ALTER TABLE checkout_items ADD COLUMN pkg_id INTEGER REFERENCES packages(id) ON DELETE SET NULL')
   }
+}
+
+// ─── 遷移：checkout_items.category「套組核銷」→「商品券」 ─────────────────────
+function migrateRenameCategory(db: Database.Database) {
+  db.prepare(`UPDATE checkout_items SET category = '商品券' WHERE category = '套組核銷'`).run()
 }
 
 function migrateLegacyCustomers(db: Database.Database) {

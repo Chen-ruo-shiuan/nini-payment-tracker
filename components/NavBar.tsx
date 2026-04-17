@@ -39,7 +39,7 @@ export default function NavBar() {
       {/* Bottom tab bar */}
       <nav style={{ background: '#faf8f5', borderTop: '1px solid #e0d9d0' }}
         className="fixed bottom-0 left-0 right-0 z-40 pb-safe">
-        <div className="max-w-xl mx-auto grid grid-cols-6">
+        <div className="max-w-xl mx-auto grid grid-cols-7">
           {tabs.map(t => {
             const active = isActive(t.href)
             return (

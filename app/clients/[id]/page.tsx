@@ -659,7 +659,7 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
   const [deleting, setDeleting] = useState<number | null>(null)
 
   async function deleteCheckout(co: Checkout) {
-    if (!confirm(`確定刪除 ${fmtShort(co.date)} 的消費記錄（${fmtAmt(co.total_amount)}）？\n套組核銷堂數將一併還原。`)) return
+    if (!confirm(`確定刪除 ${fmtShort(co.date)} 的消費記錄（${fmtAmt(co.total_amount)}）？\n商品券（套組）堂數將一併還原。`)) return
     setDeleting(co.id)
     await fetch(`/api/checkouts/${co.id}`, { method: 'DELETE' })
     setDeleting(null)
@@ -686,7 +686,7 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
     for (const item of co.items) {
       const key = item.label
       const amt = item.price * item.qty
-      if (['服務', '套組核銷', '加購', '活動'].includes(item.category)) {
+      if (['服務', '商品券', '加購', '活動'].includes(item.category)) {
         if (!serviceMap[key]) serviceMap[key] = { count: 0, amount: 0 }
         serviceMap[key].count += item.qty
         serviceMap[key].amount += amt

@@ -243,7 +243,7 @@ export default function ReportsPage() {
                 const cats = data.byCategory ?? data.categoryBreakdown ?? []
                 const maxVal = Math.max(...cats.map((c: {total:number}) => c.total))
                 const COLORS: Record<string, string> = {
-                  '服務': '#9ab89e', '加購': '#a8c4b0', '套組核銷': '#c4b8aa',
+                  '服務': '#9ab89e', '加購': '#a8c4b0', '商品券': '#c4b8aa',
                   '產品': '#b8a8d0', '活動': '#d4c8a0',
                 }
                 return cats.map((c: {category:string;total:number;qty:number}) => (

@@ -15,9 +15,12 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     FROM packages WHERE used_sessions < total_sessions
   `).get() as { total: number }).total
 
-  // 已實現套組金額：已核銷堂數 × 單堂單價
+  // 已實現套組金額：本期實際使用商品券（套組核銷）的金額
   const pkgRealized = (db.prepare(`
-    SELECT COALESCE(SUM(used_sessions * unit_price), 0) AS total FROM packages WHERE date LIKE ?
+    SELECT COALESCE(SUM(ci.price * ci.qty), 0) AS total
+    FROM checkout_items ci
+    JOIN checkouts co ON co.id = ci.checkout_id
+    WHERE ci.category = '商品券' AND co.date LIKE ?
   `).get(dateFilter) as { total: number }).total
 
   // 分期已收金額
@@ -109,7 +112,7 @@ export async function GET(req: NextRequest) {
       GROUP BY ci.category ORDER BY total DESC
     `).all(`${target}%`)
 
-    // Top services (exclude 套組核銷 — already counted at purchase)
+    // Top services (exclude 商品券 — already counted at purchase)
     const topServices = db.prepare(`
       SELECT ci.label, ci.category, SUM(ci.price * ci.qty) AS total, SUM(ci.qty) AS qty
       FROM checkout_items ci

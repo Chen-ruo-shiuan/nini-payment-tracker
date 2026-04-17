@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(coId, item.category, item.label, item.price, item.qty, item.pkg_id ?? null)
 
-      // 套組核銷: increment used_sessions
-      if (item.category === '套組核銷' && item.pkg_id) {
+      // 商品券: increment used_sessions
+      if (item.category === '商品券' && item.pkg_id) {
         db.prepare(`UPDATE packages SET used_sessions = used_sessions + ? WHERE id = ?`)
           .run(item.qty, item.pkg_id)
       }
