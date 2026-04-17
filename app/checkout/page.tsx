@@ -773,14 +773,21 @@ export default function CheckoutPage() {
                         </div>
 
                         {/* Note + accumulation */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ borderTop: '1px solid #f0ebe4', paddingTop: '8px' }} className="space-y-2">
                           <input value={editNote} onChange={e => setEditNote(e.target.value)}
                             placeholder="備註（選填）" style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 10px' }} />
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" checked={editInclCourse} onChange={e => setEditInclCourse(e.target.checked)}
-                              style={{ accentColor: '#6b5f54' }} />
-                            <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>計入年度</span>
-                          </label>
+                          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={editInclCourse} onChange={e => setEditInclCourse(e.target.checked)}
+                                style={{ accentColor: '#6b5f54' }} />
+                              <span style={{ color: '#2c2825', fontSize: '0.8rem' }}>計入年度課程消費</span>
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={editInclProduct} onChange={e => setEditInclProduct(e.target.checked)}
+                                style={{ accentColor: '#6b5f54' }} />
+                              <span style={{ color: '#2c2825', fontSize: '0.8rem' }}>計入保養品消費</span>
+                            </label>
+                          </div>
                         </div>
 
                         {/* Actions */}
