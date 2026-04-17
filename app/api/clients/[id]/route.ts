@@ -43,10 +43,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     SELECT * FROM sv_ledger WHERE client_id = ? ORDER BY date DESC
   `).all(id)
 
-  // Fetch recent checkouts
+  // Fetch recent checkouts with items and payments
   const checkouts = db.prepare(`
-    SELECT * FROM checkouts WHERE client_id = ? ORDER BY date DESC LIMIT 20
+    SELECT * FROM checkouts WHERE client_id = ? ORDER BY date DESC LIMIT 50
   `).all(id)
+
+  for (const co of checkouts as { id: number; items?: unknown[]; payments?: unknown[] }[]) {
+    co.items    = db.prepare('SELECT * FROM checkout_items WHERE checkout_id = ?').all(co.id)
+    co.payments = db.prepare('SELECT * FROM checkout_payments WHERE checkout_id = ?').all(co.id)
+  }
 
   return NextResponse.json({ ...client as object, contracts, packages, sv_ledger, checkouts })
 }

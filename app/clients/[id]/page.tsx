@@ -817,7 +817,7 @@ export default function ClientDetailPage() {
   const currentYear = new Date().getFullYear().toString()
   const annualCourseSpending = client.checkouts
     .filter(co => co.incl_course && co.date.startsWith(currentYear))
-    .flatMap(co => co.items)
+    .flatMap(co => co.items ?? [])
     .filter(item => ['服務', '加購', '活動', '套組核銷'].includes(item.category))
     .reduce((s, item) => s + item.price * item.qty, 0)
 
