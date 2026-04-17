@@ -6,9 +6,23 @@ import MembershipBadge from '@/components/MembershipBadge'
 import { PAYMENT_METHODS, ClientWithStats, MembershipLevel, LEVEL_POINTS, YODOMO_THRESHOLD } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Item  { id: string; category: string; label: string; price: string; qty: number; pkg_id?: number }
+interface Item  { id: string; category: string; label: string; price: string; qty: number; pkg_id?: number; custom?: boolean }
 interface Pay   { id: string; method: string; amount: string }
 interface PkgOption { id: number; service_name: string; remaining: number; unit_price: number }
+
+const PRESET_SERVICES  = ['精細光彩', '原液調理', '泡光氧彗', '小顏骨氣', '雨林頭療', '森林癒撥筋']
+const PRESET_ADDONS    = ['全臉粉清', '深皮超導', '光波嫩膚', '臭氧離子']
+const LS_PRODUCTS_KEY  = 'nini_custom_products'
+
+function getStoredProducts(): string[] {
+  if (typeof window === 'undefined') return []
+  try { return JSON.parse(localStorage.getItem(LS_PRODUCTS_KEY) || '[]') } catch { return [] }
+}
+function saveProduct(name: string) {
+  if (typeof window === 'undefined' || !name) return
+  const list = getStoredProducts()
+  if (!list.includes(name)) localStorage.setItem(LS_PRODUCTS_KEY, JSON.stringify([name, ...list].slice(0, 30)))
+}
 interface DailyCheckout {
   id: number; client_id: number | null; client_name: string | null
   date: string; note: string | null; total_amount: number
@@ -73,6 +87,10 @@ export default function CheckoutPage() {
   const [inclYodomo,  setInclYodomo]  = useState(false)
   const [inclPoints,  setInclPoints]  = useState(false)
 
+  // Custom product memory
+  const [customProducts, setCustomProducts] = useState<string[]>([])
+  useEffect(() => { setCustomProducts(getStoredProducts()) }, [])
+
   // Client search
   const searchClients = useCallback(async (q: string) => {
     if (!q) { setClients([]); return }
@@ -128,10 +146,10 @@ export default function CheckoutPage() {
     setPays(p => p.map(pay => pay.id === id ? { ...pay, [k]: v } : pay))
   }
 
-  // Points preview
+  // Points preview — 套組核銷 excluded (already counted at package purchase)
   const qualifyingAmt = items
     .filter(i => {
-      if (['服務', '加購', '活動', '套組核銷'].includes(i.category)) return inclCourse
+      if (['服務', '加購', '活動'].includes(i.category)) return inclCourse
       if (i.category === '產品') return inclProduct
       return false
     })
@@ -296,22 +314,79 @@ export default function CheckoutPage() {
             <div key={item.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: '6px', alignItems: 'center' }}>
               {/* Category */}
               <select value={item.category}
-                onChange={e => setItem(item.id, 'category', e.target.value)}
+                onChange={e => {
+                  setItems(p => p.map(i => i.id === item.id
+                    ? { ...i, category: e.target.value, label: '', custom: false, pkg_id: undefined }
+                    : i))
+                }}
                 style={{ ...iStyle, fontSize: '0.78rem', padding: '6px 8px', width: 'auto' }}>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
 
-              {/* Name */}
-              {item.category === '套組核銷' && clientPkgs.length > 0 ? (
-                <select value={item.pkg_id ?? ''} onChange={e => setPkgItem(item.id, Number(e.target.value))}
-                  style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
-                  <option value="">選擇套組…</option>
-                  {clientPkgs.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.service_name}（剩 {p.remaining} 次）
-                    </option>
-                  ))}
-                </select>
+              {/* Name — smart selector per category */}
+              {item.category === '套組核銷' ? (
+                clientPkgs.length > 0 ? (
+                  <select value={item.pkg_id ?? ''} onChange={e => setPkgItem(item.id, Number(e.target.value))}
+                    style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
+                    <option value="">選擇套組…</option>
+                    {clientPkgs.map(p => (
+                      <option key={p.id} value={p.id}>{p.service_name}（剩 {p.remaining} 次）</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={item.label} onChange={e => setItem(item.id, 'label', e.target.value)}
+                    placeholder="套組名稱" style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />
+                )
+              ) : item.category === '服務' ? (
+                item.custom ? (
+                  <input value={item.label} onChange={e => setItem(item.id, 'label', e.target.value)}
+                    placeholder="服務名稱" autoFocus style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />
+                ) : (
+                  <select value={item.label}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') setItem(item.id, 'custom', 1)
+                      else setItem(item.id, 'label', e.target.value)
+                    }}
+                    style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
+                    <option value="">選擇服務…</option>
+                    {PRESET_SERVICES.map(s => <option key={s} value={s}>{s}</option>)}
+                    <option value="__custom__">自定義…</option>
+                  </select>
+                )
+              ) : item.category === '加購' ? (
+                item.custom ? (
+                  <input value={item.label} onChange={e => setItem(item.id, 'label', e.target.value)}
+                    placeholder="加購項目" autoFocus style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />
+                ) : (
+                  <select value={item.label}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') setItem(item.id, 'custom', 1)
+                      else setItem(item.id, 'label', e.target.value)
+                    }}
+                    style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
+                    <option value="">選擇加購…</option>
+                    {PRESET_ADDONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    <option value="__custom__">自定義…</option>
+                  </select>
+                )
+              ) : item.category === '產品' ? (
+                item.custom ? (
+                  <input value={item.label}
+                    onChange={e => setItem(item.id, 'label', e.target.value)}
+                    onBlur={e => { if (e.target.value) { saveProduct(e.target.value); setCustomProducts(getStoredProducts()) } }}
+                    placeholder="產品名稱" autoFocus style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />
+                ) : (
+                  <select value={item.label}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') setItem(item.id, 'custom', 1)
+                      else setItem(item.id, 'label', e.target.value)
+                    }}
+                    style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
+                    <option value="">選擇產品…</option>
+                    {customProducts.map(s => <option key={s} value={s}>{s}</option>)}
+                    <option value="__custom__">新增產品…</option>
+                  </select>
+                )
               ) : (
                 <input value={item.label} onChange={e => setItem(item.id, 'label', e.target.value)}
                   placeholder="品項名稱" style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />

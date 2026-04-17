@@ -9,6 +9,7 @@ const tabs = [
   { href: '/packages',    label: '套組',  icon: '⊕' },
   { href: '/installments',label: '分期',  icon: '⊘' },
   { href: '/expenses',    label: '支出',  icon: '⊖' },
+  { href: '/reports',     label: '報表',  icon: '⊜' },
 ]
 
 export default function NavBar() {

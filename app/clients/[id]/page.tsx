@@ -330,7 +330,7 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       </BenefitSection>
 
       {/* ── 金米 ── */}
-      <BenefitSection label={`金米　千元 ${pointRate} 點`} color="#c49a00" bg="#fdf5e0" border="#e0c055">
+      <BenefitSection label={`金米　千元 ${pointRate} 點`} color="#7a5a00" bg="#fdf5e0" border="#d4a830">
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
             <span style={{ color: '#7a5a00', fontSize: '1.6rem', fontWeight: 600 }}>{client.points}</span>
@@ -353,18 +353,18 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       </BenefitSection>
 
       {/* ── 迎賓下午茶 ── */}
-      <BenefitSection label={`迎賓下午茶　本月 ${teaQuota} 次`} color={lc.color} bg={lc.bg} border={lc.border}>
+      <BenefitSection label={`迎賓下午茶　本月 ${teaQuota} 次`} color="#1a6b5a" bg="#e6f5f0" border="#5ab89e">
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
           {Array.from({ length: teaQuota }).map((_, i) => {
             const date = teaDates[i]
             return date ? (
               // Used slot
               <div key={i} style={{
-                background: lc.bg, border: `1px solid ${lc.border}`,
+                background: '#e6f5f0', border: '1px solid #5ab89e',
                 borderRadius: '8px', padding: '6px 10px', fontSize: '0.75rem',
                 display: 'flex', alignItems: 'center', gap: '6px',
               }}>
-                <span style={{ color: lc.color }}>☕ {fmtShort(date)}</span>
+                <span style={{ color: '#1a6b5a' }}>☕ {fmtShort(date)}</span>
                 <button onClick={() => cancelTea(date)} style={{
                   background: 'none', border: 'none', color: '#c4b8aa',
                   cursor: 'pointer', fontSize: '0.8rem', lineHeight: 1, padding: '0 2px',
@@ -671,7 +671,7 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
   // Aggregate stats from checkout history
   const allItems = client.checkouts.flatMap(co => co.items ?? [])
   const courseSpendig = allItems
-    .filter(i => ['服務', '加購', '活動', '套組核銷'].includes(i.category))
+    .filter(i => ['服務', '加購', '活動'].includes(i.category))
     .reduce((s, i) => s + i.price * i.qty, 0)
   const productSpending = allItems
     .filter(i => i.category === '產品')
@@ -842,10 +842,11 @@ export default function ClientDetailPage() {
 
   // Annual course spending for upgrade progress (current year, incl_course checkouts)
   const currentYear = new Date().getFullYear().toString()
+  // 套組核銷 is excluded — it was already counted when the package was purchased
   const annualCourseSpending = client.checkouts
     .filter(co => co.incl_course && co.date.startsWith(currentYear))
     .flatMap(co => co.items ?? [])
-    .filter(item => ['服務', '加購', '活動', '套組核銷'].includes(item.category))
+    .filter(item => ['服務', '加購', '活動'].includes(item.category))
     .reduce((s, item) => s + item.price * item.qty, 0)
 
   const nextLevel = NEXT_LEVEL[effectiveLevel]
