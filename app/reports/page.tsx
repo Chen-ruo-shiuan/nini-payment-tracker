@@ -8,6 +8,7 @@ import { MembershipLevel } from '@/types'
 interface Financials {
   prepaid: number; outstanding: number
   pkgRealized: number; svUsed: number; pointsUsed: number; discountUsed: number
+  svDeposited: number; svBalance: number
   installmentReceived: number; installmentOutstanding: number
   checkoutTotal: number
   byPayMethod: { method: string; total: number }[]
@@ -220,18 +221,42 @@ export default function ReportsPage() {
             </div>
 
             {/* 預收 & 待履行 */}
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <StatCard
-                label="預收套組總額"
-                value={fmtAmt(fin?.prepaid ?? 0)}
-                color="#2d4f9a" bg="#e8f0fc" border="#9ab0e8"
-              />
-              <StatCard
-                label="待履行（套組）"
-                value={fmtAmt(fin?.outstanding ?? 0)}
-                sub="未核銷 × 單價"
-                color="#9a6a4a" bg="#fdf0e6" border="#e8cba8"
-              />
+            <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px 14px' }}>
+              <p style={{ color: '#9a8f84', fontSize: '0.68rem', letterSpacing: '0.08em', marginBottom: '8px' }}>預收款項（全期）</p>
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+                <StatCard
+                  label="套組預收總額"
+                  value={fmtAmt(fin?.prepaid ?? 0)}
+                  color="#2d4f9a" bg="#e8f0fc" border="#9ab0e8"
+                />
+                <StatCard
+                  label="套組待履行"
+                  value={fmtAmt(fin?.outstanding ?? 0)}
+                  sub="剩餘堂數 × 單價"
+                  color="#9a6a4a" bg="#fdf0e6" border="#e8cba8"
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <StatCard
+                  label="儲值金充值總額"
+                  value={fmtAmt(fin?.svDeposited ?? 0)}
+                  color="#2d4f9a" bg="#e8f0fc" border="#9ab0e8"
+                />
+                <StatCard
+                  label="儲值金餘額"
+                  value={fmtAmt(fin?.svBalance ?? 0)}
+                  sub="尚未使用"
+                  color="#4a6b52" bg="#edf3eb" border="#9ab89e"
+                />
+              </div>
+              {fin && (
+                <div style={{ marginTop: '8px', borderTop: '1px solid #e0d9d0', paddingTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b5f54', fontSize: '0.75rem', fontWeight: 500 }}>預收合計（套組 + 儲值金）</span>
+                  <span style={{ color: '#2d4f9a', fontSize: '0.88rem', fontWeight: 700 }}>
+                    {fmtAmt((fin.prepaid ?? 0) + (fin.svDeposited ?? 0))}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* 分期 */}
