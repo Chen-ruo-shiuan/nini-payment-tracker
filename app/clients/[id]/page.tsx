@@ -532,10 +532,15 @@ const SV_PAY_METHODS = ['現金', '匯款', 'LINE Pay', '信用卡', '其他'] a
 
 function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
   const [amount, setAmount] = useState('')
+  const [paidAmount, setPaidAmount] = useState('')
   const [note, setNote] = useState('')
   const [date, setDate] = useState(todayStr())
   const [payMethod, setPayMethod] = useState('現金')
   const [saving, setSaving] = useState(false)
+
+  const isDeposit = Number(amount) > 0
+  const allowance = isDeposit && paidAmount && Number(paidAmount) < Number(amount)
+    ? Number(amount) - Number(paidAmount) : 0
 
   async function addEntry(e: React.FormEvent) {
     e.preventDefault()
@@ -543,9 +548,15 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
     setSaving(true)
     await fetch('/api/sv-ledger', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: client.id, amount: Number(amount), note, date, payment_method: Number(amount) > 0 ? payMethod : null }),
+      body: JSON.stringify({
+        client_id: client.id,
+        amount: Number(amount),
+        paid_amount: isDeposit && paidAmount ? Number(paidAmount) : null,
+        note, date,
+        payment_method: isDeposit ? payMethod : null,
+      }),
     })
-    setAmount(''); setNote(''); setSaving(false)
+    setAmount(''); setPaidAmount(''); setNote(''); setSaving(false)
     refresh()
   }
 
@@ -558,38 +569,63 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
       <form onSubmit={addEntry} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '14px' }} className="space-y-3">
         <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>新增儲值 / 扣款</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="金額（負數為扣款）" type="number" style={inputStyle} />
-          <input value={date} onChange={e => setDate(e.target.value)} type="date" style={inputStyle} />
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '4px' }}>入帳金額（客人帳上）</label>
+            <input value={amount} onChange={e => { setAmount(e.target.value); setPaidAmount('') }}
+              placeholder="例：3000" type="number" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '4px' }}>
+              實收金額（選填）
+              {allowance > 0 && <span style={{ color: '#9a4a4a', marginLeft: '6px' }}>讓利 {fmtAmt(allowance)}</span>}
+            </label>
+            <input value={paidAmount} onChange={e => setPaidAmount(e.target.value)}
+              placeholder={isDeposit ? `無折扣填 ${amount || '同入帳'}` : '—'}
+              type="number" disabled={!isDeposit} style={{ ...inputStyle, opacity: isDeposit ? 1 : 0.4 }} />
+          </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          <select value={payMethod} onChange={e => setPayMethod(e.target.value)} style={inputStyle}>
+          <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
+            disabled={!isDeposit} style={{ ...inputStyle, opacity: isDeposit ? 1 : 0.4 }}>
             {SV_PAY_METHODS.map(m => <option key={m}>{m}</option>)}
           </select>
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={inputStyle} />
         </div>
-        <button type="submit" disabled={saving || !amount} style={{
-          background: saving || !amount ? '#c4b8aa' : '#2c2825', color: '#f7f4ef',
-          border: 'none', borderRadius: '5px', fontSize: '0.85rem', padding: '8px 20px', cursor: 'pointer',
-        }}>{saving ? '儲存中…' : '新增'}</button>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <input value={date} onChange={e => setDate(e.target.value)} type="date" style={inputStyle} />
+          <button type="submit" disabled={saving || !amount} style={{
+            background: saving || !amount ? '#c4b8aa' : '#2c2825', color: '#f7f4ef',
+            border: 'none', borderRadius: '5px', fontSize: '0.85rem', cursor: 'pointer',
+          }}>{saving ? '儲存中…' : '新增'}</button>
+        </div>
       </form>
       <div className="space-y-1">
         {client.sv_ledger.length === 0 && (
           <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無儲值記錄</p>
         )}
-        {(client.sv_ledger as (SvLedgerEntry & { payment_method?: string })[]).map(e => (
-          <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0ebe4' }}>
-            <div>
-              <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(e.date)}</span>
-              {e.payment_method && e.amount > 0 && (
-                <span style={{ color: '#9a8f84', fontSize: '0.72rem', marginLeft: '6px', background: '#f0ebe4', borderRadius: '8px', padding: '1px 6px' }}>{e.payment_method}</span>
-              )}
-              {e.note && <span style={{ color: '#6b5f54', fontSize: '0.8rem', marginLeft: '8px' }}>{e.note}</span>}
+        {client.sv_ledger.map(e => {
+          const hasAllowance = e.amount > 0 && e.paid_amount !== null && e.paid_amount !== undefined && e.paid_amount < e.amount
+          const svAllowance = hasAllowance ? e.amount - (e.paid_amount as number) : 0
+          return (
+            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0ebe4' }}>
+              <div>
+                <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(e.date)}</span>
+                {e.payment_method && e.amount > 0 && (
+                  <span style={{ color: '#9a8f84', fontSize: '0.72rem', marginLeft: '6px', background: '#f0ebe4', borderRadius: '8px', padding: '1px 6px' }}>{e.payment_method}</span>
+                )}
+                {hasAllowance && (
+                  <span style={{ color: '#9a4a4a', fontSize: '0.68rem', marginLeft: '6px', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '8px', padding: '1px 6px' }}>
+                    實收 {fmtAmt(e.paid_amount as number)}　讓利 {fmtAmt(svAllowance)}
+                  </span>
+                )}
+                {e.note && <span style={{ color: '#6b5f54', fontSize: '0.8rem', marginLeft: '8px' }}>{e.note}</span>}
+              </div>
+              <span style={{ color: e.amount >= 0 ? '#4a6b52' : '#9a4a4a', fontSize: '0.9rem', fontWeight: 500 }}>
+                {e.amount >= 0 ? '+' : ''}{fmtAmt(e.amount)}
+              </span>
             </div>
-            <span style={{ color: e.amount >= 0 ? '#4a6b52' : '#9a4a4a', fontSize: '0.9rem', fontWeight: 500 }}>
-              {e.amount >= 0 ? '+' : ''}{fmtAmt(e.amount)}
-            </span>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

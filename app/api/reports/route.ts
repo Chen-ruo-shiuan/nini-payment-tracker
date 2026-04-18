@@ -23,14 +23,23 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     WHERE ci.category = '商品券' AND co.date LIKE ?
   `).get(dateFilter) as { total: number }).total
 
-  // 儲值金：全期（不限日期）充值總額、餘額
+  // 儲值金：全期（不限日期）充值總額、餘額、讓利
   const svAll = (db.prepare(`
     SELECT
-      COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0)       AS sv_deposited,
-      COALESCE(ABS(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END)), 0)  AS sv_used_all,
-      COALESCE(SUM(amount), 0)                                             AS sv_balance
+      COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0)                        AS sv_deposited,
+      COALESCE(ABS(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END)), 0)                   AS sv_used_all,
+      COALESCE(SUM(amount), 0)                                                              AS sv_balance,
+      COALESCE(SUM(CASE WHEN paid_amount IS NOT NULL AND amount > paid_amount
+                        THEN amount - paid_amount ELSE 0 END), 0)                          AS sv_allowance_all
     FROM sv_ledger
-  `).get() as { sv_deposited: number; sv_used_all: number; sv_balance: number })
+  `).get() as { sv_deposited: number; sv_used_all: number; sv_balance: number; sv_allowance_all: number })
+
+  // 儲值讓利：本期充值中有折扣的讓利金額
+  const svAllowancePeriod = (db.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN paid_amount IS NOT NULL AND amount > paid_amount
+                             THEN amount - paid_amount ELSE 0 END), 0) AS total
+    FROM sv_ledger WHERE date LIKE ? AND amount > 0
+  `).get(dateFilter) as { total: number }).total
 
   // 儲值金已使用：本期 sv_ledger 負值（消費）
   const svUsed = (db.prepare(`
@@ -108,8 +117,10 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
   return {
     prepaid, outstanding,
     pkgRealized, svUsed, pointsUsed, discountUsed,
-    svDeposited: svAll.sv_deposited,
-    svBalance:   svAll.sv_balance,
+    svDeposited:      svAll.sv_deposited,
+    svBalance:        svAll.sv_balance,
+    svAllowanceAll:   svAll.sv_allowance_all,   // 全期儲值讓利（給預收區塊顯示）
+    svAllowancePeriod,                           // 本期儲值讓利（進 P&L 銷售折讓）
     installmentReceived, installmentOutstanding,
     checkoutTotal, byPayMethod,
     pkgDiscount,

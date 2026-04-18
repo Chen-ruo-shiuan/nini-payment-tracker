@@ -22,6 +22,7 @@ export function getDb(): Database.Database {
     migrateSvLedgerPaymentMethod(db)
     migrateRenameCategory(db)
     migratePackageUnitPriceOrig(db)
+    migrateSvLedgerPaidAmount(db)
   }
   return db
 }
@@ -270,6 +271,15 @@ function migratePackageUnitPriceOrig(db: Database.Database) {
   const cols = (db.prepare('PRAGMA table_info(packages)').all() as { name: string }[]).map(c => c.name)
   if (!cols.includes('unit_price_orig')) {
     db.exec(`ALTER TABLE packages ADD COLUMN unit_price_orig INTEGER NOT NULL DEFAULT 0`)
+  }
+}
+
+// ─── 遷移：sv_ledger 新增 paid_amount（實際收款，用於計算儲值讓利）──────────────
+function migrateSvLedgerPaidAmount(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(sv_ledger)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('paid_amount')) {
+    db.exec(`ALTER TABLE sv_ledger ADD COLUMN paid_amount INTEGER`)
+    // paid_amount NULL 表示無折扣（實收 = 入帳金額）
   }
 }
 

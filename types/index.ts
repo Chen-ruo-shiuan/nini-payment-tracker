@@ -192,6 +192,8 @@ export interface SvLedgerEntry {
   id: number
   client_id: number
   amount: number
+  paid_amount: number | null   // 實際收款；null = 無折扣（paid = amount）
+  payment_method: string | null
   note: string | null
   date: string
   created_at: string
