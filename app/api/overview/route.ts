@@ -21,12 +21,13 @@ export async function GET() {
   // ── 套組預收 vs 實收 ───────────────────────────────────────────────────────
   const pkgStats = db.prepare(`
     SELECT
-      COALESCE(SUM(prepaid_amount), 0)          AS pkg_prepaid,
-      COALESCE(SUM(used_sessions * unit_price), 0) AS pkg_realized,
-      COUNT(*)                                  AS pkg_total,
-      SUM(CASE WHEN used_sessions < total_sessions THEN 1 ELSE 0 END) AS pkg_active
+      COALESCE(SUM(prepaid_amount), 0)                                          AS pkg_prepaid,
+      COALESCE(SUM(used_sessions * unit_price), 0)                              AS pkg_realized,
+      COALESCE(SUM((total_sessions - used_sessions) * unit_price), 0)           AS pkg_outstanding,
+      COUNT(*)                                                                   AS pkg_total,
+      SUM(CASE WHEN used_sessions < total_sessions THEN 1 ELSE 0 END)           AS pkg_active
     FROM packages
-  `).get() as { pkg_prepaid: number; pkg_realized: number; pkg_total: number; pkg_active: number }
+  `).get() as { pkg_prepaid: number; pkg_realized: number; pkg_outstanding: number; pkg_total: number; pkg_active: number }
 
   // ── 儲值金統計 ────────────────────────────────────────────────────────────
   const svStats = db.prepare(`
@@ -107,7 +108,7 @@ export async function GET() {
     // 大數字
     pkg_prepaid:    pkgStats.pkg_prepaid,
     pkg_realized:   pkgStats.pkg_realized,
-    pkg_pending:    pkgStats.pkg_prepaid - pkgStats.pkg_realized,
+    pkg_pending:    pkgStats.pkg_outstanding,
     pkg_total:      pkgStats.pkg_total,
     pkg_active:     pkgStats.pkg_active,
     sv_deposited:   svStats.sv_deposited,

@@ -4,12 +4,12 @@ import { getDb } from '@/lib/db'
 export const runtime = 'nodejs'
 
 function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilter: string) {
-  // 預收金額：套組的預收總額（符合日期範圍的套組購買）
+  // 預收金額：全部套組歷史預收總額（不限日期，與總覽一致）
   const prepaid = (db.prepare(`
-    SELECT COALESCE(SUM(prepaid_amount), 0) AS total FROM packages WHERE date LIKE ?
-  `).get(dateFilter) as { total: number }).total
+    SELECT COALESCE(SUM(prepaid_amount), 0) AS total FROM packages
+  `).get() as { total: number }).total
 
-  // 待履行金額：未核銷堂數 × 單堂單價（不限日期，所有未完成套組）
+  // 待履行金額：未核銷堂數 × 單堂單價（不限日期，所有未完成套組，與總覽一致）
   const outstanding = (db.prepare(`
     SELECT COALESCE(SUM((total_sessions - used_sessions) * unit_price), 0) AS total
     FROM packages WHERE used_sessions < total_sessions
