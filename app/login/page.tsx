@@ -1,14 +1,13 @@
 'use client'
 import { useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const from = searchParams.get('from') || '/'
 
-  const [pw, setPw]         = useState('')
-  const [error, setError]   = useState('')
+  const [pw, setPw]           = useState('')
+  const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -22,10 +21,11 @@ function LoginForm() {
         body: JSON.stringify({ password: pw }),
       })
       if (res.ok) {
-        router.replace(from)
-        router.refresh()
+        // 強制整頁跳轉，確保 middleware 重新驗證新 cookie
+        window.location.href = from
       } else {
-        setError('密碼錯誤，請再試一次')
+        const data = await res.json()
+        setError(data.error || '密碼錯誤，請再試一次')
         setPw('')
       }
     } catch {
