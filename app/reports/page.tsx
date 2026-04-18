@@ -7,7 +7,7 @@ import { MembershipLevel } from '@/types'
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Financials {
   prepaid: number; outstanding: number
-  pkgRealized: number; svUsed: number; pointsUsed: number
+  pkgRealized: number; svUsed: number; pointsUsed: number; discountUsed: number
   installmentReceived: number; installmentOutstanding: number
   checkoutTotal: number
   byPayMethod: { method: string; total: number }[]
@@ -182,8 +182,8 @@ export default function ReportsPage() {
               {/* 付款方式明細 */}
               {fin?.byPayMethod && fin.byPayMethod.length > 0 && (() => {
                 const cashMethods = fin.byPayMethod.filter(m => ['現金','匯款','LINE Pay','LinePay'].includes(m.method))
-                const preMethods  = fin.byPayMethod.filter(m => ['商品券','儲值金','金米'].includes(m.method))
-                const otherMethods = fin.byPayMethod.filter(m => !['現金','匯款','LINE Pay','LinePay','商品券','儲值金','金米'].includes(m.method))
+                const preMethods  = fin.byPayMethod.filter(m => ['商品券','儲值金','金米','優惠折扣'].includes(m.method))
+                const otherMethods = fin.byPayMethod.filter(m => !['現金','匯款','LINE Pay','LinePay','商品券','儲值金','金米','優惠折扣'].includes(m.method))
                 return (
                   <div className="space-y-1">
                     {cashMethods.length > 0 && (
@@ -262,10 +262,12 @@ export default function ReportsPage() {
 
             // ── 銷售折讓（隱沒成本）──────────────────────────────────────────
             // 套組讓利：本期核銷時，原定單價 vs 記帳單價的差（每堂計算）
-            const pkgDiscount   = fin.pkgDiscount
-            // 優惠折扣：金米折抵（客戶用積分抵扣，不收現金）
-            const pointsDisc    = fin.pointsUsed
-            const totalAllowance = pkgDiscount + pointsDisc
+            const pkgDiscount    = fin.pkgDiscount
+            // 優惠折扣：結帳時選「優惠折扣」付款方式（我方讓利，未收現金）
+            const cashDiscount   = fin.discountUsed
+            // 金米折抵：客戶用積分抵扣，未收現金
+            const pointsDisc     = fin.pointsUsed
+            const totalAllowance = pkgDiscount + cashDiscount + pointsDisc
 
             // ── 毛利 = 收入 - 折讓 ───────────────────────────────────────────
             const grossProfit  = grossRevenue - totalAllowance
@@ -304,10 +306,18 @@ export default function ReportsPage() {
                         <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(pkgDiscount)}</span>
                       </div>
                     )}
-                    {pointsDisc > 0 && (
+                    {cashDiscount > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                         <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>優惠折扣
-                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>金米折抵</span>
+                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>結帳讓利</span>
+                        </span>
+                        <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(cashDiscount)}</span>
+                      </div>
+                    )}
+                    {pointsDisc > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>金米折抵
+                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>積分折抵</span>
                         </span>
                         <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(pointsDisc)}</span>
                       </div>

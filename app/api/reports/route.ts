@@ -37,6 +37,14 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     WHERE cp.method = '金米' AND co.date LIKE ?
   `).get(dateFilter) as { total: number }).total
 
+  // 優惠折扣：本期結帳付款方式為「優惠折扣」的金額（我方讓利，未收現金）
+  const discountUsed = (db.prepare(`
+    SELECT COALESCE(SUM(cp.amount), 0) AS total
+    FROM checkout_payments cp
+    JOIN checkouts co ON co.id = cp.checkout_id
+    WHERE cp.method = '優惠折扣' AND co.date LIKE ?
+  `).get(dateFilter) as { total: number }).total
+
   // 分期已收（本期）
   const installmentReceived = (db.prepare(`
     SELECT COALESCE(SUM(amount), 0) AS total FROM installments
@@ -90,7 +98,7 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
 
   return {
     prepaid, outstanding,
-    pkgRealized, svUsed, pointsUsed,
+    pkgRealized, svUsed, pointsUsed, discountUsed,
     installmentReceived, installmentOutstanding,
     checkoutTotal, byPayMethod,
     pkgDiscount,            // 套組讓利（依核銷時間）
