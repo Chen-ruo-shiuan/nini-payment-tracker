@@ -11,7 +11,7 @@ interface Financials {
   installmentReceived: number; installmentOutstanding: number
   checkoutTotal: number
   byPayMethod: { method: string; total: number }[]
-  discountAbsorbed: number; pkgOrigTotal: number
+  pkgDiscount: number           // 套組讓利（依本期核銷計算）
   expensesTotal: number; expensesByCategory: { category: string; total: number }[]
 }
 interface ReportData {
@@ -256,61 +256,70 @@ export default function ReportsPage() {
 
           {/* ── 損益報表 ── */}
           {fin && (() => {
-            const cashMethods = fin.byPayMethod.filter(m => ['現金','匯款','LINE Pay','LinePay'].includes(m.method))
-            const cashIncome  = cashMethods.reduce((s, m) => s + m.total, 0)
-            // 套組原價收入（本期）= prepaid + discount absorbed（= standard price before discount）
-            const pkgStdRevenue = fin.prepaid + fin.discountAbsorbed
-            // 現場非套組收入 = cash payments at checkout（walk-in, excluding pre-paid fulfilment）
-            const walkInIncome  = cashIncome
-            // 小計標準收入
-            const grossRevenue  = pkgStdRevenue + walkInIncome + fin.installmentReceived
-            // 毛利 = 淨收入 = 標準收入 - 銷售折讓 = prepaid + walkIn + installment
-            const grossProfit   = fin.prepaid + walkInIncome + fin.installmentReceived
-            // 淨利 = 毛利 - 費用
-            const netProfit     = grossProfit - fin.expensesTotal
-            const profitColor   = netProfit >= 0 ? '#4a6b52' : '#9a4a4a'
-            const profitBg      = netProfit >= 0 ? '#edf3eb' : '#fdf0f0'
-            const profitBorder  = netProfit >= 0 ? '#9ab89e' : '#e8a8a8'
+            // ── 收入：以本期「已結帳」的服務價值為基準（含套組核銷）──────────
+            // checkoutTotal = Σ 所有結帳品項（含商品券），這樣使用套組時P&L就會更新
+            const grossRevenue = fin.checkoutTotal + fin.installmentReceived
+
+            // ── 銷售折讓（隱沒成本）──────────────────────────────────────────
+            // 套組讓利：本期核銷時，原定單價 vs 記帳單價的差（每堂計算）
+            const pkgDiscount   = fin.pkgDiscount
+            // 優惠折扣：金米折抵（客戶用積分抵扣，不收現金）
+            const pointsDisc    = fin.pointsUsed
+            const totalAllowance = pkgDiscount + pointsDisc
+
+            // ── 毛利 = 收入 - 折讓 ───────────────────────────────────────────
+            const grossProfit  = grossRevenue - totalAllowance
+
+            // ── 淨利 = 毛利 - 費用 ───────────────────────────────────────────
+            const netProfit    = grossProfit - fin.expensesTotal
+
+            const profitColor  = netProfit >= 0 ? '#4a6b52' : '#9a4a4a'
+            const profitBg     = netProfit >= 0 ? '#edf3eb' : '#fdf0f0'
+            const profitBorder = netProfit >= 0 ? '#9ab89e' : '#e8a8a8'
 
             return (
               <section style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }}>
                 <p style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.1em', marginBottom: '12px' }}>損益報表</p>
 
-                {/* 收入 */}
+                {/* ── 收入 ── */}
                 <div style={{ marginBottom: '10px' }}>
-                  <p style={{ color: '#b4aa9e', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '6px' }}>── 收入（標準定價）</p>
-                  <Row label="套組原價（本期）" value={pkgStdRevenue} indent />
-                  {fin.discountAbsorbed > 0 && (
-                    <div style={{ paddingLeft: '10px', display: 'flex', justifyContent: 'space-between', padding: '2px 0 2px 10px' }}>
-                      <span style={{ color: '#b4aa9e', fontSize: '0.72rem' }}>
-                        　（優惠後實收 {fmtAmt(fin.prepaid)}，折讓 {fmtAmt(fin.discountAbsorbed)}）
-                      </span>
-                    </div>
-                  )}
-                  {walkInIncome > 0 && <Row label="現場現金收入" value={walkInIncome} indent />}
+                  <p style={{ color: '#b4aa9e', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '6px' }}>── 本期收入</p>
+                  <Row label="本期結帳總額（含套組核銷）" value={fin.checkoutTotal} indent />
                   {fin.installmentReceived > 0 && <Row label="分期已收" value={fin.installmentReceived} indent />}
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e0d9d0', paddingTop: '5px', marginTop: '4px' }}>
-                    <span style={{ color: '#2c2825', fontSize: '0.8rem', fontWeight: 500 }}>標準收入小計</span>
+                    <span style={{ color: '#2c2825', fontSize: '0.8rem', fontWeight: 500 }}>收入小計</span>
                     <span style={{ color: '#2c2825', fontSize: '0.82rem', fontWeight: 600 }}>{fmtAmt(grossRevenue)}</span>
                   </div>
                 </div>
 
-                {/* 銷售折讓 */}
-                {fin.discountAbsorbed > 0 && (
+                {/* ── 銷售折讓 ── */}
+                {totalAllowance > 0 && (
                   <div style={{ background: '#fdf6f0', border: '1px solid #e8cba8', borderRadius: '6px', padding: '8px 12px', marginBottom: '10px' }}>
-                    <p style={{ color: '#9a6a4a', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '4px' }}>── 銷售折讓（折扣吸收）</p>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>套組讓利</span>
-                      <span style={{ color: '#9a4a4a', fontSize: '0.82rem', fontWeight: 500 }}>- {fmtAmt(fin.discountAbsorbed)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #e8cba8', paddingTop: '4px', marginTop: '4px' }}>
-                      <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>折讓後淨收入 / 毛利</span>
-                      <span style={{ color: '#2c2825', fontSize: '0.82rem', fontWeight: 600 }}>{fmtAmt(grossProfit)}</span>
+                    <p style={{ color: '#9a6a4a', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '6px' }}>── 銷售折讓（隱沒成本）</p>
+                    {pkgDiscount > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>套組讓利
+                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>原定價 vs 記帳價差額</span>
+                        </span>
+                        <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(pkgDiscount)}</span>
+                      </div>
+                    )}
+                    {pointsDisc > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>優惠折扣
+                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>金米折抵</span>
+                        </span>
+                        <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(pointsDisc)}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #e8cba8', paddingTop: '5px', marginTop: '4px' }}>
+                      <span style={{ color: '#9a6a4a', fontSize: '0.75rem', fontWeight: 500 }}>折讓合計</span>
+                      <span style={{ color: '#9a4a4a', fontSize: '0.82rem', fontWeight: 600 }}>- {fmtAmt(totalAllowance)}</span>
                     </div>
                   </div>
                 )}
 
-                {/* 費用 */}
+                {/* ── 費用支出 ── */}
                 <div style={{ marginBottom: '10px' }}>
                   <p style={{ color: '#b4aa9e', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '6px' }}>── 費用支出</p>
                   {fin.expensesByCategory.length > 0 ? (
@@ -328,24 +337,51 @@ export default function ReportsPage() {
                   )}
                 </div>
 
-                {/* 損益結算 */}
+                {/* ── 損益結算 ── */}
                 <div style={{ background: profitBg, border: `1px solid ${profitBorder}`, borderRadius: '7px', padding: '12px' }}>
                   <p style={{ color: '#9a8f84', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '8px' }}>── 損益結算</p>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>毛利（折讓後淨收入）</span>
-                    <span style={{ color: '#2c2825', fontSize: '0.82rem', fontWeight: 500 }}>{fmtAmt(grossProfit)}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                    <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>收入小計</span>
+                    <span style={{ color: '#2c2825', fontSize: '0.78rem' }}>{fmtAmt(grossRevenue)}</span>
+                  </div>
+                  {totalAllowance > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                      <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>(-) 銷售折讓</span>
+                      <span style={{ color: '#9a4a4a', fontSize: '0.78rem' }}>- {fmtAmt(totalAllowance)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                    <span style={{ color: '#6b5f54', fontSize: '0.78rem', fontWeight: 500 }}>毛利</span>
+                    <span style={{ color: '#2c2825', fontSize: '0.82rem', fontWeight: 600 }}>{fmtAmt(grossProfit)}</span>
                   </div>
                   {fin.expensesTotal > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>(-) 費用合計</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                      <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>(-) 費用合計</span>
                       <span style={{ color: '#9a4a4a', fontSize: '0.78rem' }}>- {fmtAmt(fin.expensesTotal)}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${profitBorder}`, paddingTop: '7px', marginTop: '5px' }}>
                     <span style={{ color: profitColor, fontSize: '0.88rem', fontWeight: 600 }}>淨利</span>
-                    <span style={{ color: profitColor, fontSize: '1rem', fontWeight: 700 }}>{netProfit >= 0 ? '' : '- '}{fmtAmt(Math.abs(netProfit))}</span>
+                    <span style={{ color: profitColor, fontSize: '1rem', fontWeight: 700 }}>
+                      {netProfit < 0 ? '- ' : ''}{fmtAmt(Math.abs(netProfit))}
+                    </span>
                   </div>
                 </div>
+
+                {/* ── 套組資訊（參考用） ── */}
+                {fin.prepaid > 0 && (
+                  <div style={{ marginTop: '8px', padding: '8px 12px', background: '#f0ede8', borderRadius: '6px' }}>
+                    <p style={{ color: '#b4aa9e', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '4px' }}>── 套組現金流（參考）</p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>本期套組預收（購買時點）</span>
+                      <span style={{ color: '#6b5f54', fontSize: '0.75rem', fontWeight: 500 }}>{fmtAmt(fin.prepaid)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>待履行（全期剩餘）</span>
+                      <span style={{ color: '#9a6a4a', fontSize: '0.75rem' }}>{fmtAmt(fin.outstanding)}</span>
+                    </div>
+                  </div>
+                )}
               </section>
             )
           })()}

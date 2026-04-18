@@ -62,19 +62,20 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     GROUP BY cp.method ORDER BY total DESC
   `).all(dateFilter) as { method: string; total: number }[]
 
-  // 銷售折讓（套組折扣吸收）：本期購買套組中有設定原價者
-  const discountRow = (db.prepare(`
-    SELECT
-      COALESCE(SUM(CASE WHEN unit_price_orig > 0
-        THEN (unit_price_orig * total_sessions) - prepaid_amount
-        ELSE 0 END), 0) AS discount_absorbed,
-      COALESCE(SUM(CASE WHEN unit_price_orig > 0
-        THEN unit_price_orig * total_sessions
-        ELSE prepaid_amount END), 0) AS pkg_orig_total
-    FROM packages WHERE date LIKE ?
-  `).get(dateFilter) as { discount_absorbed: number; pkg_orig_total: number })
-  const discountAbsorbed = discountRow.discount_absorbed
-  const pkgOrigTotal     = discountRow.pkg_orig_total
+  // 套組讓利（銷售折讓）：本期核銷的商品券，原定價 vs 記帳價之差
+  // 用結帳時間過濾，所以使用套組、P&L 就會更新
+  const pkgDiscountRow = (db.prepare(`
+    SELECT COALESCE(SUM(
+      CASE WHEN p.unit_price_orig > ci.price
+           THEN (p.unit_price_orig - ci.price) * ci.qty
+           ELSE 0 END
+    ), 0) AS pkg_discount
+    FROM checkout_items ci
+    JOIN packages p ON p.id = ci.pkg_id
+    JOIN checkouts co ON co.id = ci.checkout_id
+    WHERE ci.category = '商品券' AND co.date LIKE ?
+  `).get(dateFilter) as { pkg_discount: number })
+  const pkgDiscount = pkgDiscountRow.pkg_discount
 
   // 費用支出（本期）
   const expensesTotal = (db.prepare(`
@@ -92,7 +93,7 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     pkgRealized, svUsed, pointsUsed,
     installmentReceived, installmentOutstanding,
     checkoutTotal, byPayMethod,
-    discountAbsorbed, pkgOrigTotal,
+    pkgDiscount,            // 套組讓利（依核銷時間）
     expensesTotal, expensesByCategory,
   }
 }
