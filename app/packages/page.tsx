@@ -23,7 +23,7 @@ const fmtAmt = (n: number) => `$ ${n.toLocaleString()}`
 const fmtShort = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
 
-const EDIT_PAY_METHODS = PAYMENT_METHODS.filter(m => !['分期', '核銷'].includes(m))
+const EDIT_PAY_METHODS = PAYMENT_METHODS.filter(m => !['分期', '核銷', '商品券'].includes(m))
 
 export default function PackagesPage() {
   const [packages, setPackages] = useState<PkgRow[]>([])

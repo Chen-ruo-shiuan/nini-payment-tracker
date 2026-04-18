@@ -10,6 +10,9 @@ const SERVICE_NAMES = [
   '小顏骨氣', '森林癒撥筋', '深皮超導', '全臉粉清',
 ]
 
+// 排除核銷、商品券（不能用商品券買商品券）
+const PKG_PAY_METHODS = PAYMENT_METHODS.filter(m => !['核銷', '商品券'].includes(m))
+
 function NewPackageForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -22,25 +25,51 @@ function NewPackageForm() {
   const [selectedClient, setSelectedClient] = useState<ClientWithStats | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
 
-  // Service name selection
+  // Service name
   const [serviceSelect, setServiceSelect] = useState('')
   const [customName, setCustomName] = useState('')
   const finalServiceName = serviceSelect === 'custom' ? customName : serviceSelect
 
-  // Discounted total for accounting
-  const [discountedTotal, setDiscountedTotal] = useState('')
+  // Pricing
+  const [unitPriceOrig, setUnitPriceOrig] = useState('')   // 單堂原價
+  const [totalSessions, setTotalSessions] = useState('1')  // 總堂數
+  const [discountPct, setDiscountPct]     = useState('')    // 折扣 (e.g. 88 → 88折)
+  const [discountedTotal, setDiscountedTotal] = useState('') // 優惠總價
+  const [lastEdited, setLastEdited] = useState<'pct' | 'total' | null>(null)
 
-  const [form, setForm] = useState({
-    total_sessions: '1',
-    unit_price: '',
-    prepaid_amount: '',
-    payment_method: '現金',
-    date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }),
-    note: '',
-    include_in_accumulation: true,
-    include_in_points: true,
-  })
+  // Other fields
+  const [paymentMethod, setPaymentMethod] = useState('現金')
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }))
+  const [note, setNote] = useState('')
+  const [inclAccum, setInclAccum] = useState(true)
+  const [inclPoints, setInclPoints] = useState(true)
 
+  // Derived values
+  const origTotal   = Number(unitPriceOrig) * Number(totalSessions)  // 原價小計
+  const discTotal   = Number(discountedTotal) || 0                    // 優惠總價（最終預收）
+  const unitBooking = discTotal > 0 && Number(totalSessions) > 0      // 記帳單堂價
+    ? Math.round(discTotal / Number(totalSessions))
+    : (Number(unitPriceOrig) || 0)
+  const prepaid = discTotal > 0 ? discTotal : origTotal               // 預收金額
+
+  // 折扣 ↔ 優惠總價 互相聯動
+  useEffect(() => {
+    if (lastEdited !== 'pct') return
+    const pct = Number(discountPct)
+    if (origTotal > 0 && pct > 0 && pct <= 100) {
+      setDiscountedTotal(String(Math.round(origTotal * pct / 100)))
+    }
+  }, [discountPct, origTotal, lastEdited])
+
+  useEffect(() => {
+    if (lastEdited !== 'total') return
+    const tot = Number(discountedTotal)
+    if (origTotal > 0 && tot > 0) {
+      setDiscountPct(String(Math.round((tot / origTotal) * 100)))
+    }
+  }, [discountedTotal, origTotal, lastEdited])
+
+  // Client search
   useEffect(() => {
     if (presetClientId) {
       fetch(`/api/clients/${presetClientId}`)
@@ -51,8 +80,7 @@ function NewPackageForm() {
 
   const searchClients = useCallback(async (q: string) => {
     if (!q) { setClients([]); return }
-    const res = await fetch(`/api/clients?q=${encodeURIComponent(q)}`)
-    setClients(await res.json())
+    setClients(await (await fetch(`/api/clients?q=${encodeURIComponent(q)}`)).json())
   }, [])
 
   useEffect(() => {
@@ -61,36 +89,27 @@ function NewPackageForm() {
     return () => clearTimeout(t)
   }, [clientSearch, searchClients, selectedClient])
 
-  function set(k: string, v: string | boolean) {
-    setForm(prev => ({ ...prev, [k]: v }))
-  }
-
-  // When discounted_total is set, override unit_price and prepaid_amount
-  useEffect(() => {
-    const d = Number(discountedTotal), s = Number(form.total_sessions)
-    if (d > 0 && s > 0) {
-      set('unit_price', String(Math.round(d / s)))
-      set('prepaid_amount', String(d))
-    }
-  }, [discountedTotal, form.total_sessions])
-
-  // Auto-fill prepaid from unit_price × sessions (only when discounted_total is empty)
-  useEffect(() => {
-    if (discountedTotal) return
-    const u = Number(form.unit_price), s = Number(form.total_sessions)
-    if (u > 0 && s > 0) set('prepaid_amount', String(u * s))
-  }, [form.unit_price, form.total_sessions, discountedTotal])
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!selectedClient) { setError('請選擇客人'); return }
+    if (!selectedClient)   { setError('請選擇客人'); return }
     if (!finalServiceName) { setError('請選擇或輸入服務名稱'); return }
+    if (!unitPriceOrig)    { setError('請輸入單堂原價'); return }
     setSaving(true); setError('')
     try {
       const res = await fetch('/api/packages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, service_name: finalServiceName, client_id: selectedClient.id }),
+        body: JSON.stringify({
+          client_id: selectedClient.id,
+          service_name: finalServiceName,
+          total_sessions: Number(totalSessions),
+          unit_price: unitBooking,
+          prepaid_amount: prepaid,
+          payment_method: paymentMethod,
+          date, note,
+          include_in_accumulation: inclAccum,
+          include_in_points: inclPoints,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || '發生錯誤'); return }
@@ -98,8 +117,9 @@ function NewPackageForm() {
     } catch { setError('網路錯誤') } finally { setSaving(false) }
   }
 
-  const discountedUnitPrice = discountedTotal && Number(form.total_sessions) > 0
-    ? Math.round(Number(discountedTotal) / Number(form.total_sessions))
+  const hasDiscount = discTotal > 0 && discTotal !== origTotal
+  const discountRate = origTotal > 0 && discTotal > 0
+    ? Math.round((discTotal / origTotal) * 100)
     : null
 
   return (
@@ -110,10 +130,11 @@ function NewPackageForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Client */}
+
+        {/* ── 客人 ── */}
         <Field label="客人 *">
           {selectedClient ? (
-            <div style={{ ...inputStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ ...iStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ color: '#2c2825' }}>{selectedClient.name}</span>
                 <MembershipBadge tier={selectedClient.level as MembershipLevel} />
@@ -128,11 +149,12 @@ function NewPackageForm() {
               <input value={clientSearch}
                 onChange={e => { setClientSearch(e.target.value); setShowDropdown(true) }}
                 onFocus={() => setShowDropdown(true)}
-                placeholder="搜尋客人…" style={inputStyle} />
+                placeholder="搜尋客人…" style={iStyle} />
               {showDropdown && clients.length > 0 && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '0 0 6px 6px', zIndex: 10 }}>
                   {clients.map(c => (
-                    <button key={c.id} type="button" onClick={() => { setSelectedClient(c); setClientSearch(c.name); setShowDropdown(false) }}
+                    <button key={c.id} type="button"
+                      onClick={() => { setSelectedClient(c); setClientSearch(c.name); setShowDropdown(false) }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid #f0ebe4', cursor: 'pointer', textAlign: 'left' }}>
                       <span style={{ color: '#2c2825' }}>{c.name}</span>
                       <MembershipBadge tier={c.level as MembershipLevel} />
@@ -144,81 +166,127 @@ function NewPackageForm() {
           )}
         </Field>
 
-        {/* Service name */}
+        {/* ── 服務名稱 ── */}
         <Field label="服務名稱 *">
-          <select value={serviceSelect} onChange={e => setServiceSelect(e.target.value)} style={inputStyle}>
+          <select value={serviceSelect} onChange={e => setServiceSelect(e.target.value)} style={iStyle}>
             <option value="">請選擇服務…</option>
             {SERVICE_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
             <option value="custom">自定義…</option>
           </select>
           {serviceSelect === 'custom' && (
             <input value={customName} onChange={e => setCustomName(e.target.value)}
-              placeholder="輸入服務名稱" style={{ ...inputStyle, marginTop: '6px' }} />
+              placeholder="輸入服務名稱" style={{ ...iStyle, marginTop: '6px' }} autoFocus />
           )}
         </Field>
 
-        <Field label="總堂數 *">
-          <input value={form.total_sessions} onChange={e => set('total_sessions', e.target.value)}
-            type="number" min="1" style={inputStyle} />
-        </Field>
+        {/* ── 定價計算區塊 ── */}
+        <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }}
+          className="space-y-3">
+          <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>定價設定</p>
 
-        {/* Discounted total */}
-        <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }} className="space-y-3">
-          <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>優惠價格（選填）</p>
+          {/* 單堂原價 + 總堂數 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <Field label="優惠總價">
-              <input value={discountedTotal} onChange={e => setDiscountedTotal(e.target.value)}
-                type="number" placeholder="套組優惠總金額" style={inputStyle} />
+            <Field label="單堂原價 *">
+              <input value={unitPriceOrig} onChange={e => setUnitPriceOrig(e.target.value)}
+                type="number" min="0" placeholder="例：2500" style={iStyle} />
             </Field>
-            <Field label="記帳單價（自動）">
-              <div style={{ ...inputStyle, color: discountedUnitPrice ? '#4a6b52' : '#c4b8aa', background: '#f0ede8' }}>
-                {discountedUnitPrice ? `$ ${discountedUnitPrice.toLocaleString()}` : '優惠總價 ÷ 堂數'}
-              </div>
+            <Field label="總堂數 *">
+              <input value={totalSessions} onChange={e => setTotalSessions(e.target.value)}
+                type="number" min="1" style={iStyle} />
             </Field>
           </div>
-          <p style={{ color: '#b4aa9e', fontSize: '0.72rem' }}>
-            填入優惠總價後，將自動計算每堂記帳單價，用於套組結帳金額
-          </p>
+
+          {/* 原價小計（顯示用） */}
+          {origTotal > 0 && (
+            <div style={{ background: '#f0ede8', borderRadius: '6px', padding: '8px 12px', display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#9a8f84', fontSize: '0.78rem' }}>原價小計</span>
+              <span style={{ color: '#6b5f54', fontSize: '0.88rem', fontWeight: 500 }}>
+                $ {origTotal.toLocaleString()}
+                <span style={{ color: '#b4aa9e', fontSize: '0.72rem', marginLeft: '6px' }}>
+                  （{unitPriceOrig} × {totalSessions} 堂）
+                </span>
+              </span>
+            </div>
+          )}
+
+          {/* 折扣 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <Field label="折扣（選填）">
+              <div style={{ position: 'relative' }}>
+                <input value={discountPct}
+                  onChange={e => { setDiscountPct(e.target.value); setLastEdited('pct') }}
+                  type="number" min="1" max="100" placeholder="例：88"
+                  style={iStyle} />
+                <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9a8f84', fontSize: '0.82rem', pointerEvents: 'none' }}>
+                  折
+                </span>
+              </div>
+            </Field>
+            <Field label="優惠總價（選填）">
+              <input value={discountedTotal}
+                onChange={e => { setDiscountedTotal(e.target.value); setLastEdited('total') }}
+                type="number" min="0" placeholder="例：6600"
+                style={iStyle} />
+            </Field>
+          </div>
+
+          {/* 計算結果 */}
+          <div style={{ background: hasDiscount ? '#edf3eb' : '#f0ede8', border: `1px solid ${hasDiscount ? '#9ab89e' : '#d9d0c5'}`, borderRadius: '6px', padding: '10px 12px' }}
+            className="space-y-1">
+            {hasDiscount && discountRate !== null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>折扣</span>
+                <span style={{ color: '#4a6b52', fontSize: '0.8rem', fontWeight: 500 }}>{discountRate} 折</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>記帳單堂價</span>
+              <span style={{ color: hasDiscount ? '#4a6b52' : '#2c2825', fontSize: '0.88rem', fontWeight: 600 }}>
+                $ {unitBooking.toLocaleString()}
+                {hasDiscount && Number(unitPriceOrig) > 0 && (
+                  <span style={{ color: '#9a8f84', fontSize: '0.7rem', marginLeft: '5px', textDecoration: 'line-through' }}>
+                    {Number(unitPriceOrig).toLocaleString()}
+                  </span>
+                )}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '6px', marginTop: '4px' }}>
+              <span style={{ color: '#6b5f54', fontSize: '0.78rem', fontWeight: 500 }}>預收金額</span>
+              <span style={{ color: '#2c2825', fontSize: '1rem', fontWeight: 700 }}>
+                $ {prepaid.toLocaleString()}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-          <Field label={discountedTotal ? '單堂定價（參考）' : '單堂單價'}>
-            <input value={form.unit_price} onChange={e => { if (!discountedTotal) set('unit_price', e.target.value) }}
-              type="number" placeholder="0" style={{ ...inputStyle, opacity: discountedTotal ? 0.5 : 1 }}
-              readOnly={!!discountedTotal} />
-          </Field>
-          <Field label="預收金額">
-            <input value={form.prepaid_amount} onChange={e => set('prepaid_amount', e.target.value)}
-              type="number" placeholder="自動計算" style={inputStyle} />
-          </Field>
-        </div>
-
+        {/* ── 付款方式 ── */}
         <Field label="付款方式">
-          <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)} style={inputStyle}>
-            {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+          <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} style={iStyle}>
+            {PKG_PAY_METHODS.map(m => <option key={m}>{m}</option>)}
           </select>
         </Field>
 
+        {/* ── 購買日期 ── */}
         <Field label="購買日期">
-          <input value={form.date} onChange={e => set('date', e.target.value)} type="date" style={inputStyle} />
+          <input value={date} onChange={e => setDate(e.target.value)} type="date" style={iStyle} />
         </Field>
 
+        {/* ── 備註 ── */}
         <Field label="備註">
-          <input value={form.note} onChange={e => set('note', e.target.value)} placeholder="選填" style={inputStyle} />
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="選填" style={iStyle} />
         </Field>
 
-        {/* Flags */}
+        {/* ── 計算設定 ── */}
         <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }} className="space-y-2">
-          <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em', marginBottom: '8px' }}>計算設定</p>
+          <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em', marginBottom: '6px' }}>計算設定</p>
           {[
-            { key: 'include_in_accumulation', label: '列入年度消費累積' },
-            { key: 'include_in_points',       label: '計入金米點數' },
-          ].map(({ key, label }) => (
-            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input type="checkbox" checked={form[key as keyof typeof form] as boolean}
-                onChange={e => set(key, e.target.checked)}
+            { key: 'inclAccum',  val: inclAccum,  set: setInclAccum,  label: '列入年度消費累積（升等用）' },
+            { key: 'inclPoints', val: inclPoints, set: setInclPoints, label: '計入金米點數' },
+          ].map(row => (
+            <label key={row.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={row.val} onChange={e => row.set(e.target.checked)}
                 style={{ accentColor: '#6b5f54', width: '15px', height: '15px' }} />
-              <span style={{ color: '#2c2825', fontSize: '0.85rem' }}>{label}</span>
+              <span style={{ color: '#2c2825', fontSize: '0.85rem' }}>{row.label}</span>
             </label>
           ))}
         </div>
@@ -228,13 +296,15 @@ function NewPackageForm() {
             className="px-3 py-2">{error}</p>
         )}
 
-        <button type="submit" disabled={saving}
+        <button type="submit" disabled={saving || !selectedClient || !finalServiceName || !unitPriceOrig}
           style={{
-            width: '100%', background: saving ? '#c4b8aa' : '#2c2825',
+            width: '100%',
+            background: saving || !selectedClient || !finalServiceName || !unitPriceOrig ? '#c4b8aa' : '#2c2825',
             color: '#f7f4ef', border: 'none', borderRadius: '6px',
-            fontSize: '0.95rem', padding: '12px', cursor: saving ? 'not-allowed' : 'pointer',
+            fontSize: '0.95rem', padding: '12px',
+            cursor: saving || !selectedClient || !finalServiceName || !unitPriceOrig ? 'not-allowed' : 'pointer',
           }}>
-          {saving ? '建立中…' : '建立套組'}
+          {saving ? '建立中…' : `建立套組　$ ${prepaid.toLocaleString()}`}
         </button>
       </form>
     </div>
@@ -245,7 +315,7 @@ export default function NewPackagePage() {
   return <Suspense><NewPackageForm /></Suspense>
 }
 
-const inputStyle: React.CSSProperties = {
+const iStyle: React.CSSProperties = {
   width: '100%', background: '#faf8f5', border: '1px solid #e0d9d0',
   borderRadius: '6px', color: '#2c2825', fontSize: '0.9rem', outline: 'none', padding: '10px 14px',
 }
