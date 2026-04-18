@@ -15,7 +15,7 @@ export async function PATCH(
   if (!entry) return NextResponse.json({ error: '找不到記錄' }, { status: 404 })
 
   const body = await req.json()
-  const { amount, paid_amount, note, date, payment_method } = body
+  const { amount, paid_amount, note, date, payment_method, include_in_accumulation } = body
 
   const isDeposit = Number(amount) > 0
   const parsedPaid = paid_amount !== undefined && paid_amount !== '' ? Number(paid_amount) : null
@@ -23,19 +23,21 @@ export async function PATCH(
 
   db.prepare(`
     UPDATE sv_ledger SET
-      amount         = @amount,
-      paid_amount    = @paid_amount,
-      note           = @note,
-      date           = @date,
-      payment_method = @payment_method
+      amount                  = @amount,
+      paid_amount             = @paid_amount,
+      note                    = @note,
+      date                    = @date,
+      payment_method          = @payment_method,
+      include_in_accumulation = @include_in_accumulation
     WHERE id = @id
   `).run({
     id: Number(id),
-    amount:         Number(amount),
-    paid_amount:    storedPaid,
-    note:           note || null,
-    date:           date || '',
-    payment_method: isDeposit ? (payment_method || null) : null,
+    amount:                  Number(amount),
+    paid_amount:             storedPaid,
+    note:                    note || null,
+    date:                    date || '',
+    payment_method:          isDeposit ? (payment_method || null) : null,
+    include_in_accumulation: isDeposit && include_in_accumulation ? 1 : 0,
   })
 
   return NextResponse.json({ success: true })

@@ -279,7 +279,9 @@ function migrateSvLedgerPaidAmount(db: Database.Database) {
   const cols = (db.prepare('PRAGMA table_info(sv_ledger)').all() as { name: string }[]).map(c => c.name)
   if (!cols.includes('paid_amount')) {
     db.exec(`ALTER TABLE sv_ledger ADD COLUMN paid_amount INTEGER`)
-    // paid_amount NULL 表示無折扣（實收 = 入帳金額）
+  }
+  if (!cols.includes('include_in_accumulation')) {
+    db.exec(`ALTER TABLE sv_ledger ADD COLUMN include_in_accumulation INTEGER NOT NULL DEFAULT 0`)
   }
 }
 

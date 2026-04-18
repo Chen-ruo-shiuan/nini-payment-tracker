@@ -537,6 +537,7 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
   const [note, setNote] = useState('')
   const [date, setDate] = useState(todayStr())
   const [payMethod, setPayMethod] = useState('現金')
+  const [inclAccum, setInclAccum] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const isDeposit = Number(amount) > 0
@@ -555,9 +556,10 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
         paid_amount: isDeposit && paidAmount ? Number(paidAmount) : null,
         note, date,
         payment_method: isDeposit ? payMethod : null,
+        include_in_accumulation: inclAccum,
       }),
     })
-    setAmount(''); setPaidAmount(''); setNote(''); setSaving(false)
+    setAmount(''); setPaidAmount(''); setNote(''); setInclAccum(false); setSaving(false)
     refresh()
   }
 
@@ -568,6 +570,7 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
   const [editNote, setEditNote] = useState('')
   const [editDate, setEditDate] = useState('')
   const [editPay, setEditPay] = useState('現金')
+  const [editInclAccum, setEditInclAccum] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
 
   function startEdit(e: SvLedgerEntry) {
@@ -577,6 +580,7 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
     setEditNote(e.note ?? '')
     setEditDate(e.date)
     setEditPay(e.payment_method ?? '現金')
+    setEditInclAccum(e.include_in_accumulation === 1)
   }
 
   async function saveEdit(id: number) {
@@ -589,6 +593,7 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
         note: editNote,
         date: editDate,
         payment_method: editPay,
+        include_in_accumulation: editInclAccum,
       }),
     })
     setSavingEdit(false)
@@ -638,6 +643,13 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
             border: 'none', borderRadius: '5px', fontSize: '0.85rem', cursor: 'pointer',
           }}>{saving ? '儲存中…' : '新增'}</button>
         </div>
+        {isDeposit && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={inclAccum} onChange={e => setInclAccum(e.target.checked)}
+              style={{ accentColor: '#6b5f54', width: '15px', height: '15px' }} />
+            <span style={{ color: '#2c2825', fontSize: '0.85rem' }}>計入年度消費累積（升等用）</span>
+          </label>
+        )}
       </form>
 
       <div className="space-y-1">
@@ -658,6 +670,9 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
                     <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(e.date)}</span>
                     {e.payment_method && e.amount > 0 && (
                       <span style={{ color: '#9a8f84', fontSize: '0.72rem', marginLeft: '6px', background: '#f0ebe4', borderRadius: '8px', padding: '1px 6px' }}>{e.payment_method}</span>
+                    )}
+                    {e.include_in_accumulation === 1 && e.amount > 0 && (
+                      <span style={{ color: '#4a6b52', fontSize: '0.68rem', marginLeft: '6px', background: '#edf3eb', border: '1px solid #9ab89e', borderRadius: '8px', padding: '1px 6px' }}>計入年度</span>
                     )}
                     {hasAllowance && (
                       <span style={{ color: '#9a4a4a', fontSize: '0.68rem', marginLeft: '6px', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '8px', padding: '1px 6px' }}>
@@ -712,6 +727,13 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
                     <input value={editNote} onChange={e => setEditNote(e.target.value)}
                       placeholder="選填" style={inputStyle} />
                   </div>
+                  {editIsDeposit && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={editInclAccum} onChange={ev => setEditInclAccum(ev.target.checked)}
+                        style={{ accentColor: '#6b5f54', width: '14px', height: '14px' }} />
+                      <span style={{ color: '#2c2825', fontSize: '0.82rem' }}>計入年度消費累積（升等用）</span>
+                    </label>
+                  )}
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button onClick={() => saveEdit(e.id)} disabled={savingEdit}
                       style={{ background: '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 16px', cursor: 'pointer', flex: 1 }}>
@@ -814,7 +836,11 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
   const pkgAccumAmt = (client.packages ?? [])
     .filter(pkg => pkg.include_in_accumulation === 1)
     .reduce((s, pkg) => s + pkg.prepaid_amount, 0)
-  const courseSpendig = checkoutCourseAmt + pkgAccumAmt
+  // Add sv_ledger deposits with include_in_accumulation (all time)
+  const svAccumAmt = (client.sv_ledger ?? [])
+    .filter(e => e.include_in_accumulation === 1 && e.amount > 0)
+    .reduce((s, e) => s + e.amount, 0)
+  const courseSpendig = checkoutCourseAmt + pkgAccumAmt + svAccumAmt
   const productSpending = allItems
     .filter(i => i.category === '產品')
     .reduce((s, i) => s + i.price * i.qty, 0)
@@ -994,7 +1020,11 @@ export default function ClientDetailPage() {
   const pkgCourseSpending = (client.packages ?? [])
     .filter(pkg => pkg.include_in_accumulation === 1 && pkg.date.startsWith(currentYear))
     .reduce((s, pkg) => s + pkg.prepaid_amount, 0)
-  const annualCourseSpending = checkoutCourseSpending + pkgCourseSpending
+  // sv_ledger deposits with include_in_accumulation this year
+  const svCourseSpending = (client.sv_ledger ?? [])
+    .filter(e => e.include_in_accumulation === 1 && e.amount > 0 && e.date.startsWith(currentYear))
+    .reduce((s, e) => s + e.amount, 0)
+  const annualCourseSpending = checkoutCourseSpending + pkgCourseSpending + svCourseSpending
 
   const nextLevel = NEXT_LEVEL[effectiveLevel]
   const nextThreshold = nextLevel ? LEVEL_THRESHOLDS[nextLevel] : null
