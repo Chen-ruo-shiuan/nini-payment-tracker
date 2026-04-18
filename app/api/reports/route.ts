@@ -15,7 +15,7 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     FROM packages WHERE used_sessions < total_sessions
   `).get() as { total: number }).total
 
-  // 已實現套組金額：本期實際使用商品券（套組核銷）的金額
+  // 商品券已履行：本期結帳中商品券品項金額
   const pkgRealized = (db.prepare(`
     SELECT COALESCE(SUM(ci.price * ci.qty), 0) AS total
     FROM checkout_items ci
@@ -23,18 +23,51 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     WHERE ci.category = '商品券' AND co.date LIKE ?
   `).get(dateFilter) as { total: number }).total
 
-  // 分期已收金額
+  // 儲值金已使用：本期 sv_ledger 負值（消費）
+  const svUsed = (db.prepare(`
+    SELECT COALESCE(ABS(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END)), 0) AS total
+    FROM sv_ledger WHERE date LIKE ?
+  `).get(dateFilter) as { total: number }).total
+
+  // 金米折抵：本期結帳付款方式為「金米」的金額
+  const pointsUsed = (db.prepare(`
+    SELECT COALESCE(SUM(cp.amount), 0) AS total
+    FROM checkout_payments cp
+    JOIN checkouts co ON co.id = cp.checkout_id
+    WHERE cp.method = '金米' AND co.date LIKE ?
+  `).get(dateFilter) as { total: number }).total
+
+  // 分期已收（本期）
   const installmentReceived = (db.prepare(`
     SELECT COALESCE(SUM(amount), 0) AS total FROM installments
     WHERE paid_at LIKE ? AND paid_at IS NOT NULL
   `).get(dateFilter) as { total: number }).total
 
-  // 結帳實收
+  // 分期未收（全部，不限日期）
+  const installmentOutstanding = (db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS total FROM installments WHERE paid_at IS NULL
+  `).get() as { total: number }).total
+
+  // 結帳實收（本期）
   const checkoutTotal = (db.prepare(`
     SELECT COALESCE(SUM(total_amount), 0) AS total FROM checkouts WHERE date LIKE ?
   `).get(dateFilter) as { total: number }).total
 
-  return { prepaid, outstanding, pkgRealized, installmentReceived, checkoutTotal }
+  // 付款方式明細（本期結帳）
+  const byPayMethod = db.prepare(`
+    SELECT cp.method, COALESCE(SUM(cp.amount), 0) AS total
+    FROM checkout_payments cp
+    JOIN checkouts co ON co.id = cp.checkout_id
+    WHERE co.date LIKE ?
+    GROUP BY cp.method ORDER BY total DESC
+  `).all(dateFilter) as { method: string; total: number }[]
+
+  return {
+    prepaid, outstanding,
+    pkgRealized, svUsed, pointsUsed,
+    installmentReceived, installmentOutstanding,
+    checkoutTotal, byPayMethod,
+  }
 }
 
 // GET /api/reports?type=daily&date=2026-04-11

@@ -22,6 +22,7 @@ interface OverviewData {
   pkg_prepaid: number; pkg_realized: number; pkg_pending: number
   pkg_total: number; pkg_active: number
   sv_deposited: number; sv_used: number; sv_balance: number
+  points_redeemed: number
   month_count: number; month_total: number
   installment_outstanding: number; total_clients: number
   overdue: DueItem[]; todayDue: DueItem[]; weekDue: DueItem[]
@@ -525,19 +526,20 @@ export default function OverviewPage() {
             </div>
           </StatCard>
 
-          {/* 已實收 */}
+          {/* 已履行預收 */}
           <StatCard
-            label="已實收"
-            value={fmtAmt(data.pkg_realized + data.sv_used)}
-            sub={`核銷 ＋ 儲值消費`}
+            label="已履行預收"
+            value={fmtAmt(data.pkg_realized + data.sv_used + data.points_redeemed)}
+            sub={`商品券 ＋ 儲值金 ＋ 金米`}
             color="#4a6b52" bg="#edf3eb" border="#9ab89e"
             expanded={expandedCard === 'realized'}
             onClick={() => toggleCard('realized')}
           >
             <div className="space-y-1">
-              <DetailRow label="課程核銷" value={fmtAmt(data.pkg_realized)} />
-              <DetailRow label="儲值消費" value={fmtAmt(data.sv_used)} />
-              <DetailRow label="合計" value={fmtAmt(data.pkg_realized + data.sv_used)} muted />
+              <DetailRow label="商品券（套組核銷）" value={fmtAmt(data.pkg_realized)} />
+              <DetailRow label="儲值金消費" value={fmtAmt(data.sv_used)} />
+              <DetailRow label="金米折抵" value={fmtAmt(data.points_redeemed)} />
+              <DetailRow label="合計" value={fmtAmt(data.pkg_realized + data.sv_used + data.points_redeemed)} muted />
             </div>
           </StatCard>
 
@@ -619,7 +621,7 @@ export default function OverviewPage() {
           </StatCard>
         </div>
         <p style={{ color: '#c4b8aa', fontSize: '0.68rem', paddingLeft: '2px' }}>
-          ＊ 預收含套組預購及儲值加值；實收含課程核銷及儲值消費
+          ＊ 預收含套組預購及儲值加值；履行預收含商品券、儲值金消費及金米折抵
         </p>
       </div>
 

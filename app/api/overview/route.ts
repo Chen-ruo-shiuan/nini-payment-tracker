@@ -37,6 +37,13 @@ export async function GET() {
     FROM sv_ledger
   `).get() as { sv_deposited: number; sv_used: number; sv_balance: number }
 
+  // ── 金米折抵 ─────────────────────────────────────────────────────────────
+  const pointsRedeemed = (db.prepare(`
+    SELECT COALESCE(SUM(cp.amount), 0) AS total
+    FROM checkout_payments cp
+    WHERE cp.method = '金米'
+  `).get() as { total: number }).total
+
   // ── 本月結帳 ──────────────────────────────────────────────────────────────
   const monthStats = db.prepare(`
     SELECT
@@ -106,6 +113,7 @@ export async function GET() {
     sv_deposited:   svStats.sv_deposited,
     sv_used:        svStats.sv_used,
     sv_balance:     svStats.sv_balance,
+    points_redeemed: pointsRedeemed,
     month_count:    monthStats.month_count,
     month_total:    monthStats.month_total,
     installment_outstanding: installmentOutstanding,

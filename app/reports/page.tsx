@@ -7,7 +7,10 @@ import { MembershipLevel } from '@/types'
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Financials {
   prepaid: number; outstanding: number
-  pkgRealized: number; installmentReceived: number; checkoutTotal: number
+  pkgRealized: number; svUsed: number; pointsUsed: number
+  installmentReceived: number; installmentOutstanding: number
+  checkoutTotal: number
+  byPayMethod: { method: string; total: number }[]
 }
 interface ReportData {
   type: string
@@ -142,38 +145,97 @@ export default function ReportsPage() {
         <div className="space-y-4">
 
           {/* ── 財務總覽 ── */}
-          <section>
-            <p style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.1em', marginBottom: '8px' }}>財務總覽</p>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <StatCard
-                label="實收（結帳）"
-                value={fmtAmt(data.total ?? data.monthTotal ?? data.yearTotal ?? 0)}
-                color="#2c2825" bg="#faf8f5" border="#e0d9d0"
-              />
+          <section className="space-y-3">
+            <p style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.1em' }}>財務總覽</p>
+
+            {/* 實際收到的金流 */}
+            <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }}>
+              <p style={{ color: '#9a8f84', fontSize: '0.68rem', letterSpacing: '0.08em', marginBottom: '8px' }}>實際收到款項（現金流）</p>
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                <StatCard
+                  label="結帳總額"
+                  value={fmtAmt(data.total ?? data.monthTotal ?? data.yearTotal ?? 0)}
+                  color="#2c2825" bg="#f5f2ee" border="#d9d0c5"
+                />
+                {period !== '日' && fin?.installmentReceived != null && fin.installmentReceived > 0 && (
+                  <StatCard
+                    label="分期已收"
+                    value={fmtAmt(fin.installmentReceived)}
+                    color="#4a6b52" bg="#edf3eb" border="#9ab89e"
+                  />
+                )}
+              </div>
+              {/* 付款方式明細 */}
+              {fin?.byPayMethod && fin.byPayMethod.length > 0 && (() => {
+                const cashMethods = fin.byPayMethod.filter(m => ['現金','匯款','LINE Pay','LinePay'].includes(m.method))
+                const preMethods  = fin.byPayMethod.filter(m => ['商品券','儲值金','金米'].includes(m.method))
+                const otherMethods = fin.byPayMethod.filter(m => !['現金','匯款','LINE Pay','LinePay','商品券','儲值金','金米'].includes(m.method))
+                return (
+                  <div className="space-y-1">
+                    {cashMethods.length > 0 && (
+                      <div style={{ borderBottom: '1px dashed #e0d9d0', paddingBottom: '6px', marginBottom: '6px' }}>
+                        <p style={{ color: '#b4aa9e', fontSize: '0.65rem', marginBottom: '4px' }}>── 現金流入</p>
+                        {cashMethods.map(m => (
+                          <div key={m.method} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                            <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>{m.method}</span>
+                            <span style={{ color: '#2c2825', fontSize: '0.8rem', fontWeight: 500 }}>{fmtAmt(m.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {preMethods.length > 0 && (
+                      <div style={{ borderBottom: '1px dashed #e0d9d0', paddingBottom: '6px', marginBottom: '6px' }}>
+                        <p style={{ color: '#b4aa9e', fontSize: '0.65rem', marginBottom: '4px' }}>── 履行預收</p>
+                        {preMethods.map(m => (
+                          <div key={m.method} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                            <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>{m.method}</span>
+                            <span style={{ color: '#2c2825', fontSize: '0.8rem', fontWeight: 500 }}>{fmtAmt(m.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {otherMethods.map(m => (
+                      <div key={m.method} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>{m.method}</span>
+                        <span style={{ color: '#2c2825', fontSize: '0.8rem', fontWeight: 500 }}>{fmtAmt(m.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* 預收 & 待履行 */}
+            <div style={{ display: 'flex', gap: '6px' }}>
               <StatCard
                 label="預收套組總額"
                 value={fmtAmt(fin?.prepaid ?? 0)}
                 color="#2d4f9a" bg="#e8f0fc" border="#9ab0e8"
               />
               <StatCard
-                label="待履行"
+                label="待履行（套組）"
                 value={fmtAmt(fin?.outstanding ?? 0)}
-                sub="未核銷堂數 × 單價"
+                sub="未核銷 × 單價"
                 color="#9a6a4a" bg="#fdf0e6" border="#e8cba8"
               />
             </div>
+
+            {/* 分期 */}
             {period !== '日' && (
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
-                <StatCard
-                  label="分期已收"
-                  value={fmtAmt(fin?.installmentReceived ?? 0)}
-                  color="#4a6b52" bg="#edf3eb" border="#9ab89e"
-                />
-                <StatCard
-                  label="套組已核銷金額"
-                  value={fmtAmt(fin?.pkgRealized ?? 0)}
-                  color="#6b5f54" bg="#f0ede8" border="#d9d0c5"
-                />
+              <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px 14px' }}>
+                <p style={{ color: '#9a8f84', fontSize: '0.68rem', letterSpacing: '0.08em', marginBottom: '8px' }}>分期款項</p>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <StatCard
+                    label="分期已收"
+                    value={fmtAmt(fin?.installmentReceived ?? 0)}
+                    color="#4a6b52" bg="#edf3eb" border="#9ab89e"
+                  />
+                  <StatCard
+                    label="分期未收（全部）"
+                    value={fmtAmt(fin?.installmentOutstanding ?? 0)}
+                    color="#9a4a4a" bg="#fdf0f0" border="#e8a8a8"
+                  />
+                </div>
               </div>
             )}
           </section>
