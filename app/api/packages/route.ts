@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const {
     client_id, service_name, total_sessions,
-    unit_price, prepaid_amount, payment_method,
+    unit_price, unit_price_orig, prepaid_amount, payment_method,
     date, note, include_in_accumulation, include_in_points,
   } = body
 
@@ -41,18 +41,19 @@ export async function POST(req: NextRequest) {
   const res = db.prepare(`
     INSERT INTO packages
       (client_id, service_name, total_sessions, used_sessions,
-       unit_price, prepaid_amount, payment_method,
+       unit_price, unit_price_orig, prepaid_amount, payment_method,
        include_in_accumulation, include_in_points, note, date)
     VALUES
       (@client_id, @service_name, @total_sessions, 0,
-       @unit_price, @prepaid_amount, @payment_method,
+       @unit_price, @unit_price_orig, @prepaid_amount, @payment_method,
        @include_in_acc, @include_in_pts, @note, @date)
   `).run({
     client_id: Number(client_id),
     service_name,
-    total_sessions: Number(total_sessions),
-    unit_price:     Number(unit_price)     || 0,
-    prepaid_amount: Number(prepaid_amount) || 0,
+    total_sessions:  Number(total_sessions),
+    unit_price:      Number(unit_price)      || 0,
+    unit_price_orig: Number(unit_price_orig) || 0,
+    prepaid_amount:  Number(prepaid_amount)  || 0,
     payment_method: payment_method || '現金',
     include_in_acc: include_in_accumulation ? 1 : 0,
     include_in_pts: include_in_points       ? 1 : 0,

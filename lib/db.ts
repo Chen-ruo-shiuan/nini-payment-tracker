@@ -21,6 +21,7 @@ export function getDb(): Database.Database {
     migrateCheckoutItems(db)
     migrateSvLedgerPaymentMethod(db)
     migrateRenameCategory(db)
+    migratePackageUnitPriceOrig(db)
   }
   return db
 }
@@ -262,6 +263,14 @@ function migrateCheckoutItems(db: Database.Database) {
 // ─── 遷移：checkout_items.category「套組核銷」→「商品券」 ─────────────────────
 function migrateRenameCategory(db: Database.Database) {
   db.prepare(`UPDATE checkout_items SET category = '商品券' WHERE category = '套組核銷'`).run()
+}
+
+// ─── 遷移：packages 新增 unit_price_orig（原始單堂定價，用於計算銷售折讓）──────
+function migratePackageUnitPriceOrig(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(packages)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('unit_price_orig')) {
+    db.exec(`ALTER TABLE packages ADD COLUMN unit_price_orig INTEGER NOT NULL DEFAULT 0`)
+  }
 }
 
 function migrateLegacyCustomers(db: Database.Database) {

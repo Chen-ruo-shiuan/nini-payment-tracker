@@ -11,6 +11,8 @@ interface Financials {
   installmentReceived: number; installmentOutstanding: number
   checkoutTotal: number
   byPayMethod: { method: string; total: number }[]
+  discountAbsorbed: number; pkgOrigTotal: number
+  expensesTotal: number; expensesByCategory: { category: string; total: number }[]
 }
 interface ReportData {
   type: string
@@ -56,6 +58,18 @@ function StatCard({ label, value, sub, color = '#2c2825', bg = '#faf8f5', border
       <div style={{ color: '#9a8f84', fontSize: '0.65rem', letterSpacing: '0.07em', marginBottom: '4px' }}>{label}</div>
       <div style={{ color, fontSize: '0.95rem', fontWeight: 600 }}>{value}</div>
       {sub && <div style={{ color: '#b4aa9e', fontSize: '0.65rem', marginTop: '2px' }}>{sub}</div>}
+    </div>
+  )
+}
+
+// ─── Row (P&L line item) ──────────────────────────────────────────────────────
+function Row({ label, value, indent, negative }: { label: string; value: number; indent?: boolean; negative?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', paddingLeft: indent ? '10px' : '0' }}>
+      <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>{label}</span>
+      <span style={{ color: negative ? '#9a4a4a' : '#2c2825', fontSize: '0.8rem', fontWeight: 500 }}>
+        {negative ? '- ' : ''}{fmtAmt(value)}
+      </span>
     </div>
   )
 }
@@ -239,6 +253,102 @@ export default function ReportsPage() {
               </div>
             )}
           </section>
+
+          {/* ── 損益報表 ── */}
+          {fin && (() => {
+            const cashMethods = fin.byPayMethod.filter(m => ['現金','匯款','LINE Pay','LinePay'].includes(m.method))
+            const cashIncome  = cashMethods.reduce((s, m) => s + m.total, 0)
+            // 套組原價收入（本期）= prepaid + discount absorbed（= standard price before discount）
+            const pkgStdRevenue = fin.prepaid + fin.discountAbsorbed
+            // 現場非套組收入 = cash payments at checkout（walk-in, excluding pre-paid fulfilment）
+            const walkInIncome  = cashIncome
+            // 小計標準收入
+            const grossRevenue  = pkgStdRevenue + walkInIncome + fin.installmentReceived
+            // 毛利 = 淨收入 = 標準收入 - 銷售折讓 = prepaid + walkIn + installment
+            const grossProfit   = fin.prepaid + walkInIncome + fin.installmentReceived
+            // 淨利 = 毛利 - 費用
+            const netProfit     = grossProfit - fin.expensesTotal
+            const profitColor   = netProfit >= 0 ? '#4a6b52' : '#9a4a4a'
+            const profitBg      = netProfit >= 0 ? '#edf3eb' : '#fdf0f0'
+            const profitBorder  = netProfit >= 0 ? '#9ab89e' : '#e8a8a8'
+
+            return (
+              <section style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }}>
+                <p style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.1em', marginBottom: '12px' }}>損益報表</p>
+
+                {/* 收入 */}
+                <div style={{ marginBottom: '10px' }}>
+                  <p style={{ color: '#b4aa9e', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '6px' }}>── 收入（標準定價）</p>
+                  <Row label="套組原價（本期）" value={pkgStdRevenue} indent />
+                  {fin.discountAbsorbed > 0 && (
+                    <div style={{ paddingLeft: '10px', display: 'flex', justifyContent: 'space-between', padding: '2px 0 2px 10px' }}>
+                      <span style={{ color: '#b4aa9e', fontSize: '0.72rem' }}>
+                        　（優惠後實收 {fmtAmt(fin.prepaid)}，折讓 {fmtAmt(fin.discountAbsorbed)}）
+                      </span>
+                    </div>
+                  )}
+                  {walkInIncome > 0 && <Row label="現場現金收入" value={walkInIncome} indent />}
+                  {fin.installmentReceived > 0 && <Row label="分期已收" value={fin.installmentReceived} indent />}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e0d9d0', paddingTop: '5px', marginTop: '4px' }}>
+                    <span style={{ color: '#2c2825', fontSize: '0.8rem', fontWeight: 500 }}>標準收入小計</span>
+                    <span style={{ color: '#2c2825', fontSize: '0.82rem', fontWeight: 600 }}>{fmtAmt(grossRevenue)}</span>
+                  </div>
+                </div>
+
+                {/* 銷售折讓 */}
+                {fin.discountAbsorbed > 0 && (
+                  <div style={{ background: '#fdf6f0', border: '1px solid #e8cba8', borderRadius: '6px', padding: '8px 12px', marginBottom: '10px' }}>
+                    <p style={{ color: '#9a6a4a', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '4px' }}>── 銷售折讓（折扣吸收）</p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>套組讓利</span>
+                      <span style={{ color: '#9a4a4a', fontSize: '0.82rem', fontWeight: 500 }}>- {fmtAmt(fin.discountAbsorbed)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #e8cba8', paddingTop: '4px', marginTop: '4px' }}>
+                      <span style={{ color: '#6b5f54', fontSize: '0.75rem' }}>折讓後淨收入 / 毛利</span>
+                      <span style={{ color: '#2c2825', fontSize: '0.82rem', fontWeight: 600 }}>{fmtAmt(grossProfit)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 費用 */}
+                <div style={{ marginBottom: '10px' }}>
+                  <p style={{ color: '#b4aa9e', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '6px' }}>── 費用支出</p>
+                  {fin.expensesByCategory.length > 0 ? (
+                    fin.expensesByCategory.map(e => (
+                      <Row key={e.category} label={e.category} value={e.total} indent negative />
+                    ))
+                  ) : (
+                    <p style={{ color: '#c4b8aa', fontSize: '0.75rem', paddingLeft: '10px' }}>本期無費用記錄</p>
+                  )}
+                  {fin.expensesTotal > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e0d9d0', paddingTop: '5px', marginTop: '4px' }}>
+                      <span style={{ color: '#2c2825', fontSize: '0.8rem', fontWeight: 500 }}>費用合計</span>
+                      <span style={{ color: '#9a4a4a', fontSize: '0.82rem', fontWeight: 600 }}>- {fmtAmt(fin.expensesTotal)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 損益結算 */}
+                <div style={{ background: profitBg, border: `1px solid ${profitBorder}`, borderRadius: '7px', padding: '12px' }}>
+                  <p style={{ color: '#9a8f84', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '8px' }}>── 損益結算</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>毛利（折讓後淨收入）</span>
+                    <span style={{ color: '#2c2825', fontSize: '0.82rem', fontWeight: 500 }}>{fmtAmt(grossProfit)}</span>
+                  </div>
+                  {fin.expensesTotal > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>(-) 費用合計</span>
+                      <span style={{ color: '#9a4a4a', fontSize: '0.78rem' }}>- {fmtAmt(fin.expensesTotal)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${profitBorder}`, paddingTop: '7px', marginTop: '5px' }}>
+                    <span style={{ color: profitColor, fontSize: '0.88rem', fontWeight: 600 }}>淨利</span>
+                    <span style={{ color: profitColor, fontSize: '1rem', fontWeight: 700 }}>{netProfit >= 0 ? '' : '- '}{fmtAmt(Math.abs(netProfit))}</span>
+                  </div>
+                </div>
+              </section>
+            )
+          })()}
 
           {/* ── 付款方式 ── */}
           {(data.payBreakdown ?? data.byMethod) && (

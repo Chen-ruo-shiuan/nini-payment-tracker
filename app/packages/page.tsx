@@ -7,14 +7,14 @@ import { MembershipLevel, PAYMENT_METHODS } from '@/types'
 interface PkgRow {
   id: number; client_id: number; client_name: string; client_level: string
   service_name: string; total_sessions: number; used_sessions: number
-  unit_price: number; prepaid_amount: number; payment_method: string
+  unit_price: number; unit_price_orig: number; prepaid_amount: number; payment_method: string
   date: string; note: string | null
   include_in_accumulation: number; include_in_points: number
 }
 
 interface EditForm {
   service_name: string; total_sessions: string; used_sessions: string
-  unit_price: string; prepaid_amount: string; payment_method: string
+  unit_price: string; unit_price_orig: string; prepaid_amount: string; payment_method: string
   date: string; note: string
   include_in_accumulation: boolean; include_in_points: boolean
 }
@@ -72,14 +72,15 @@ export default function PackagesPage() {
   function startEdit(pkg: PkgRow) {
     setEditingId(pkg.id)
     setEditForm({
-      service_name:   pkg.service_name,
-      total_sessions: String(pkg.total_sessions),
-      used_sessions:  String(pkg.used_sessions),
-      unit_price:     String(pkg.unit_price),
-      prepaid_amount: String(pkg.prepaid_amount),
-      payment_method: pkg.payment_method,
-      date:           pkg.date,
-      note:           pkg.note ?? '',
+      service_name:    pkg.service_name,
+      total_sessions:  String(pkg.total_sessions),
+      used_sessions:   String(pkg.used_sessions),
+      unit_price:      String(pkg.unit_price),
+      unit_price_orig: String(pkg.unit_price_orig || pkg.unit_price),
+      prepaid_amount:  String(pkg.prepaid_amount),
+      payment_method:  pkg.payment_method,
+      date:            pkg.date,
+      note:            pkg.note ?? '',
       include_in_accumulation: pkg.include_in_accumulation === 1,
       include_in_points:       pkg.include_in_points === 1,
     })
@@ -93,10 +94,11 @@ export default function PackagesPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...editForm,
-        total_sessions: Number(editForm.total_sessions),
-        used_sessions:  Number(editForm.used_sessions),
-        unit_price:     Number(editForm.unit_price),
-        prepaid_amount: Number(editForm.prepaid_amount),
+        total_sessions:  Number(editForm.total_sessions),
+        used_sessions:   Number(editForm.used_sessions),
+        unit_price:      Number(editForm.unit_price),
+        unit_price_orig: Number(editForm.unit_price_orig),
+        prepaid_amount:  Number(editForm.prepaid_amount),
       }),
     })
     setSaving(false)
@@ -284,8 +286,8 @@ export default function PackagesPage() {
                         style={iStyle} />
                     </div>
 
-                    {/* Sessions row */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                    {/* Sessions + price row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                       <div>
                         <FLabel>總堂數</FLabel>
                         <input value={editForm.total_sessions} onChange={e => ef('total_sessions', e.target.value)}
@@ -297,7 +299,12 @@ export default function PackagesPage() {
                           type="number" min="0" style={iStyle} />
                       </div>
                       <div>
-                        <FLabel>單堂單價</FLabel>
+                        <FLabel>單堂原價</FLabel>
+                        <input value={editForm.unit_price_orig} onChange={e => ef('unit_price_orig', e.target.value)}
+                          type="number" min="0" style={iStyle} />
+                      </div>
+                      <div>
+                        <FLabel>記帳單堂價（優惠後）</FLabel>
                         <input value={editForm.unit_price} onChange={e => ef('unit_price', e.target.value)}
                           type="number" min="0" style={iStyle} />
                       </div>

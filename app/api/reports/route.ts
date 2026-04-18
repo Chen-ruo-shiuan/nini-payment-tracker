@@ -62,11 +62,38 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     GROUP BY cp.method ORDER BY total DESC
   `).all(dateFilter) as { method: string; total: number }[]
 
+  // 銷售折讓（套組折扣吸收）：本期購買套組中有設定原價者
+  const discountRow = (db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN unit_price_orig > 0
+        THEN (unit_price_orig * total_sessions) - prepaid_amount
+        ELSE 0 END), 0) AS discount_absorbed,
+      COALESCE(SUM(CASE WHEN unit_price_orig > 0
+        THEN unit_price_orig * total_sessions
+        ELSE prepaid_amount END), 0) AS pkg_orig_total
+    FROM packages WHERE date LIKE ?
+  `).get(dateFilter) as { discount_absorbed: number; pkg_orig_total: number })
+  const discountAbsorbed = discountRow.discount_absorbed
+  const pkgOrigTotal     = discountRow.pkg_orig_total
+
+  // 費用支出（本期）
+  const expensesTotal = (db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE date LIKE ?
+  `).get(dateFilter) as { total: number }).total
+
+  const expensesByCategory = db.prepare(`
+    SELECT category, COALESCE(SUM(amount), 0) AS total
+    FROM expenses WHERE date LIKE ?
+    GROUP BY category ORDER BY total DESC
+  `).all(dateFilter) as { category: string; total: number }[]
+
   return {
     prepaid, outstanding,
     pkgRealized, svUsed, pointsUsed,
     installmentReceived, installmentOutstanding,
     checkoutTotal, byPayMethod,
+    discountAbsorbed, pkgOrigTotal,
+    expensesTotal, expensesByCategory,
   }
 }
 

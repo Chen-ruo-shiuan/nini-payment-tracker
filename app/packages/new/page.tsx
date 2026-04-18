@@ -104,6 +104,7 @@ function NewPackageForm() {
           service_name: finalServiceName,
           total_sessions: Number(totalSessions),
           unit_price: unitBooking,
+          unit_price_orig: Number(unitPriceOrig) || 0,
           prepaid_amount: prepaid,
           payment_method: paymentMethod,
           date, note,
