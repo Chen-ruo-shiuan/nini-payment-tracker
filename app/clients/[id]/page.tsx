@@ -531,6 +531,7 @@ function PerkBtn({ label, done, doneDate, loading, onRecord, onUndo }: {
 const SV_PAY_METHODS = ['現金', '匯款', 'LINE Pay', '信用卡', '其他'] as const
 
 function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
+  // ── 新增表單 ────────────────────────────────────────────────────────────────
   const [amount, setAmount] = useState('')
   const [paidAmount, setPaidAmount] = useState('')
   const [note, setNote] = useState('')
@@ -559,6 +560,45 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
     setAmount(''); setPaidAmount(''); setNote(''); setSaving(false)
     refresh()
   }
+
+  // ── 編輯狀態 ────────────────────────────────────────────────────────────────
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editPaid, setEditPaid] = useState('')
+  const [editNote, setEditNote] = useState('')
+  const [editDate, setEditDate] = useState('')
+  const [editPay, setEditPay] = useState('現金')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  function startEdit(e: SvLedgerEntry) {
+    setEditingId(e.id)
+    setEditAmount(String(e.amount))
+    setEditPaid(e.paid_amount !== null && e.paid_amount !== undefined ? String(e.paid_amount) : '')
+    setEditNote(e.note ?? '')
+    setEditDate(e.date)
+    setEditPay(e.payment_method ?? '現金')
+  }
+
+  async function saveEdit(id: number) {
+    setSavingEdit(true)
+    await fetch(`/api/sv-ledger/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: Number(editAmount),
+        paid_amount: editPaid ? Number(editPaid) : null,
+        note: editNote,
+        date: editDate,
+        payment_method: editPay,
+      }),
+    })
+    setSavingEdit(false)
+    setEditingId(null)
+    refresh()
+  }
+
+  const editIsDeposit = Number(editAmount) > 0
+  const editAllowance = editIsDeposit && editPaid && Number(editPaid) < Number(editAmount)
+    ? Number(editAmount) - Number(editPaid) : 0
 
   return (
     <div className="space-y-4">
@@ -599,6 +639,7 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
           }}>{saving ? '儲存中…' : '新增'}</button>
         </div>
       </form>
+
       <div className="space-y-1">
         {client.sv_ledger.length === 0 && (
           <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無儲值記錄</p>
@@ -606,23 +647,83 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
         {client.sv_ledger.map(e => {
           const hasAllowance = e.amount > 0 && e.paid_amount !== null && e.paid_amount !== undefined && e.paid_amount < e.amount
           const svAllowance = hasAllowance ? e.amount - (e.paid_amount as number) : 0
+          const isEditing = editingId === e.id
+
           return (
-            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0ebe4' }}>
-              <div>
-                <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(e.date)}</span>
-                {e.payment_method && e.amount > 0 && (
-                  <span style={{ color: '#9a8f84', fontSize: '0.72rem', marginLeft: '6px', background: '#f0ebe4', borderRadius: '8px', padding: '1px 6px' }}>{e.payment_method}</span>
-                )}
-                {hasAllowance && (
-                  <span style={{ color: '#9a4a4a', fontSize: '0.68rem', marginLeft: '6px', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '8px', padding: '1px 6px' }}>
-                    實收 {fmtAmt(e.paid_amount as number)}　讓利 {fmtAmt(svAllowance)}
-                  </span>
-                )}
-                {e.note && <span style={{ color: '#6b5f54', fontSize: '0.8rem', marginLeft: '8px' }}>{e.note}</span>}
-              </div>
-              <span style={{ color: e.amount >= 0 ? '#4a6b52' : '#9a4a4a', fontSize: '0.9rem', fontWeight: 500 }}>
-                {e.amount >= 0 ? '+' : ''}{fmtAmt(e.amount)}
-              </span>
+            <div key={e.id} style={{ borderBottom: '1px solid #f0ebe4', padding: '8px 0' }}>
+              {!isEditing ? (
+                /* ── 顯示模式 ── */
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(e.date)}</span>
+                    {e.payment_method && e.amount > 0 && (
+                      <span style={{ color: '#9a8f84', fontSize: '0.72rem', marginLeft: '6px', background: '#f0ebe4', borderRadius: '8px', padding: '1px 6px' }}>{e.payment_method}</span>
+                    )}
+                    {hasAllowance && (
+                      <span style={{ color: '#9a4a4a', fontSize: '0.68rem', marginLeft: '6px', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '8px', padding: '1px 6px' }}>
+                        實收 {fmtAmt(e.paid_amount as number)}　讓利 {fmtAmt(svAllowance)}
+                      </span>
+                    )}
+                    {e.note && <span style={{ color: '#6b5f54', fontSize: '0.8rem', marginLeft: '8px' }}>{e.note}</span>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: e.amount >= 0 ? '#4a6b52' : '#9a4a4a', fontSize: '0.9rem', fontWeight: 500 }}>
+                      {e.amount >= 0 ? '+' : ''}{fmtAmt(e.amount)}
+                    </span>
+                    <button onClick={() => startEdit(e)}
+                      style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer' }}>
+                      編輯
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* ── 編輯模式 ── */
+                <div style={{ background: '#f5f2ee', borderRadius: '6px', padding: '10px' }} className="space-y-2">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>入帳金額</label>
+                      <input value={editAmount} onChange={e => { setEditAmount(e.target.value); setEditPaid('') }}
+                        type="number" style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>
+                        實收金額（選填）
+                        {editAllowance > 0 && <span style={{ color: '#9a4a4a', marginLeft: '4px' }}>讓利 {fmtAmt(editAllowance)}</span>}
+                      </label>
+                      <input value={editPaid} onChange={e => setEditPaid(e.target.value)}
+                        type="number" disabled={!editIsDeposit}
+                        style={{ ...inputStyle, opacity: editIsDeposit ? 1 : 0.4 }} />
+                    </div>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>付款方式</label>
+                      <select value={editPay} onChange={e => setEditPay(e.target.value)}
+                        disabled={!editIsDeposit} style={{ ...inputStyle, opacity: editIsDeposit ? 1 : 0.4 }}>
+                        {SV_PAY_METHODS.map(m => <option key={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>日期</label>
+                      <input value={editDate} onChange={e => setEditDate(e.target.value)}
+                        type="date" style={inputStyle} />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>備註</label>
+                    <input value={editNote} onChange={e => setEditNote(e.target.value)}
+                      placeholder="選填" style={inputStyle} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={() => saveEdit(e.id)} disabled={savingEdit}
+                      style={{ background: '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 16px', cursor: 'pointer', flex: 1 }}>
+                      {savingEdit ? '儲存中…' : '儲存'}
+                    </button>
+                    <button onClick={() => setEditingId(null)}
+                      style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 14px', cursor: 'pointer' }}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )
         })}
