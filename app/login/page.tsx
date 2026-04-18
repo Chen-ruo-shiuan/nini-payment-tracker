@@ -1,29 +1,38 @@
 'use client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function LoginPage() {
-  const [pw, setPw] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const from = searchParams.get('from') || '/'
+
+  const [pw, setPw]         = useState('')
+  const [error, setError]   = useState('')
+  const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw }),
-    })
-    if (res.ok) {
-      router.replace('/')
-    } else {
-      setError('密碼錯誤，請再試一次')
-      setPw('')
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      })
+      if (res.ok) {
+        router.replace(from)
+        router.refresh()
+      } else {
+        setError('密碼錯誤，請再試一次')
+        setPw('')
+      }
+    } catch {
+      setError('網路錯誤，請稍後再試')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
@@ -56,11 +65,12 @@ export default function LoginPage() {
               onChange={e => setPw(e.target.value)}
               placeholder="請輸入密碼"
               autoFocus
+              autoComplete="current-password"
               style={{
-                width: '100%', padding: '10px 12px', border: '1px solid #ddd8d0',
+                width: '100%', padding: '10px 12px',
+                border: `1px solid ${error ? '#c0504a' : '#ddd8d0'}`,
                 borderRadius: '8px', fontSize: '0.9rem', background: '#fff',
                 color: '#2c2825', outline: 'none', boxSizing: 'border-box',
-                borderColor: error ? '#c0504a' : '#ddd8d0',
               }}
             />
             {error && (
@@ -72,7 +82,8 @@ export default function LoginPage() {
             type="submit"
             disabled={loading || !pw}
             style={{
-              width: '100%', padding: '11px', background: loading || !pw ? '#b5b0a8' : '#2c2825',
+              width: '100%', padding: '11px',
+              background: loading || !pw ? '#b5b0a8' : '#2c2825',
               color: '#f7f4ef', border: 'none', borderRadius: '8px', fontSize: '0.9rem',
               fontWeight: '500', cursor: loading || !pw ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit', letterSpacing: '0.04em',
@@ -81,7 +92,19 @@ export default function LoginPage() {
             {loading ? '驗證中…' : '進入系統'}
           </button>
         </form>
+
+        <p style={{ textAlign: 'center', color: '#c4b8aa', fontSize: '0.68rem', marginTop: '20px' }}>
+          此系統僅供授權人員使用
+        </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }

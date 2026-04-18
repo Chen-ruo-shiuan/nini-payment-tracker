@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: 'NINI 分期',
   description: 'NINIの皮膚療癒所 — 客人分期繳納系統',
   manifest: '/manifest.json',
+  robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
