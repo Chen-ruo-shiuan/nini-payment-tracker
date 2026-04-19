@@ -23,7 +23,17 @@ const fmtAmt = (n: number) => `$ ${n.toLocaleString()}`
 const fmtShort = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
 
-const EDIT_PAY_METHODS = PAYMENT_METHODS.filter(m => !['分期', '核銷', '商品券'].includes(m))
+const EDIT_PAY_METHODS = PAYMENT_METHODS.filter(m => !['核銷', '商品券'].includes(m))
+
+function addMonths(dateStr: string, n: number) {
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setMonth(d.getMonth() + n)
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+
+interface InstPeriod { due_date: string; amount: string; paid_at?: string | null }
+interface ContractRow { id: number; payment_method: string; note: string | null }
+interface InstRow { due_date: string; amount: number; paid_at: string | null }
 
 export default function PackagesPage() {
   const [packages, setPackages] = useState<PkgRow[]>([])
@@ -34,6 +44,10 @@ export default function PackagesPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [editInstPeriods, setEditInstPeriods] = useState<InstPeriod[]>([])
+  const [editInstPayMethod, setEditInstPayMethod] = useState('現金')
+  const [editInstContractId, setEditInstContractId] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState<number | null>(null)
 
   function load() {
     setLoading(true)
@@ -69,7 +83,7 @@ export default function PackagesPage() {
     load()
   }
 
-  function startEdit(pkg: PkgRow) {
+  async function startEdit(pkg: PkgRow) {
     setEditingId(pkg.id)
     setEditForm({
       service_name:    pkg.service_name,
@@ -84,6 +98,25 @@ export default function PackagesPage() {
       include_in_accumulation: pkg.include_in_accumulation === 1,
       include_in_points:       pkg.include_in_points === 1,
     })
+    setEditInstPeriods([])
+    setEditInstPayMethod('現金')
+    setEditInstContractId(null)
+    if (pkg.payment_method === '分期') {
+      try {
+        const contracts: ContractRow[] = await fetch(`/api/contracts?client_id=${pkg.client_id}`).then(r => r.json())
+        const matching = contracts.find(c => c.note?.includes(pkg.service_name)) ?? contracts[0] ?? null
+        if (matching) {
+          const full = await fetch(`/api/contracts/${matching.id}`).then(r => r.json())
+          setEditInstContractId(matching.id)
+          setEditInstPayMethod(matching.payment_method || '現金')
+          setEditInstPeriods((full.installments as InstRow[]).map(inst => ({
+            due_date: inst.due_date,
+            amount: String(inst.amount),
+            paid_at: inst.paid_at,
+          })))
+        }
+      } catch { /* ignore */ }
+    }
   }
 
   async function saveEdit(id: number) {
@@ -101,9 +134,41 @@ export default function PackagesPage() {
         prepaid_amount:  Number(editForm.prepaid_amount),
       }),
     })
+    if (editForm.payment_method === '分期' && editInstPeriods.length > 0) {
+      const hasPaid = editInstPeriods.some(p => p.paid_at)
+      if (editInstContractId && !hasPaid) {
+        await fetch(`/api/contracts/${editInstContractId}`, { method: 'DELETE' })
+      }
+      if (!editInstContractId || !hasPaid) {
+        const pkg = packages.find(p => p.id === id)
+        if (pkg) {
+          await fetch('/api/contracts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_id: pkg.client_id,
+              payment_method: editInstPayMethod,
+              note: `套組：${editForm.service_name}`,
+              periods: editInstPeriods.map(p => ({ due_date: p.due_date, amount: Number(p.amount) })),
+            }),
+          })
+        }
+      }
+    }
     setSaving(false)
     setEditingId(null)
     setEditForm(null)
+    setEditInstPeriods([])
+    setEditInstPayMethod('現金')
+    setEditInstContractId(null)
+    load()
+  }
+
+  async function deletePkg(pkg: PkgRow) {
+    if (!confirm(`確定刪除「${pkg.client_name}｜${pkg.service_name}」套組？\n此操作無法復原，相關分期合約也會一併刪除。`)) return
+    setDeleting(pkg.id)
+    await fetch(`/api/packages/${pkg.id}`, { method: 'DELETE' })
+    setDeleting(null)
     load()
   }
 
@@ -262,6 +327,15 @@ export default function PackagesPage() {
                         }}>
                         編輯
                       </button>
+                      <button onClick={() => deletePkg(pkg)} disabled={deleting === pkg.id}
+                        style={{
+                          background: 'none', color: '#9a4a4a',
+                          border: '1px solid #e8c4c4', borderRadius: '4px',
+                          fontSize: '0.7rem', padding: '3px 10px',
+                          cursor: deleting === pkg.id ? 'not-allowed' : 'pointer',
+                        }}>
+                        {deleting === pkg.id ? '…' : '刪除'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -326,6 +400,91 @@ export default function PackagesPage() {
                       </div>
                     </div>
 
+                    {/* ── 分期設定 ── */}
+                    {editForm.payment_method === '分期' && (
+                      <div style={{ background: '#f5f2ee', borderRadius: '6px', padding: '12px' }}
+                        className="space-y-3">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <FLabel>分期設定</FLabel>
+                          <div style={{ display: 'flex', gap: '5px' }}>
+                            {[2,3,4,6].map(n => (
+                              <button key={n} type="button"
+                                onClick={() => {
+                                  const totalAmt = Number(editForm.prepaid_amount)
+                                  const base = Math.floor(totalAmt / n)
+                                  const rem  = totalAmt - base * (n - 1)
+                                  setEditInstPeriods(Array.from({ length: n }, (_, i) => ({
+                                    due_date: addMonths(editForm.date, i),
+                                    amount: String(i === n - 1 ? rem : base),
+                                  })))
+                                }}
+                                style={{
+                                  background: editInstPeriods.length === n ? '#2c2825' : '#f0ebe4',
+                                  color: editInstPeriods.length === n ? '#f7f4ef' : '#6b5f54',
+                                  border: 'none', borderRadius: '4px',
+                                  fontSize: '0.72rem', padding: '3px 10px', cursor: 'pointer',
+                                }}>
+                                {n}期
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {editInstContractId !== null && editInstPeriods.some(p => p.paid_at) && (
+                          <p style={{ color: '#9a6a4a', fontSize: '0.72rem', background: '#fdf5ee', borderRadius: '4px', padding: '6px 10px' }}>
+                            ⚠ 此合約已有付款記錄，僅供查看。如需修改請至分期管理頁面。
+                          </p>
+                        )}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                          <div>
+                            <FLabel>每期付款方式</FLabel>
+                            <select value={editInstPayMethod}
+                              onChange={e => setEditInstPayMethod(e.target.value)}
+                              disabled={editInstContractId !== null && editInstPeriods.some(p => p.paid_at)}
+                              style={iStyle}>
+                              {['現金','匯款','LINE Pay'].map(m => <option key={m}>{m}</option>)}
+                            </select>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '4px' }}>
+                            <span style={{
+                              color: editInstPeriods.reduce((s,p) => s+Number(p.amount), 0) === Number(editForm.prepaid_amount) ? '#4a6b52' : '#9a4a4a',
+                              fontSize: '0.78rem',
+                            }}>
+                              合計 ${editInstPeriods.reduce((s,p) => s+Number(p.amount), 0).toLocaleString()}
+                              {editInstPeriods.reduce((s,p) => s+Number(p.amount), 0) !== Number(editForm.prepaid_amount) &&
+                                ` ≠ $${Number(editForm.prepaid_amount).toLocaleString()}`}
+                            </span>
+                          </div>
+                        </div>
+                        {editInstPeriods.map((p, i) => (
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+                            <span style={{ color: '#9a8f84', fontSize: '0.75rem', minWidth: '36px' }}>
+                              第{i+1}期{p.paid_at ? ' ✓' : ''}
+                            </span>
+                            <input value={p.due_date}
+                              onChange={e => setEditInstPeriods(ps => ps.map((x,j) => j===i ? {...x, due_date: e.target.value} : x))}
+                              type="date" style={iStyle} disabled={!!p.paid_at} />
+                            <input value={p.amount}
+                              onChange={e => setEditInstPeriods(ps => ps.map((x,j) => j===i ? {...x, amount: e.target.value} : x))}
+                              type="number" min="0" style={iStyle} disabled={!!p.paid_at} />
+                            {!p.paid_at ? (
+                              <button type="button"
+                                onClick={() => setEditInstPeriods(ps => ps.filter((_,j) => j!==i))}
+                                style={{ color: '#9a4a4a', background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer', padding: '0 4px' }}>×</button>
+                            ) : (
+                              <span style={{ color: '#4a6b52', fontSize: '0.72rem', padding: '0 4px' }}>已付</span>
+                            )}
+                          </div>
+                        ))}
+                        {(editInstContractId === null || !editInstPeriods.some(p => p.paid_at)) && (
+                          <button type="button"
+                            onClick={() => setEditInstPeriods(ps => [...ps, { due_date: addMonths(editForm.date, ps.length), amount: '' }])}
+                            style={{ color: '#9a8f84', background: 'none', border: '1px dashed #e0d9d0', borderRadius: '5px', fontSize: '0.78rem', padding: '5px 0', width: '100%', cursor: 'pointer' }}>
+                            ＋ 新增一期
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {/* Date + note */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                       <div>
@@ -367,7 +526,7 @@ export default function PackagesPage() {
                         }}>
                         {saving ? '儲存中…' : '儲存'}
                       </button>
-                      <button onClick={() => { setEditingId(null); setEditForm(null) }}
+                      <button onClick={() => { setEditingId(null); setEditForm(null); setEditInstPeriods([]); setEditInstPayMethod('現金'); setEditInstContractId(null) }}
                         style={{
                           flex: 1, background: 'none', color: '#6b5f54',
                           border: '1px solid #e0d9d0', borderRadius: '5px',

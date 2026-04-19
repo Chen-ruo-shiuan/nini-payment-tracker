@@ -55,3 +55,33 @@ export async function PATCH(
 
   return NextResponse.json({ success: true })
 }
+
+// DELETE /api/packages/[id]
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const db = getDb()
+
+  const pkg = db.prepare('SELECT id, client_id, service_name, payment_method FROM packages WHERE id = ?').get(id) as {
+    id: number; client_id: number; service_name: string; payment_method: string
+  } | undefined
+  if (!pkg) return NextResponse.json({ error: '找不到套組' }, { status: 404 })
+
+  db.transaction(() => {
+    // Delete any linked installment contracts (when payment_method was 分期)
+    if (pkg.payment_method === '分期') {
+      const contracts = db.prepare(
+        `SELECT id FROM installment_contracts WHERE client_id = ? AND note LIKE ?`
+      ).all(pkg.client_id, `套組：${pkg.service_name}%`) as { id: number }[]
+      for (const c of contracts) {
+        db.prepare('DELETE FROM installment_contracts WHERE id = ?').run(c.id)
+      }
+    }
+    // Delete package (FK: checkout_items.pkg_id → SET NULL, sessions.package_id → SET NULL)
+    db.prepare('DELETE FROM packages WHERE id = ?').run(id)
+  })()
+
+  return NextResponse.json({ success: true })
+}

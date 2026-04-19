@@ -39,9 +39,11 @@ function NewPackageForm() {
   // Pricing
   const [unitPriceOrig, setUnitPriceOrig] = useState('')   // 單堂原價
   const [totalSessions, setTotalSessions] = useState('1')  // 總堂數
+  const [discountMode, setDiscountMode]   = useState<'折數' | '折價'>('折數')
   const [discountPct, setDiscountPct]     = useState('')    // 折扣 (e.g. 88 → 88折)
+  const [discountFlat, setDiscountFlat]   = useState('')    // 折扣金額 (e.g. 420 → 減420元)
   const [discountedTotal, setDiscountedTotal] = useState('') // 優惠總價
-  const [lastEdited, setLastEdited] = useState<'pct' | 'total' | null>(null)
+  const [lastEdited, setLastEdited] = useState<'pct' | 'flat' | 'total' | null>(null)
 
   // Other fields
   const [paymentMethod, setPaymentMethod] = useState('現金')
@@ -79,22 +81,33 @@ function NewPackageForm() {
     : (Number(unitPriceOrig) || 0)
   const prepaid = discTotal > 0 ? discTotal : origTotal               // 預收金額
 
-  // 折扣 ↔ 優惠總價 互相聯動
+  // 折數 → 優惠總價
   useEffect(() => {
-    if (lastEdited !== 'pct') return
+    if (discountMode !== '折數' || lastEdited !== 'pct') return
     const pct = Number(discountPct)
-    if (origTotal > 0 && pct > 0 && pct <= 100) {
+    if (origTotal > 0 && pct > 0 && pct <= 100)
       setDiscountedTotal(String(Math.round(origTotal * pct / 100)))
-    }
-  }, [discountPct, origTotal, lastEdited])
+  }, [discountPct, origTotal, lastEdited, discountMode])
 
+  // 折價 → 優惠總價
+  useEffect(() => {
+    if (discountMode !== '折價' || lastEdited !== 'flat') return
+    const flat = Number(discountFlat)
+    if (origTotal > 0 && flat >= 0)
+      setDiscountedTotal(String(Math.max(0, origTotal - flat)))
+  }, [discountFlat, origTotal, lastEdited, discountMode])
+
+  // 優惠總價 → 反算折扣輸入
   useEffect(() => {
     if (lastEdited !== 'total') return
     const tot = Number(discountedTotal)
     if (origTotal > 0 && tot > 0) {
-      setDiscountPct(String(Math.round((tot / origTotal) * 100)))
+      if (discountMode === '折數')
+        setDiscountPct(String(Math.round((tot / origTotal) * 100)))
+      else
+        setDiscountFlat(String(Math.max(0, origTotal - tot)))
     }
-  }, [discountedTotal, origTotal, lastEdited])
+  }, [discountedTotal, origTotal, lastEdited, discountMode])
 
   // Client search
   useEffect(() => {
@@ -261,24 +274,51 @@ function NewPackageForm() {
           )}
 
           {/* 折扣 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <Field label="折扣（選填）">
-              <div style={{ position: 'relative' }}>
-                <input value={discountPct}
-                  onChange={e => { setDiscountPct(e.target.value); setLastEdited('pct') }}
-                  type="number" min="1" max="100" placeholder="例：88"
+          <div className="space-y-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>折扣方式</span>
+              {(['折數', '折價'] as const).map(mode => (
+                <button key={mode} type="button"
+                  onClick={() => { setDiscountMode(mode); setDiscountPct(''); setDiscountFlat(''); setDiscountedTotal(''); setLastEdited(null) }}
+                  style={{
+                    background: discountMode === mode ? '#2c2825' : '#f0ebe4',
+                    color: discountMode === mode ? '#f7f4ef' : '#6b5f54',
+                    border: 'none', borderRadius: '4px',
+                    fontSize: '0.72rem', padding: '3px 10px', cursor: 'pointer',
+                  }}>
+                  {mode}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              {discountMode === '折數' ? (
+                <Field label="折數（選填）">
+                  <div style={{ position: 'relative' }}>
+                    <input value={discountPct}
+                      onChange={e => { setDiscountPct(e.target.value); setLastEdited('pct') }}
+                      type="number" min="1" max="100" placeholder="例：88"
+                      style={iStyle} />
+                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9a8f84', fontSize: '0.82rem', pointerEvents: 'none' }}>折</span>
+                  </div>
+                </Field>
+              ) : (
+                <Field label="折扣金額（選填）">
+                  <div style={{ position: 'relative' }}>
+                    <input value={discountFlat}
+                      onChange={e => { setDiscountFlat(e.target.value); setLastEdited('flat') }}
+                      type="number" min="0" placeholder="例：420"
+                      style={iStyle} />
+                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9a8f84', fontSize: '0.82rem', pointerEvents: 'none' }}>元</span>
+                  </div>
+                </Field>
+              )}
+              <Field label="優惠總價（選填）">
+                <input value={discountedTotal}
+                  onChange={e => { setDiscountedTotal(e.target.value); setLastEdited('total') }}
+                  type="number" min="0" placeholder="例：6600"
                   style={iStyle} />
-                <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9a8f84', fontSize: '0.82rem', pointerEvents: 'none' }}>
-                  折
-                </span>
-              </div>
-            </Field>
-            <Field label="優惠總價（選填）">
-              <input value={discountedTotal}
-                onChange={e => { setDiscountedTotal(e.target.value); setLastEdited('total') }}
-                type="number" min="0" placeholder="例：6600"
-                style={iStyle} />
-            </Field>
+              </Field>
+            </div>
           </div>
 
           {/* 計算結果 */}
