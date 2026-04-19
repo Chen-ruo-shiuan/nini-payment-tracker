@@ -35,10 +35,11 @@ async function verifyToken(token: string, secret: string): Promise<boolean> {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // 放行：登入相關、靜態資源
+  // 放行：登入相關、靜態資源、行事曆公開 API
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth') ||
+    pathname === '/api/calendar-state' ||
     pathname.startsWith('/_next') ||
     pathname === '/favicon.ico' ||
     pathname === '/robots.txt' ||
