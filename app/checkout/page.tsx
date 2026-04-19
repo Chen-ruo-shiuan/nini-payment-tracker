@@ -213,6 +213,7 @@ export default function CheckoutPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (editingLogId !== null) return  // 正在編輯紀錄時，封鎖主表單送出
     if (items.some(i => !i.label || !i.price)) { alert('請填寫完整品項名稱和金額'); return }
     if (Math.round(diff) !== 0) { alert(`付款金額與消費金額不符，差距 ${fmtAmt(Math.abs(diff))}`); return }
 
@@ -792,7 +793,7 @@ export default function CheckoutPage() {
 
                         {/* Actions */}
                         <div style={{ display: 'flex', gap: '8px' }}>
-                          <button onClick={() => saveLogEdit(co.id)} disabled={savingEdit || Math.round(editDiff) !== 0}
+                          <button type="button" onClick={() => saveLogEdit(co.id)} disabled={savingEdit || Math.round(editDiff) !== 0}
                             style={{
                               flex: 1, background: savingEdit || Math.round(editDiff) !== 0 ? '#c4b8aa' : '#2c2825',
                               color: '#f7f4ef', border: 'none', borderRadius: '5px',
@@ -800,7 +801,7 @@ export default function CheckoutPage() {
                             }}>
                             {savingEdit ? '儲存中…' : '儲存'}
                           </button>
-                          <button onClick={() => setEditingLogId(null)}
+                          <button type="button" onClick={() => setEditingLogId(null)}
                             style={{ flex: 1, background: 'none', color: '#6b5f54', border: '1px solid #e0d9d0', borderRadius: '5px', fontSize: '0.82rem', padding: '8px', cursor: 'pointer' }}>
                             取消
                           </button>
