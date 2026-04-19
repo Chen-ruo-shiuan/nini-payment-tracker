@@ -34,8 +34,9 @@ function getStrokeCount(char: string): number {
 
 export async function GET(req: NextRequest) {
   const db = getDb()
-  const search = req.nextUrl.searchParams.get('q') || ''
-  const level  = req.nextUrl.searchParams.get('level') || ''
+  const search        = req.nextUrl.searchParams.get('q') || ''
+  const level         = req.nextUrl.searchParams.get('level') || ''
+  const birthdayMonth = req.nextUrl.searchParams.get('birthday_month') || ''
 
   const conditions: string[] = []
   const bindParams: string[] = []
@@ -47,6 +48,11 @@ export async function GET(req: NextRequest) {
   if (level) {
     conditions.push('c.level = ?')
     bindParams.push(level)
+  }
+  if (birthdayMonth) {
+    const mm = String(Number(birthdayMonth)).padStart(2, '0')
+    conditions.push("c.birthday IS NOT NULL AND SUBSTR(c.birthday, 1, 2) = ?")
+    bindParams.push(mm)
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''

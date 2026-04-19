@@ -81,7 +81,6 @@ export async function POST(req: NextRequest) {
   const birthdayClients = db.prepare(`
     SELECT id, name, birthday, level FROM clients
     WHERE birthday IS NOT NULL
-      AND level IN ('甜癒米','療癒米','悟癒米')
       AND birthday IN (?, ?)
   `).all(bdayMmdd5, bdayMmdd3) as Array<{
     id: number; name: string; birthday: string; level: string

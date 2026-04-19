@@ -10,7 +10,21 @@ function formatAmount(n: number) {
 
 const ALL_LEVELS = ['全部', ...MEMBERSHIP_LEVELS] as const
 
-function ClientCard({ client, onDelete }: { client: ClientWithStats; onDelete: (id: number) => void }) {
+function daysUntilBirthday(mmdd: string): number {
+  const [mm, dd] = mmdd.split('-').map(Number)
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  const today = new Date(todayStr + 'T00:00:00')
+  let bday = new Date(today.getFullYear(), mm - 1, dd)
+  if (bday < today) bday = new Date(today.getFullYear() + 1, mm - 1, dd)
+  return Math.round((bday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function ClientCard({ client, onDelete, showBirthday }: {
+  client: ClientWithStats; onDelete: (id: number) => void; showBirthday?: boolean
+}) {
+  const days = showBirthday && client.birthday ? daysUntilBirthday(client.birthday) : null
+  const [mm, dd] = client.birthday ? client.birthday.split('-') : []
+
   return (
     <div style={{ display: 'flex', background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px' }}>
       {/* Main clickable area */}
@@ -22,6 +36,18 @@ function ClientCard({ client, onDelete }: { client: ClientWithStats; onDelete: (
         </div>
         {client.phone && (
           <div style={{ color: '#9a8f84', fontSize: '0.78rem', marginTop: '2px' }}>{client.phone}</div>
+        )}
+        {showBirthday && client.birthday && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
+            <span style={{ color: '#9a4a7a', fontSize: '0.8rem' }}>🎂 {Number(mm)} 月 {Number(dd)} 日</span>
+            <span style={{
+              fontSize: '0.72rem',
+              color: days === 0 ? '#c4622d' : days !== null && days <= 7 ? '#9a6a4a' : '#9a8f84',
+              fontWeight: days !== null && days <= 7 ? 600 : 400,
+            }}>
+              {days === 0 ? '🎉 今天！' : days !== null ? `還有 ${days} 天` : ''}
+            </span>
+          </div>
         )}
         <div className="flex gap-3 mt-2 flex-wrap">
           {client.active_contracts > 0 && (
@@ -65,27 +91,44 @@ function ClientCard({ client, onDelete }: { client: ClientWithStats; onDelete: (
   )
 }
 
+const currentMonth = new Date().getMonth() + 1
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<ClientWithStats[]>([])
   const [search, setSearch] = useState('')
   const [levelFilter, setLevelFilter] = useState<string>('全部')
+  const [birthdayMonth, setBirthdayMonth] = useState<number>(currentMonth)
   const [loading, setLoading] = useState(true)
+
+  const isBirthdayMode = levelFilter === '壽星'
 
   const fetchClients = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams()
       if (search) params.set('q', search)
-      if (levelFilter !== '全部') params.set('level', levelFilter)
+      if (isBirthdayMode) {
+        params.set('birthday_month', String(birthdayMonth))
+      } else if (levelFilter !== '全部') {
+        params.set('level', levelFilter)
+      }
       const res = await fetch(`/api/clients?${params.toString()}`)
-      const data = await res.json()
+      const data: ClientWithStats[] = await res.json()
+      // In birthday mode: sort by day within the month
+      if (isBirthdayMode) {
+        data.sort((a, b) => {
+          const da = a.birthday ? Number(a.birthday.split('-')[1]) : 99
+          const db = b.birthday ? Number(b.birthday.split('-')[1]) : 99
+          return da - db
+        })
+      }
       setClients(data)
     } catch {
       setClients([])
     } finally {
       setLoading(false)
     }
-  }, [search, levelFilter])
+  }, [search, levelFilter, birthdayMonth, isBirthdayMode])
 
   useEffect(() => {
     const t = setTimeout(fetchClients, 250)
@@ -127,7 +170,7 @@ export default function ClientsPage() {
         }}
       />
 
-      {/* Level filter */}
+      {/* Level + Birthday filter */}
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
         {ALL_LEVELS.map(l => (
           <button key={l} onClick={() => setLevelFilter(l)}
@@ -140,7 +183,32 @@ export default function ClientsPage() {
             {l}
           </button>
         ))}
+        <button onClick={() => setLevelFilter('壽星')}
+          style={{
+            background: isBirthdayMode ? '#9a4a7a' : '#faf8f5',
+            color: isBirthdayMode ? '#f7f4ef' : '#9a4a7a',
+            border: `1px solid ${isBirthdayMode ? '#9a4a7a' : '#d4a8c8'}`,
+            borderRadius: '20px', fontSize: '0.75rem', padding: '4px 12px', cursor: 'pointer',
+          }}>
+          🎂 壽星
+        </button>
       </div>
+
+      {/* Birthday month selector */}
+      {isBirthdayMode && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fdf5fa', border: '1px solid #d4a8c8', borderRadius: '8px', padding: '10px 14px' }}>
+          <span style={{ color: '#9a4a7a', fontSize: '0.78rem' }}>月份</span>
+          <select value={birthdayMonth} onChange={e => setBirthdayMonth(Number(e.target.value))}
+            style={{ background: '#fff', border: '1px solid #d4a8c8', borderRadius: '6px', color: '#2c2825', fontSize: '0.85rem', outline: 'none', padding: '4px 10px', cursor: 'pointer' }}>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i + 1} value={i + 1}>{i + 1} 月</option>
+            ))}
+          </select>
+          <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>
+            {birthdayMonth} 月壽星　共 {clients.length} 位
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '40px 0', fontSize: '0.85rem' }}>
@@ -150,7 +218,9 @@ export default function ClientsPage() {
         <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '40px 0' }}>
           <div style={{ fontSize: '1.8rem', marginBottom: '10px' }}>— 無 —</div>
           <p style={{ fontSize: '0.85rem', letterSpacing: '0.08em' }}>
-            {search || levelFilter !== '全部' ? '找不到符合的客人' : '尚無客人資料'}
+            {isBirthdayMode
+              ? `${birthdayMonth} 月沒有壽星`
+              : search || levelFilter !== '全部' ? '找不到符合的客人' : '尚無客人資料'}
           </p>
           {!search && levelFilter === '全部' && (
             <Link href="/clients/new"
@@ -162,10 +232,14 @@ export default function ClientsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          <p style={{ color: '#9a8f84', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
-            共 {clients.length} 位客人
-          </p>
-          {clients.map(c => <ClientCard key={c.id} client={c} onDelete={deleteClient} />)}
+          {!isBirthdayMode && (
+            <p style={{ color: '#9a8f84', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+              共 {clients.length} 位客人
+            </p>
+          )}
+          {clients.map(c => (
+            <ClientCard key={c.id} client={c} onDelete={deleteClient} showBirthday={isBirthdayMode} />
+          ))}
         </div>
       )}
     </div>
