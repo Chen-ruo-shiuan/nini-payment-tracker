@@ -1035,6 +1035,11 @@ export default function ClientDetailPage() {
   const upgradeGap = nextThreshold ? Math.max(0, nextThreshold - annualCourseSpending) : 0
   const upgradePct = nextThreshold ? Math.min(100, Math.round((annualCourseSpending / nextThreshold) * 100)) : 100
 
+  // 悟癒米：顯示甜癒米門檻的年度累積進度（明年年費基準）
+  const renewThreshold = LEVEL_THRESHOLDS['甜癒米']  // 38,000
+  const renewPct = Math.min(100, Math.round((annualCourseSpending / renewThreshold) * 100))
+  const renewGap = Math.max(0, renewThreshold - annualCourseSpending)
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -1104,36 +1109,30 @@ export default function ClientDetailPage() {
                 : `已達 ${nextLevel} 門檻`}
             </div>
           </div>
-        ) : (() => {
-          // 悟癒米：已無更高等級，改顯示明年甜癒米門檻的年度累積進度
-          const renewThreshold = LEVEL_THRESHOLDS['甜癒米']   // 38,000
-          const renewPct = Math.min(100, Math.round((annualCourseSpending / renewThreshold) * 100))
-          const renewGap = Math.max(0, renewThreshold - annualCourseSpending)
-          return (
-            <div style={{ background: '#fdf5e0', border: '1px solid #e0c055', borderRadius: '6px', padding: '10px 12px', marginTop: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <span style={{ color: '#7a5a00', fontSize: '0.72rem', letterSpacing: '0.06em' }}>
-                  悟癒米　年度累積進度
-                </span>
-                <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>
-                  {fmtAmt(annualCourseSpending)} / {fmtAmt(renewThreshold)}
-                </span>
-              </div>
-              <div style={{ background: '#e8d89e', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                <div style={{
-                  background: renewPct >= 100 ? '#c8a000' : '#e0c055',
-                  width: `${renewPct}%`, height: '100%', borderRadius: '4px',
-                  transition: 'width 0.4s',
-                }} />
-              </div>
-              <div style={{ marginTop: '4px', color: '#9a8f84', fontSize: '0.68rem' }}>
-                {renewGap > 0
-                  ? `還差 ${fmtAmt(renewGap)} 達甜癒米門檻（明年年費基準）`
-                  : '✓ 已達甜癒米門檻，明年年費有保障'}
-              </div>
+        ) : (
+          <div style={{ background: '#fdf5e0', border: '1px solid #e0c055', borderRadius: '6px', padding: '10px 12px', marginTop: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ color: '#7a5a00', fontSize: '0.72rem', letterSpacing: '0.06em' }}>
+                悟癒米　年度累積進度
+              </span>
+              <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>
+                {fmtAmt(annualCourseSpending)} / {fmtAmt(renewThreshold)}
+              </span>
             </div>
-          )
-        })()
+            <div style={{ background: '#e8d89e', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+              <div style={{
+                background: renewPct >= 100 ? '#c8a000' : '#e0c055',
+                width: `${renewPct}%`, height: '100%', borderRadius: '4px',
+                transition: 'width 0.4s',
+              }} />
+            </div>
+            <div style={{ marginTop: '4px', color: '#9a8f84', fontSize: '0.68rem' }}>
+              {renewGap > 0
+                ? `還差 ${fmtAmt(renewGap)} 達甜癒米門檻（明年年費基準）`
+                : '✓ 已達甜癒米門檻，明年年費有保障'}
+            </div>
+          </div>
+        )
         )}
       </div>
 
