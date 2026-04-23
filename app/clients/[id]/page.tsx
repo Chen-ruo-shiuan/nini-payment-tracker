@@ -264,10 +264,14 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     setTeaLoading(slotIndex)
     const date = prompt('請輸入日期（YYYY-MM-DD）', todayStr())
     if (!date) { setTeaLoading(null); return }
-    await fetch(`/api/clients/${id}/tea`, {
+    const res = await fetch(`/api/clients/${id}/tea`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(`記錄失敗：${err.error || res.status}`)
+    }
     setTeaLoading(null)
     refresh()
   }
