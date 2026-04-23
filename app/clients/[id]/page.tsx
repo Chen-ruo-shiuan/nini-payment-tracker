@@ -24,6 +24,9 @@ interface Checkout {
   total_amount: number; incl_course: number; created_at: string
   items: CheckoutItem[]; payments: CheckoutPayment[]
 }
+interface PointsLedgerEntry {
+  id: number; client_id: number; delta: number; note: string | null; date: string; created_at: string
+}
 interface ClientDetail extends Client {
   stored_value: number
   active_contracts: number
@@ -32,6 +35,7 @@ interface ClientDetail extends Client {
   contracts: ContractWithInstallments[]
   packages: Package[]
   sv_ledger: SvLedgerEntry[]
+  points_ledger: PointsLedgerEntry[]
   checkouts: Checkout[]
 }
 
@@ -249,11 +253,43 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
   })()
   const [yodomoLoading, setYodomoLoading] = useState(false)
 
-  // points adjust
+  // points adjust — new entry form
   const [ptDelta, setPtDelta] = useState('')
   const [ptNote, setPtNote] = useState('')
+  const [ptDate, setPtDate] = useState(todayStr)
   const [ptLoading, setPtLoading] = useState(false)
   const [showPtForm, setShowPtForm] = useState(false)
+
+  // points_ledger edit state
+  const [ptEditingId, setPtEditingId] = useState<number | null>(null)
+  const [ptEditDelta, setPtEditDelta] = useState('')
+  const [ptEditNote, setPtEditNote] = useState('')
+  const [ptEditDate, setPtEditDate] = useState('')
+  const [ptEditSaving, setPtEditSaving] = useState(false)
+
+  function startPtEdit(e: PointsLedgerEntry) {
+    setPtEditingId(e.id)
+    setPtEditDelta(String(e.delta))
+    setPtEditNote(e.note ?? '')
+    setPtEditDate(e.date)
+  }
+
+  async function savePtEdit(entryId: number) {
+    setPtEditSaving(true)
+    await fetch(`/api/points-ledger/${entryId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delta: Number(ptEditDelta), note: ptEditNote, date: ptEditDate }),
+    })
+    setPtEditSaving(false)
+    setPtEditingId(null)
+    refresh()
+  }
+
+  async function deletePtEntry(entryId: number) {
+    if (!confirm('確定刪除這筆金米記錄？')) return
+    await fetch(`/api/points-ledger/${entryId}`, { method: 'DELETE' })
+    refresh()
+  }
 
   // yodomo adjust
   const [ydDelta, setYdDelta] = useState('')
@@ -291,9 +327,9 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     setPtLoading(true)
     await fetch(`/api/clients/${id}/points`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ delta: Number(ptDelta), note: ptNote }),
+      body: JSON.stringify({ delta: Number(ptDelta), note: ptNote, date: ptDate }),
     })
-    setPtDelta(''); setPtNote(''); setShowPtForm(false); setPtLoading(false)
+    setPtDelta(''); setPtNote(''); setPtDate(todayStr()); setShowPtForm(false); setPtLoading(false)
     refresh()
   }
 
@@ -343,17 +379,106 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
           <button onClick={() => setShowPtForm(v => !v)} style={{
             background: 'none', border: '1px solid #e0c055', color: '#7a5a00',
             borderRadius: '4px', fontSize: '0.72rem', padding: '3px 10px', cursor: 'pointer',
-          }}>調整</button>
+          }}>＋ 新增記錄</button>
         </div>
         {showPtForm && (
-          <form onSubmit={adjustPoints} style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            <input value={ptDelta} onChange={e => setPtDelta(e.target.value)}
-              placeholder="增減點數（負數為扣除）" type="number" style={{ ...miniInput, flex: '1', minWidth: '140px' }} />
-            <input value={ptNote} onChange={e => setPtNote(e.target.value)}
-              placeholder="備註（選填）" style={{ ...miniInput, flex: '1', minWidth: '100px' }} />
-            <button type="submit" disabled={ptLoading} style={miniBtn}>確認</button>
+          <form onSubmit={adjustPoints} style={{ marginTop: '8px', background: '#f5f2ee', borderRadius: '6px', padding: '10px' }} className="space-y-2">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+              <div>
+                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>增減點數（負數為扣除）</label>
+                <input value={ptDelta} onChange={e => setPtDelta(e.target.value)}
+                  type="number" style={miniInput} />
+              </div>
+              <div>
+                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>日期</label>
+                <input value={ptDate} onChange={e => setPtDate(e.target.value)}
+                  type="date" style={miniInput} />
+              </div>
+            </div>
+            <div>
+              <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>備註（選填）</label>
+              <input value={ptNote} onChange={e => setPtNote(e.target.value)}
+                placeholder="選填" style={miniInput} />
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button type="submit" disabled={ptLoading || !ptDelta} style={{
+                background: ptLoading || !ptDelta ? '#c4b8aa' : '#7a5a00', color: '#f7f4ef',
+                border: 'none', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 16px', cursor: 'pointer', flex: 1,
+              }}>{ptLoading ? '儲存中…' : '新增'}</button>
+              <button type="button" onClick={() => setShowPtForm(false)} style={{
+                background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0',
+                borderRadius: '4px', fontSize: '0.78rem', padding: '6px 14px', cursor: 'pointer',
+              }}>取消</button>
+            </div>
           </form>
         )}
+
+        {/* ── 金米明細 ── */}
+        <div className="space-y-1" style={{ marginTop: '10px' }}>
+          {(client.points_ledger ?? []).length === 0 && (
+            <p style={{ color: '#c4b8aa', fontSize: '0.82rem', textAlign: 'center', padding: '10px 0' }}>尚無金米記錄</p>
+          )}
+          {(client.points_ledger ?? []).map(e => {
+            const isEditing = ptEditingId === e.id
+            return (
+              <div key={e.id} style={{ borderBottom: '1px solid #f0ebe4', padding: '8px 0' }}>
+                {!isEditing ? (
+                  /* ── 顯示模式 ── */
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(e.date)}</span>
+                      {e.note && <span style={{ color: '#6b5f54', fontSize: '0.8rem', marginLeft: '8px' }}>{e.note}</span>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: e.delta >= 0 ? '#7a5a00' : '#9a4a4a', fontSize: '0.9rem', fontWeight: 500 }}>
+                        {e.delta >= 0 ? '+' : ''}{e.delta}
+                      </span>
+                      <button onClick={() => startPtEdit(e)}
+                        style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer' }}>
+                        編輯
+                      </button>
+                      <button onClick={() => deletePtEntry(e.id)}
+                        style={{ background: 'none', color: '#c47070', border: '1px solid #e8c8c8', borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer' }}>
+                        刪除
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── 編輯模式 ── */
+                  <div style={{ background: '#f5f2ee', borderRadius: '6px', padding: '10px' }} className="space-y-2">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                      <div>
+                        <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>增減點數</label>
+                        <input value={ptEditDelta} onChange={ev => setPtEditDelta(ev.target.value)}
+                          type="number" style={miniInput} />
+                      </div>
+                      <div>
+                        <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>日期</label>
+                        <input value={ptEditDate} onChange={ev => setPtEditDate(ev.target.value)}
+                          type="date" style={miniInput} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>備註</label>
+                      <input value={ptEditNote} onChange={ev => setPtEditNote(ev.target.value)}
+                        placeholder="選填" style={miniInput} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button onClick={() => savePtEdit(e.id)} disabled={ptEditSaving}
+                        style={{ background: '#7a5a00', color: '#f7f4ef', border: 'none', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 16px', cursor: 'pointer', flex: 1 }}>
+                        {ptEditSaving ? '儲存中…' : '儲存'}
+                      </button>
+                      <button onClick={() => setPtEditingId(null)}
+                        style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 14px', cursor: 'pointer' }}>
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </BenefitSection>
 
       {/* ── 迎賓下午茶 ── */}
@@ -1132,7 +1257,6 @@ export default function ClientDetailPage() {
                 : '✓ 已達甜癒米門檻，明年年費有保障'}
             </div>
           </div>
-        )
         )}
       </div>
 

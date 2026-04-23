@@ -23,6 +23,7 @@ export function getDb(): Database.Database {
     migrateRenameCategory(db)
     migratePackageUnitPriceOrig(db)
     migrateSvLedgerPaidAmount(db)
+    migratePointsLedger(db)
   }
   return db
 }
@@ -194,6 +195,18 @@ function initSchema(db: Database.Database) {
     );
 
     -- ═══════════════════════════════
+    --  POINTS LEDGER（金米明細帳）
+    -- ═══════════════════════════════
+    CREATE TABLE IF NOT EXISTS points_ledger (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      delta       INTEGER NOT NULL,
+      note        TEXT,
+      date        TEXT NOT NULL,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ═══════════════════════════════
     --  PUSH NOTIFICATIONS
     -- ═══════════════════════════════
     CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -283,6 +296,36 @@ function migrateSvLedgerPaidAmount(db: Database.Database) {
   if (!cols.includes('include_in_accumulation')) {
     db.exec(`ALTER TABLE sv_ledger ADD COLUMN include_in_accumulation INTEGER NOT NULL DEFAULT 0`)
   }
+}
+
+// ─── 遷移：為已有 points > 0 且沒有明細的客人建立初始歷史記錄 ─────────────────
+function migratePointsLedger(db: Database.Database) {
+  const clients = db.prepare(
+    `SELECT id, points, created_at FROM clients WHERE points > 0`
+  ).all() as { id: number; points: number; created_at: string }[]
+
+  const insertInit = db.prepare(`
+    INSERT INTO points_ledger (client_id, delta, note, date)
+    VALUES (@client_id, @delta, @note, @date)
+  `)
+
+  const migrate = db.transaction(() => {
+    for (const c of clients) {
+      const existing = db.prepare(
+        `SELECT id FROM points_ledger WHERE client_id = ? LIMIT 1`
+      ).get(c.id)
+      if (existing) continue
+
+      insertInit.run({
+        client_id: c.id,
+        delta: c.points,
+        note: '歷史結餘（匯入）',
+        date: c.created_at.slice(0, 10),
+      })
+    }
+  })
+
+  migrate()
 }
 
 function migrateLegacyCustomers(db: Database.Database) {
