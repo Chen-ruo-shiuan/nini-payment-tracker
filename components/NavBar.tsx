@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 const tabs = [
   { href: '/',            label: '總覽',  icon: '⊡' },
@@ -14,10 +14,16 @@ const tabs = [
 
 export default function NavBar() {
   const pathname = usePathname()
+  const router = useRouter()
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
     return pathname.startsWith(href)
+  }
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
   }
 
   return (
@@ -29,10 +35,23 @@ export default function NavBar() {
           <span style={{ color: '#9a8f84', fontSize: '0.7rem', letterSpacing: '0.15em' }}>
             NINI の 療癒所　管理系統
           </span>
-          <Link href="/import"
-            style={{ color: '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
-            匯入
-          </Link>
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+            <Link href="/export"
+              style={{ color: '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
+              匯出
+            </Link>
+            <Link href="/import"
+              style={{ color: '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
+              匯入
+            </Link>
+            <button onClick={handleLogout}
+              style={{
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                color: '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em',
+              }}>
+              登出
+            </button>
+          </div>
         </div>
       </header>
 
