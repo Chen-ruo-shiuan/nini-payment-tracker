@@ -55,10 +55,11 @@ export async function GET() {
       installments,
     }
 
+    const filename = `NINI備份_${now}.json`
     return new NextResponse(JSON.stringify(payload, null, 2), {
       headers: {
-        'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="NINI備份_${now}.json"`,
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
       },
     })
   } catch (err) {
