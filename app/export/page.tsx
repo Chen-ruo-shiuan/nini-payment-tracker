@@ -5,13 +5,20 @@ import Link from 'next/link'
 export default function ExportPage() {
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleExport() {
     setLoading(true)
     setDone(false)
+    setError('')
     try {
       const res = await fetch('/api/export')
-      if (!res.ok) { alert('匯出失敗，請稍後再試'); return }
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`
+        try { const j = await res.json(); msg = j.error || msg } catch { /* ignore */ }
+        setError(`匯出失敗：${msg}`)
+        return
+      }
 
       const blob = await res.blob()
       const disposition = res.headers.get('Content-Disposition') ?? ''
@@ -60,6 +67,16 @@ export default function ExportPage() {
           ※ 檔案格式：JSON，可作為資料備份或轉移使用
         </p>
       </div>
+
+      {error && (
+        <div style={{
+          background: '#fdf0f0', border: '1px solid #e8a8a8',
+          borderRadius: '6px', padding: '12px',
+          color: '#9a4a4a', fontSize: '0.85rem',
+        }}>
+          {error}
+        </div>
+      )}
 
       {done && (
         <div style={{
