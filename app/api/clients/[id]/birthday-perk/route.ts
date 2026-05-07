@@ -76,10 +76,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     try { return JSON.parse(client.birthday_perks || '{}') } catch { return {} }
   })()
 
-  // For cash: remove from shopping_credit_ledger and recalculate
+  // For cash: remove from shopping_credit_ledger (new) and sv_ledger (old, for backward compat)
   if (action === 'cash' && perks[useYear]?.cash) {
+    const cashDate = perks[useYear].cash
+    // 新版：shopping_credit_ledger
     db.prepare(`DELETE FROM shopping_credit_ledger WHERE client_id = ? AND note = '生日金 $100' AND date = ?`)
-      .run(id, perks[useYear].cash)
+      .run(id, cashDate)
+    // 舊版相容：sv_ledger（2026年以前誤存到儲值金的）
+    db.prepare(`DELETE FROM sv_ledger WHERE client_id = ? AND note = '生日贈' AND date = ?`)
+      .run(id, cashDate)
+    // 重新計算購物金餘額
     const { total } = db.prepare(
       `SELECT COALESCE(SUM(delta), 0) AS total FROM shopping_credit_ledger WHERE client_id = ?`
     ).get(id) as { total: number }

@@ -230,13 +230,22 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     setBdLoading(action)
     const date = undo ? undefined : (prompt('請輸入日期（YYYY-MM-DD）', todayStr()) || todayStr())
     if (!undo && !date) { setBdLoading(null); return }
-    await fetch(`/api/clients/${id}/birthday-perk`, {
-      method: undo ? 'DELETE' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, date, year: thisYear }),
-    })
-    setBdLoading(null)
-    refresh()
+    try {
+      const res = await fetch(`/api/clients/${id}/birthday-perk`, {
+        method: undo ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, date, year: thisYear }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(`操作失敗：${err.error || res.status}`)
+      }
+    } catch {
+      alert('網路錯誤，請稍後再試')
+    } finally {
+      setBdLoading(null)
+      refresh()
+    }
   }
 
   async function recordHarvest(undo = false) {
