@@ -207,7 +207,8 @@ export default function CheckoutPage() {
     .reduce((s, i) => s + (Number(i.price) || 0) * i.qty, 0)
 
   const level = selectedClient?.level as MembershipLevel
-  const ptRate = LEVEL_POINTS[level] ?? 1
+  const ptRate    = LEVEL_POINTS[level] ?? 0             // 每千元獲得金米點數
+  const ptPct     = ptRate / 10                          // 換算成百分比（20點 = 2%）
   const ptPreview = inclPoints ? Math.floor(qualifyingAmt / 1000) * ptRate : 0
   const ydPreview = inclYodomo ? Math.floor(qualifyingAmt / YODOMO_THRESHOLD) : 0
 
@@ -340,7 +341,7 @@ export default function CheckoutPage() {
                   )}
                   {selectedClient.points > 0 && (
                     <span style={{ color: '#7a5a00', fontSize: '0.72rem', background: '#fdf5e0', border: '1px solid #e0c055', borderRadius: '10px', padding: '2px 8px' }}>
-                      金米 {selectedClient.points} 點
+                      金米 $ {selectedClient.points.toLocaleString()}
                     </span>
                   )}
                 </div>
@@ -565,10 +566,10 @@ export default function CheckoutPage() {
                   <input type="checkbox" checked={inclPoints} onChange={e => setInclPoints(e.target.checked)}
                     style={{ accentColor: '#6b5f54', width: '15px', height: '15px' }} />
                   <span style={{ color: '#2c2825', fontSize: '0.85rem' }}>
-                    金米計算（{level} {ptRate}點/千元）
+                    金米計算（{level} {ptPct}%/千元）
                     {inclPoints && ptPreview > 0 && (
                       <span style={{ color: '#7a5a00', marginLeft: '8px', fontSize: '0.78rem' }}>
-                        ＋{ptPreview} 點
+                        ＋{ptPreview} 元
                       </span>
                     )}
                   </span>

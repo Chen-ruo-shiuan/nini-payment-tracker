@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
             .reduce((s, i) => s + i.price * i.qty, 0)
 
         if (incl_points && qualifyingAmount > 0) {
-          const rate = LEVEL_POINTS[client.level as keyof typeof LEVEL_POINTS] ?? 2
+          const rate = LEVEL_POINTS[client.level as keyof typeof LEVEL_POINTS] ?? 0
           pointsEarned = Math.floor(qualifyingAmount / 1000) * rate
           if (pointsEarned > 0) {
             db.prepare(`UPDATE clients SET points = points + ?, updated_at = datetime('now') WHERE id = ?`)

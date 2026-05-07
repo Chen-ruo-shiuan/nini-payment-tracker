@@ -188,7 +188,8 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
   const isPendingUpgrade = !!(client.level_since && client.level_since > todayStr())
   const effectiveLevel: MembershipLevel = isPendingUpgrade ? '癒米' : level
   const teaQuota = TEA_QUOTA[effectiveLevel]
-  const pointRate = LEVEL_POINTS[effectiveLevel]
+  const pointRate = LEVEL_POINTS[effectiveLevel]   // 每千元金米點數
+  const pointPct  = pointRate / 10                  // 百分比（20點 = 2%）
 
   // tea_usage: {"YYYY-MM": ["YYYY-MM-DD", ...]}
   const teaUsage: Record<string, string[]> = (() => {
@@ -417,7 +418,7 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       </BenefitSection>
 
       {/* ── 金米 ── */}
-      <BenefitSection label={`金米　千元 ${pointRate} 點`} color="#7a5a00" bg="#fdf5e0" border="#d4a830">
+      <BenefitSection label={pointPct > 0 ? `金米　千元回饋 ${pointPct}%` : '金米（本等級不累積）'} color="#7a5a00" bg="#fdf5e0" border="#d4a830">
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
             <span style={{ color: '#7a5a00', fontSize: '1.6rem', fontWeight: 600 }}>{client.points}</span>
@@ -432,7 +433,7 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
           <form onSubmit={adjustPoints} style={{ marginTop: '8px', background: '#f5f2ee', borderRadius: '6px', padding: '10px' }} className="space-y-2">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
               <div>
-                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>增減點數（負數為扣除）</label>
+                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>增減金額（負數為扣除）</label>
                 <input value={ptDelta} onChange={e => setPtDelta(e.target.value)}
                   type="number" style={miniInput} />
               </div>
@@ -478,7 +479,7 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ color: e.delta >= 0 ? '#7a5a00' : '#9a4a4a', fontSize: '0.9rem', fontWeight: 500 }}>
-                        {e.delta >= 0 ? '+' : ''}{e.delta}
+                        {e.delta >= 0 ? '+' : ''}$ {Math.abs(e.delta).toLocaleString()}
                       </span>
                       <button onClick={() => startPtEdit(e)}
                         style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer' }}>
@@ -495,7 +496,7 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   <div style={{ background: '#f5f2ee', borderRadius: '6px', padding: '10px' }} className="space-y-2">
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                       <div>
-                        <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>增減點數</label>
+                        <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>增減金額</label>
                         <input value={ptEditDelta} onChange={ev => setPtEditDelta(ev.target.value)}
                           type="number" style={miniInput} />
                       </div>
@@ -676,7 +677,7 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
         {showYdForm && (
           <form onSubmit={adjustYodomo} style={{ marginBottom: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             <input value={ydDelta} onChange={e => setYdDelta(e.target.value)}
-              placeholder="增減點數（負數為扣除）" type="number" style={{ ...miniInput, flex: '1', minWidth: '140px' }} />
+              placeholder="增減金額（負數為扣除）" type="number" style={{ ...miniInput, flex: '1', minWidth: '140px' }} />
             <input value={ydNote} onChange={e => setYdNote(e.target.value)}
               placeholder="備註（選填）" style={{ ...miniInput, flex: '1', minWidth: '100px' }} />
             <button type="submit" disabled={yodomoLoading} style={miniBtn}>確認</button>
@@ -1338,7 +1339,7 @@ export default function ClientDetailPage() {
         {/* Quick stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '14px' }}>
           {[
-            { label: '金米', value: `${client.points} 點`, color: '#7a5a00', bg: '#fdf5e0', border: '#e0c055' },
+            { label: '金米', value: `$ ${client.points.toLocaleString()}`, color: '#7a5a00', bg: '#fdf5e0', border: '#e0c055' },
             { label: '儲值', value: fmtAmt(client.stored_value), color: '#2d4f9a', bg: '#e8f0fc', border: '#9ab0e8' },
             { label: '分期中', value: `${client.active_contracts} 件`, color: '#9a6a4a', bg: '#fdf0e6', border: '#e8cba8' },
             { label: '套組', value: `${client.active_packages} 件`, color: '#4a6b52', bg: '#edf3eb', border: '#9ab89e' },

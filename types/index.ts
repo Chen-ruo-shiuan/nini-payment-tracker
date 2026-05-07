@@ -4,8 +4,10 @@
 export const MEMBERSHIP_LEVELS = ['癒米', '甜癒米', '療癒米', '悟癒米'] as const
 export type MembershipLevel = typeof MEMBERSHIP_LEVELS[number]
 
+// 每消費 1000 元獲得的金米點數（1點 = 1元）
+// 癒米 0%、甜癒米 2%（20點）、療癒米 4%（40點）、悟癒米 5%（50點）
 export const LEVEL_POINTS: Record<MembershipLevel, number> = {
-  '癒米': 1, '甜癒米': 2, '療癒米': 4, '悟癒米': 5
+  '癒米': 0, '甜癒米': 20, '療癒米': 40, '悟癒米': 50
 }
 export const LEVEL_THRESHOLDS: Record<MembershipLevel, number> = {
   '癒米': 0, '甜癒米': 38000, '療癒米': 48000, '悟癒米': 58000
