@@ -1,9 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { PAYMENT_METHODS } from '@/types'
 
-const EXPENSE_CATEGORIES = ['食材耗材', '設備器材', '薪資', '租金', '行銷廣告', '交通', '雜支']
-const PAY_METHODS = ['店內現金', ...PAYMENT_METHODS.filter(m => m !== '現金'), '現金']
+const EXPENSE_CATEGORIES = ['食材耗材', '設備器材', '薪資', '租金', '行銷廣告', '交通', '雜支', '自定義']
+const PAY_METHODS = ['店內當月現金', '店內當月匯款', 'Ruo刷卡墊付', 'Nini刷卡墊付', '自定義']
 
 interface Expense {
   id: number; date: string; category: string; note: string | null
@@ -36,9 +35,11 @@ export default function ExpensesPage() {
   const [form, setForm] = useState({
     date: todayLocal(),
     category: '食材耗材',
+    customCategory: '',
     note: '',
     amount: '',
-    pay_method: '店內現金',
+    pay_method: '店內當月現金',
+    customPayMethod: '',
   })
 
   const load = useCallback(() => {
@@ -57,17 +58,30 @@ export default function ExpensesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    // 若選「自定義」，使用輸入的文字
+    const finalCategory = form.category === '自定義' ? form.customCategory.trim() : form.category
+    const finalPayMethod = form.pay_method === '自定義' ? form.customPayMethod.trim() : form.pay_method
+
+    if (!finalCategory) { setError('請輸入類別名稱'); return }
+    if (!finalPayMethod) { setError('請輸入付款方式'); return }
+
     setSaving(true); setError('')
     try {
       const res = await fetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, amount: Number(form.amount) }),
+        body: JSON.stringify({
+          date: form.date,
+          category: finalCategory,
+          note: form.note,
+          amount: Number(form.amount),
+          pay_method: finalPayMethod,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || '發生錯誤'); return }
       setShowForm(false)
-      setForm({ date: todayLocal(), category: '食材耗材', note: '', amount: '', pay_method: '店內現金' })
+      setForm({ date: todayLocal(), category: '食材耗材', customCategory: '', note: '', amount: '', pay_method: '店內當月現金', customPayMethod: '' })
       load()
     } catch { setError('網路錯誤') } finally { setSaving(false) }
   }
@@ -134,17 +148,35 @@ export default function ExpensesPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            {/* 類別 */}
             <div className="space-y-1">
               <label style={{ color: '#6b5f54', fontSize: '0.75rem' }}>類別</label>
               <select value={form.category} onChange={e => set('category', e.target.value)} style={inputStyle}>
                 {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
+              {form.category === '自定義' && (
+                <input
+                  value={form.customCategory}
+                  onChange={e => set('customCategory', e.target.value)}
+                  placeholder="請輸入類別名稱"
+                  style={{ ...inputStyle, marginTop: '6px', fontSize: '0.85rem' }}
+                />
+              )}
             </div>
+            {/* 付款方式 */}
             <div className="space-y-1">
               <label style={{ color: '#6b5f54', fontSize: '0.75rem' }}>付款方式</label>
               <select value={form.pay_method} onChange={e => set('pay_method', e.target.value)} style={inputStyle}>
                 {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
               </select>
+              {form.pay_method === '自定義' && (
+                <input
+                  value={form.customPayMethod}
+                  onChange={e => set('customPayMethod', e.target.value)}
+                  placeholder="請輸入付款方式"
+                  style={{ ...inputStyle, marginTop: '6px', fontSize: '0.85rem' }}
+                />
+              )}
             </div>
           </div>
 
