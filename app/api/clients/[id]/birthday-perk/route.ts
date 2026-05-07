@@ -35,11 +35,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!perks[useYear]) perks[useYear] = {}
   perks[useYear][action] = useDate
 
-  // For cash: also add 100 to sv_ledger
+  // For cash: add $100 to shopping_credit_ledger (生日金屬購物金，非儲值金)
   if (action === 'cash') {
     db.prepare(`
-      INSERT INTO sv_ledger (client_id, amount, note, date) VALUES (?, 100, '生日贈', ?)
+      INSERT INTO shopping_credit_ledger (client_id, delta, note, date) VALUES (?, 100, '生日金 $100', ?)
     `).run(id, useDate)
+    // 重新計算購物金餘額
+    const { total } = db.prepare(
+      `SELECT COALESCE(SUM(delta), 0) AS total FROM shopping_credit_ledger WHERE client_id = ?`
+    ).get(id) as { total: number }
+    db.prepare(`UPDATE clients SET shopping_credit = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(total, id)
   }
 
   db.prepare(`UPDATE clients SET birthday_perks = ?, updated_at = datetime('now') WHERE id = ?`)
@@ -70,10 +76,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     try { return JSON.parse(client.birthday_perks || '{}') } catch { return {} }
   })()
 
-  // For cash: also remove the sv_ledger entry (find by note + approximate date)
+  // For cash: remove from shopping_credit_ledger and recalculate
   if (action === 'cash' && perks[useYear]?.cash) {
-    db.prepare(`DELETE FROM sv_ledger WHERE client_id = ? AND note = '生日贈' AND date = ?`)
+    db.prepare(`DELETE FROM shopping_credit_ledger WHERE client_id = ? AND note = '生日金 $100' AND date = ?`)
       .run(id, perks[useYear].cash)
+    const { total } = db.prepare(
+      `SELECT COALESCE(SUM(delta), 0) AS total FROM shopping_credit_ledger WHERE client_id = ?`
+    ).get(id) as { total: number }
+    db.prepare(`UPDATE clients SET shopping_credit = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(total, id)
   }
 
   if (perks[useYear]) delete perks[useYear][action]

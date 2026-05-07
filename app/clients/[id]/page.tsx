@@ -727,14 +727,16 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                 onUndo={() => recordBdPerk('donation', true)}
               />
             )}
-            {/* 生日金 $100（甜癒米以上） */}
+            {/* 生日金 $100（甜癒米以上，自動入購物金） */}
             {['甜癒米','療癒米','悟癒米'].includes(effectiveLevel) && (
-              <PerkBtn
-                label="生日金 $100" done={!!thisYearPerks.cash} doneDate={thisYearPerks.cash}
-                loading={bdLoading === 'cash'}
-                onRecord={() => recordBdPerk('cash')}
-                onUndo={() => recordBdPerk('cash', true)}
-              />
+              <div>
+                <PerkBtn
+                  label="生日金 $100（→ 購物金）" done={!!thisYearPerks.cash} doneDate={thisYearPerks.cash}
+                  loading={bdLoading === 'cash'}
+                  onRecord={() => recordBdPerk('cash')}
+                  onUndo={() => recordBdPerk('cash', true)}
+                />
+              </div>
             )}
             {/* 生日禮（全等級） */}
             <PerkBtn
