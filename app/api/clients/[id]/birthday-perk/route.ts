@@ -37,6 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // For cash: add $100 to shopping_credit_ledger (生日金屬購物金，非儲值金)
   if (action === 'cash') {
+    console.log('[birthday-perk] inserting cash $100 for client', id, 'date', useDate)
     db.prepare(`
       INSERT INTO shopping_credit_ledger (client_id, delta, note, date) VALUES (?, 100, '生日金 $100', ?)
     `).run(id, useDate)
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { total } = db.prepare(
       `SELECT COALESCE(SUM(delta), 0) AS total FROM shopping_credit_ledger WHERE client_id = ?`
     ).get(id) as { total: number }
+    console.log('[birthday-perk] new shopping_credit total for client', id, '=', total)
     db.prepare(`UPDATE clients SET shopping_credit = ?, updated_at = datetime('now') WHERE id = ?`)
       .run(total, id)
   }

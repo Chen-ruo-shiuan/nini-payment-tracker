@@ -1265,7 +1265,7 @@ export default function ClientDetailPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/clients/${id}`)
+      const res = await fetch(`/api/clients/${id}`, { cache: 'no-store' })
       if (!res.ok) { router.push('/clients'); return }
       setClient(await res.json())
     } finally {
@@ -1348,10 +1348,11 @@ export default function ClientDetailPage() {
         </div>
 
         {/* Quick stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '14px' }}>
           {[
             { label: '金米', value: `$ ${client.points.toLocaleString()}`, color: '#7a5a00', bg: '#fdf5e0', border: '#e0c055' },
             { label: '儲值', value: fmtAmt(client.stored_value), color: '#2d4f9a', bg: '#e8f0fc', border: '#9ab0e8' },
+            { label: '購物金', value: fmtAmt(client.shopping_credit ?? 0), color: '#4a6b52', bg: '#edf3eb', border: '#9ab89e' },
             { label: '分期中', value: `${client.active_contracts} 件`, color: '#9a6a4a', bg: '#fdf0e6', border: '#e8cba8' },
             { label: '套組', value: `${client.active_packages} 件`, color: '#4a6b52', bg: '#edf3eb', border: '#9ab89e' },
           ].map(({ label, value, color, bg, border }) => (
