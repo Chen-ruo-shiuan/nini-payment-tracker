@@ -27,15 +27,20 @@ interface Checkout {
 interface PointsLedgerEntry {
   id: number; client_id: number; delta: number; note: string | null; date: string; created_at: string
 }
+interface ShoppingCreditEntry {
+  id: number; client_id: number; delta: number; note: string | null; date: string; created_at: string
+}
 interface ClientDetail extends Client {
   stored_value: number
   active_contracts: number
   next_due_date: string | null
   active_packages: number
+  shopping_credit: number
   contracts: ContractWithInstallments[]
   packages: Package[]
   sv_ledger: SvLedgerEntry[]
   points_ledger: PointsLedgerEntry[]
+  shopping_credit_ledger: ShoppingCreditEntry[]
   checkouts: Checkout[]
 }
 
@@ -291,6 +296,48 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     refresh()
   }
 
+  // shopping credit adjust
+  const [scDelta, setScDelta] = useState('')
+  const [scNote, setScNote] = useState('')
+  const [scDate, setScDate] = useState(todayStr)
+  const [scLoading, setScLoading] = useState(false)
+  const [showScForm, setShowScForm] = useState(false)
+
+  // shopping_credit_ledger edit state
+  const [scEditingId, setScEditingId] = useState<number | null>(null)
+  const [scEditDelta, setScEditDelta] = useState('')
+  const [scEditNote, setScEditNote] = useState('')
+  const [scEditDate, setScEditDate] = useState('')
+  const [scEditSaving, setScEditSaving] = useState(false)
+
+  function startScEdit(e: ShoppingCreditEntry) {
+    setScEditingId(e.id); setScEditDelta(String(e.delta)); setScEditNote(e.note ?? ''); setScEditDate(e.date)
+  }
+  async function saveScEdit(entryId: number) {
+    setScEditSaving(true)
+    await fetch(`/api/shopping-credit-ledger/${entryId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delta: Number(scEditDelta), note: scEditNote, date: scEditDate }),
+    })
+    setScEditSaving(false); setScEditingId(null); refresh()
+  }
+  async function deleteScEntry(entryId: number) {
+    if (!confirm('確定刪除這筆購物金記錄？')) return
+    await fetch(`/api/shopping-credit-ledger/${entryId}`, { method: 'DELETE' })
+    refresh()
+  }
+  async function adjustShoppingCredit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!scDelta) return
+    setScLoading(true)
+    await fetch(`/api/clients/${id}/shopping-credit`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delta: Number(scDelta), note: scNote, date: scDate }),
+    })
+    setScDelta(''); setScNote(''); setScDate(todayStr()); setShowScForm(false); setScLoading(false)
+    refresh()
+  }
+
   // yodomo adjust
   const [ydDelta, setYdDelta] = useState('')
   const [ydNote, setYdNote] = useState('')
@@ -472,6 +519,99 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                         style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 14px', cursor: 'pointer' }}>
                         取消
                       </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </BenefitSection>
+
+      {/* ── 購物金 ── */}
+      <BenefitSection label="購物金" color="#4a6b52" bg="#edf3eb" border="#9ab89e">
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+            <span style={{ color: '#4a6b52', fontSize: '1.6rem', fontWeight: 600 }}>{(client.shopping_credit ?? 0).toLocaleString()}</span>
+            <span style={{ color: '#9a8f84', fontSize: '0.82rem' }}>元</span>
+          </div>
+          <button onClick={() => setShowScForm(v => !v)} style={{
+            background: 'none', border: '1px solid #9ab89e', color: '#4a6b52',
+            borderRadius: '4px', fontSize: '0.72rem', padding: '3px 10px', cursor: 'pointer',
+          }}>＋ 新增記錄</button>
+        </div>
+        {showScForm && (
+          <form onSubmit={adjustShoppingCredit} style={{ marginTop: '8px', background: '#f5f2ee', borderRadius: '6px', padding: '10px' }} className="space-y-2">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+              <div>
+                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>增減金額（負數為扣除）</label>
+                <input value={scDelta} onChange={e => setScDelta(e.target.value)} type="number" style={miniInput} />
+              </div>
+              <div>
+                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>日期</label>
+                <input value={scDate} onChange={e => setScDate(e.target.value)} type="date" style={miniInput} />
+              </div>
+            </div>
+            <div>
+              <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>備註（選填，如：舊客介紹新客）</label>
+              <input value={scNote} onChange={e => setScNote(e.target.value)} placeholder="選填" style={miniInput} />
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button type="submit" disabled={scLoading || !scDelta} style={{
+                background: scLoading || !scDelta ? '#c4b8aa' : '#4a6b52', color: '#f7f4ef',
+                border: 'none', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 16px', cursor: 'pointer', flex: 1,
+              }}>{scLoading ? '儲存中…' : '新增'}</button>
+              <button type="button" onClick={() => setShowScForm(false)} style={{
+                background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0',
+                borderRadius: '4px', fontSize: '0.78rem', padding: '6px 14px', cursor: 'pointer',
+              }}>取消</button>
+            </div>
+          </form>
+        )}
+        {/* 購物金明細 */}
+        <div className="space-y-1" style={{ marginTop: '10px' }}>
+          {(client.shopping_credit_ledger ?? []).length === 0 && (
+            <p style={{ color: '#c4b8aa', fontSize: '0.82rem', textAlign: 'center', padding: '10px 0' }}>尚無購物金記錄</p>
+          )}
+          {(client.shopping_credit_ledger ?? []).map(e => {
+            const isEditing = scEditingId === e.id
+            return (
+              <div key={e.id} style={{ borderBottom: '1px solid #f0ebe4', padding: '8px 0' }}>
+                {!isEditing ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtShort(e.date)}</span>
+                      {e.note && <span style={{ color: '#6b5f54', fontSize: '0.8rem', marginLeft: '8px' }}>{e.note}</span>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: e.delta >= 0 ? '#4a6b52' : '#9a4a4a', fontSize: '0.9rem', fontWeight: 500 }}>
+                        {e.delta >= 0 ? '+' : ''}$ {e.delta.toLocaleString()}
+                      </span>
+                      <button onClick={() => startScEdit(e)} style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer' }}>編輯</button>
+                      <button onClick={() => deleteScEntry(e.id)} style={{ background: 'none', color: '#c47070', border: '1px solid #e8c8c8', borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer' }}>刪除</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ background: '#f5f2ee', borderRadius: '6px', padding: '10px' }} className="space-y-2">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                      <div>
+                        <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>增減金額</label>
+                        <input value={scEditDelta} onChange={ev => setScEditDelta(ev.target.value)} type="number" style={miniInput} />
+                      </div>
+                      <div>
+                        <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>日期</label>
+                        <input value={scEditDate} onChange={ev => setScEditDate(ev.target.value)} type="date" style={miniInput} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>備註</label>
+                      <input value={scEditNote} onChange={ev => setScEditNote(ev.target.value)} placeholder="選填" style={miniInput} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button onClick={() => saveScEdit(e.id)} disabled={scEditSaving} style={{ background: '#4a6b52', color: '#f7f4ef', border: 'none', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 16px', cursor: 'pointer', flex: 1 }}>
+                        {scEditSaving ? '儲存中…' : '儲存'}
+                      </button>
+                      <button onClick={() => setScEditingId(null)} style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 14px', cursor: 'pointer' }}>取消</button>
                     </div>
                   </div>
                 )}

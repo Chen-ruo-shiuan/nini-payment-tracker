@@ -100,6 +100,21 @@ export async function POST(req: NextRequest) {
           date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
         )
       }
+
+      // 購物金 → deduct shopping_credit_ledger
+      if (pay.method === '購物金' && client_id) {
+        const coDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+        db.prepare(`
+          INSERT INTO shopping_credit_ledger (client_id, delta, note, date)
+          VALUES (?, ?, ?, ?)
+        `).run(client_id, -pay.amount, `結帳 #${coId} 購物金抵扣`, coDate)
+        // 重新計算餘額
+        const { total } = db.prepare(
+          `SELECT COALESCE(SUM(delta), 0) AS total FROM shopping_credit_ledger WHERE client_id = ?`
+        ).get(client_id) as { total: number }
+        db.prepare(`UPDATE clients SET shopping_credit = ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(total, client_id)
+      }
     }
 
     // ── 4. Points & Yodomo earned ────────────────────────────────────────────

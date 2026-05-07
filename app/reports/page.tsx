@@ -8,6 +8,7 @@ import { MembershipLevel } from '@/types'
 interface Financials {
   prepaid: number; outstanding: number
   pkgRealized: number; svUsed: number; pointsUsed: number; discountUsed: number
+  shoppingCreditUsed: number
   svDeposited: number; svBalance: number; svAllowanceAll: number; svAllowancePeriod: number
   installmentReceived: number; installmentOutstanding: number
   checkoutTotal: number
@@ -296,13 +297,13 @@ export default function ReportsPage() {
             // ── 銷售折讓（隱沒成本）──────────────────────────────────────────
             // 套組讓利：本期核銷時，原定單價 vs 記帳單價的差（每堂計算）
             const pkgDiscount    = fin.pkgDiscount
-            // 儲值讓利：本期充值中有折扣的讓利金額
-            const svDiscount     = fin.svAllowancePeriod
             // 優惠折扣：結帳時選「優惠折扣」付款方式（我方讓利，未收現金）
             const cashDiscount   = fin.discountUsed
             // 金米折抵：客戶用積分抵扣，未收現金
             const pointsDisc     = fin.pointsUsed
-            const totalAllowance = pkgDiscount + svDiscount + cashDiscount + pointsDisc
+            // 購物金折抵：客戶用購物金抵扣（我方讓利）
+            const scDiscount     = fin.shoppingCreditUsed ?? 0
+            const totalAllowance = pkgDiscount + cashDiscount + pointsDisc + scDiscount
 
             // ── 毛利 = 收入 - 折讓 ───────────────────────────────────────────
             const grossProfit  = grossRevenue - totalAllowance
@@ -341,14 +342,6 @@ export default function ReportsPage() {
                         <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(pkgDiscount)}</span>
                       </div>
                     )}
-                    {svDiscount > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                        <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>儲值讓利
-                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>充值折扣</span>
-                        </span>
-                        <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(svDiscount)}</span>
-                      </div>
-                    )}
                     {cashDiscount > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                         <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>優惠折扣
@@ -363,6 +356,14 @@ export default function ReportsPage() {
                           <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>積分折抵</span>
                         </span>
                         <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(pointsDisc)}</span>
+                      </div>
+                    )}
+                    {scDiscount > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>購物金折抵
+                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>購物金使用</span>
+                        </span>
+                        <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(scDiscount)}</span>
                       </div>
                     )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #e8cba8', paddingTop: '5px', marginTop: '4px' }}>

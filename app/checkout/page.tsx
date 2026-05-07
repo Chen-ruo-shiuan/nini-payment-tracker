@@ -483,16 +483,23 @@ export default function CheckoutPage() {
           </div>
 
           {pays.map((pay, idx) => (
-            <div key={pay.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '8px', alignItems: 'center' }}>
-              <select value={pay.method} onChange={e => setPay(pay.id, 'method', e.target.value)}
-                style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px', width: 'auto' }}>
-                {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
-              </select>
-              <input value={pay.amount} onChange={e => setPay(pay.id, 'amount', e.target.value)}
-                type="number" placeholder="金額" style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />
-              {idx > 0 && (
-                <button type="button" onClick={() => removePay(pay.id)}
-                  style={{ color: '#c4b8aa', background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer' }}>✕</button>
+            <div key={pay.id}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '8px', alignItems: 'center' }}>
+                <select value={pay.method} onChange={e => setPay(pay.id, 'method', e.target.value)}
+                  style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px', width: 'auto' }}>
+                  {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
+                </select>
+                <input value={pay.amount} onChange={e => setPay(pay.id, 'amount', e.target.value)}
+                  type="number" placeholder="金額" style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />
+                {idx > 0 && (
+                  <button type="button" onClick={() => removePay(pay.id)}
+                    style={{ color: '#c4b8aa', background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer' }}>✕</button>
+                )}
+              </div>
+              {pay.method === '購物金' && selectedClient && (
+                <div style={{ fontSize: '0.72rem', color: '#4a6b52', marginTop: '3px', paddingLeft: '2px' }}>
+                  {selectedClient.name} 購物金餘額：$ {(selectedClient.shopping_credit ?? 0).toLocaleString()}
+                </div>
               )}
             </div>
           ))}

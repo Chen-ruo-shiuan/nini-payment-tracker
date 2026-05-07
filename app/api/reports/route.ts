@@ -63,6 +63,14 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     WHERE cp.method = '優惠折扣' AND co.date LIKE ?
   `).get(dateFilter) as { total: number }).total
 
+  // 購物金折抵：本期結帳付款方式為「購物金」的金額（銷售折讓）
+  const shoppingCreditUsed = (db.prepare(`
+    SELECT COALESCE(SUM(cp.amount), 0) AS total
+    FROM checkout_payments cp
+    JOIN checkouts co ON co.id = cp.checkout_id
+    WHERE cp.method = '購物金' AND co.date LIKE ?
+  `).get(dateFilter) as { total: number }).total
+
   // 分期已收（本期）
   const installmentReceived = (db.prepare(`
     SELECT COALESCE(SUM(amount), 0) AS total FROM installments
@@ -116,11 +124,11 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
 
   return {
     prepaid, outstanding,
-    pkgRealized, svUsed, pointsUsed, discountUsed,
+    pkgRealized, svUsed, pointsUsed, discountUsed, shoppingCreditUsed,
     svDeposited:      svAll.sv_deposited,
     svBalance:        svAll.sv_balance,
     svAllowanceAll:   svAll.sv_allowance_all,   // 全期儲值讓利（給預收區塊顯示）
-    svAllowancePeriod,                           // 本期儲值讓利（進 P&L 銷售折讓）
+    svAllowancePeriod,                           // 本期儲值讓利（預收區塊參考用，不計入P&L折讓）
     installmentReceived, installmentOutstanding,
     checkoutTotal, byPayMethod,
     pkgDiscount,

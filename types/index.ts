@@ -28,7 +28,7 @@ export const HARVEST_GIFT: Partial<Record<MembershipLevel, string>> = {
   '甜癒米': '保養旅行組', '療癒米': '純露正裝 × 1', '悟癒米': '原液正裝 × 1'
 }
 
-export const PAYMENT_METHODS = ['現金', '匯款', 'LINE Pay', '分期', '核銷', '儲值金', '金米', '商品券', '優惠折扣'] as const
+export const PAYMENT_METHODS = ['現金', '匯款', 'LINE Pay', '分期', '核銷', '儲值金', '金米', '購物金', '商品券', '優惠折扣'] as const
 export type PaymentMethod = typeof PAYMENT_METHODS[number]
 
 export const ITEM_CATEGORIES = ['服務', '商品券', '產品', '加購', '活動'] as const
@@ -54,6 +54,7 @@ export interface Client {
   tea_usage: string        // JSON string: Record<string, number>
   birthday_perks: string   // JSON string: Record<year, {donation?:string, cash?:string, gift?:string}>
   harvest_given: string | null  // date string when harvest gift was given
+  shopping_credit: number  // 購物金餘額
   legacy_id: string | null
   created_at: string
   updated_at: string

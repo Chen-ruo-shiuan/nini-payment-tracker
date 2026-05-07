@@ -24,6 +24,7 @@ export function getDb(): Database.Database {
     migratePackageUnitPriceOrig(db)
     migrateSvLedgerPaidAmount(db)
     migratePointsLedger(db)
+    migrateShoppingCredit(db)
   }
   return db
 }
@@ -207,6 +208,18 @@ function initSchema(db: Database.Database) {
     );
 
     -- ═══════════════════════════════
+    --  SHOPPING CREDIT LEDGER（購物金）
+    -- ═══════════════════════════════
+    CREATE TABLE IF NOT EXISTS shopping_credit_ledger (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      delta       INTEGER NOT NULL,
+      note        TEXT,
+      date        TEXT NOT NULL,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ═══════════════════════════════
     --  PUSH NOTIFICATIONS
     -- ═══════════════════════════════
     CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -326,6 +339,14 @@ function migratePointsLedger(db: Database.Database) {
   })
 
   migrate()
+}
+
+// ─── 遷移：clients 新增 shopping_credit 欄位 ─────────────────────────────────
+function migrateShoppingCredit(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(clients)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('shopping_credit')) {
+    db.exec(`ALTER TABLE clients ADD COLUMN shopping_credit INTEGER NOT NULL DEFAULT 0`)
+  }
 }
 
 function migrateLegacyCustomers(db: Database.Database) {
