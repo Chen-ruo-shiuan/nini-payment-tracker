@@ -25,7 +25,7 @@ interface ReportData {
   byDay?: {date:string;count:number;total:number}[]
   byMethod?: {method:string;total:number;count:number}[]
   byCategory?: {category:string;total:number;qty:number}[]
-  topServices?: {label:string;category:string;total:number;qty:number}[]
+  topServices?: {label:string;total:number;qty:number}[]
   topProducts?: {label:string;total:number;qty:number}[]
   topClients?: {id:number;name:string;level:string;total:number;visits:number}[]
   monthTotal?: number; monthCount?: number

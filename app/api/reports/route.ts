@@ -211,12 +211,12 @@ export async function GET(req: NextRequest) {
       GROUP BY ci.category ORDER BY total DESC
     `).all(`${target}%`)
 
-    // Top services (exclude 商品券 — already counted at purchase)
+    // Top services (包含商品券核銷次數，依服務名稱合計)
     const topServices = db.prepare(`
-      SELECT ci.label, ci.category, SUM(ci.price * ci.qty) AS total, SUM(ci.qty) AS qty
+      SELECT ci.label, SUM(ci.qty) AS qty, SUM(ci.price * ci.qty) AS total
       FROM checkout_items ci
       JOIN checkouts co ON co.id = ci.checkout_id
-      WHERE co.date LIKE ? AND ci.category IN ('服務','加購','活動')
+      WHERE co.date LIKE ? AND ci.category IN ('服務','加購','活動','商品券')
       GROUP BY ci.label ORDER BY qty DESC LIMIT 10
     `).all(`${target}%`)
 
@@ -263,12 +263,12 @@ export async function GET(req: NextRequest) {
       GROUP BY ci.category ORDER BY total DESC
     `).all(`${year}%`)
 
-    // Top services for year
+    // Top services for year (包含商品券核銷次數，依服務名稱合計)
     const topServices = db.prepare(`
-      SELECT ci.label, ci.category, SUM(ci.price * ci.qty) AS total, SUM(ci.qty) AS qty
+      SELECT ci.label, SUM(ci.qty) AS qty, SUM(ci.price * ci.qty) AS total
       FROM checkout_items ci
       JOIN checkouts co ON co.id = ci.checkout_id
-      WHERE co.date LIKE ? AND ci.category IN ('服務','加購','活動')
+      WHERE co.date LIKE ? AND ci.category IN ('服務','加購','活動','商品券')
       GROUP BY ci.label ORDER BY qty DESC LIMIT 10
     `).all(`${year}%`)
 
