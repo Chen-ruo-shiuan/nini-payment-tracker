@@ -172,10 +172,6 @@ function NewPackageForm() {
     }
     if (paymentMethod === '分期' && instMode === 'existing') {
       if (!selectedContractId) { setError('請選擇要加入的分期計劃'); return }
-      if (addPeriods.length === 0) { setError('請設定此套組的分期期數'); return }
-      if (addPeriods.some(p => !p.amount || !p.due_date)) { setError('請填寫所有分期金額和日期'); return }
-      const addTotal = addPeriods.reduce((s, p) => s + Number(p.amount), 0)
-      if (addTotal !== prepaid) { setError(`分期合計 $${addTotal.toLocaleString()} 與預收金額 $${prepaid.toLocaleString()} 不符`); return }
     }
     setSaving(true); setError('')
     try {
@@ -216,15 +212,13 @@ function NewPackageForm() {
           if (!cRes.ok) { setError('套組建立成功，但分期合約建立失敗'); return }
         }
         if (instMode === 'existing' && selectedContractId) {
-          // 把此套組的期數附加到現有合約
+          // 將此套組金額平均分攤到現有未收期數
           const pRes = await fetch(`/api/contracts/${selectedContractId}/periods`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              periods: addPeriods.map(p => ({ due_date: p.due_date, amount: Number(p.amount) })),
-            }),
+            body: JSON.stringify({ amount: prepaid }),
           })
-          if (!pRes.ok) { setError('套組建立成功，但附加分期期數失敗'); return }
+          if (!pRes.ok) { setError('套組建立成功，但更新分期金額失敗'); return }
         }
       }
 
@@ -472,58 +466,29 @@ function NewPackageForm() {
                         </div>
                       </button>
                     ))}
-                    {/* 新增期數到現有合約 */}
-                    {selectedContractId && (<>
-                      <div style={{ borderTop: '1px dashed #e0d9d0', paddingTop: '10px', marginTop: '4px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                          <span style={{ color: '#6b5f54', fontSize: '0.75rem', fontWeight: 500 }}>此套組新增的期數</span>
-                          <div style={{ display: 'flex', gap: '5px' }}>
-                            {[1,2,3].map(n => (
-                              <button key={n} type="button"
-                                onClick={() => {
-                                  const base = Math.floor(prepaid / n)
-                                  const rem  = prepaid - base * (n - 1)
-                                  setAddPeriods(Array.from({ length: n }, (_, i) => ({
-                                    due_date: addMonths(date, i),
-                                    amount: String(i === n - 1 ? rem : base),
-                                  })))
-                                }}
-                                style={{ background: addPeriods.length === n ? '#2c2825' : '#f0ebe4', color: addPeriods.length === n ? '#f7f4ef' : '#6b5f54', border: 'none', borderRadius: '4px', fontSize: '0.7rem', padding: '2px 8px', cursor: 'pointer' }}>
-                                {n}期
-                              </button>
-                            ))}
-                          </div>
+                    {/* 分攤說明 */}
+                    {selectedContractId && prepaid > 0 && (() => {
+                      const sel = existingContracts.find(c => c.id === selectedContractId)
+                      const unpaid = sel?.unpaid_count ?? 0
+                      return (
+                        <div style={{ borderTop: '1px dashed #e0d9d0', paddingTop: '10px', marginTop: '4px',
+                          background: '#edf3eb', border: '1px solid #9ab89e', borderRadius: '6px', padding: '10px 12px' }}>
+                          <p style={{ color: '#4a6b52', fontSize: '0.78rem', fontWeight: 500, marginBottom: '4px' }}>
+                            建立後自動處理
+                          </p>
+                          {unpaid > 0 ? (
+                            <p style={{ color: '#6b5f54', fontSize: '0.75rem' }}>
+                              此套組 <strong>${prepaid.toLocaleString()}</strong> 將平均分攤到現有 {unpaid} 期未收款項中
+                              （每期 +${Math.floor(prepaid / unpaid).toLocaleString()}）
+                            </p>
+                          ) : (
+                            <p style={{ color: '#6b5f54', fontSize: '0.75rem' }}>
+                              現有期數已全數收款，將自動新增一期 ${prepaid.toLocaleString()}
+                            </p>
+                          )}
                         </div>
-                        <div style={{ marginBottom: '6px' }}>
-                          <span style={{ color: addPeriods.reduce((s,p)=>s+Number(p.amount),0) === prepaid ? '#4a6b52' : '#9a4a4a', fontSize: '0.75rem' }}>
-                            合計 ${addPeriods.reduce((s,p)=>s+Number(p.amount),0).toLocaleString()}
-                            {addPeriods.reduce((s,p)=>s+Number(p.amount),0) !== prepaid && ` ≠ $${prepaid.toLocaleString()}`}
-                          </span>
-                        </div>
-                        {addPeriods.map((p, i) => (
-                          <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr auto', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
-                            <span style={{ color: '#9a8f84', fontSize: '0.75rem', minWidth: '32px' }}>第{i+1}期</span>
-                            <input value={p.due_date}
-                              onChange={e => setAddPeriods(ps => ps.map((x,j) => j===i ? {...x, due_date: e.target.value} : x))}
-                              type="date" style={iStyle} />
-                            <input value={p.amount}
-                              onChange={e => setAddPeriods(ps => ps.map((x,j) => j===i ? {...x, amount: e.target.value} : x))}
-                              type="number" min="0" style={iStyle} />
-                            <button type="button"
-                              onClick={() => setAddPeriods(ps => ps.filter((_,j) => j!==i))}
-                              style={{ color: '#9a4a4a', background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer', padding: '0 4px' }}>×</button>
-                          </div>
-                        ))}
-                        <button type="button"
-                          onClick={() => setAddPeriods(ps => [...ps, { due_date: addMonths(date, ps.length), amount: '' }])}
-                          style={{ color: '#9a8f84', background: 'none', border: '1px dashed #e0d9d0', borderRadius: '5px', fontSize: '0.75rem', padding: '5px 0', width: '100%', cursor: 'pointer' }}>
-                          ＋ 新增一期
-                        </button>
-                      </div>
-                      <p style={{ color: '#b4aa9e', fontSize: '0.68rem' }}>
-                        ＊ 建立後，以上期數將附加到所選分期計劃中
-                      </p>
-                    </>)}
+                      )
+                    })()}
                   </>
                 )}
               </div>
