@@ -18,6 +18,7 @@ export async function GET() {
     const expenses = db.prepare(`SELECT * FROM expenses ORDER BY id`).all()
     const installmentContracts = db.prepare(`SELECT * FROM installment_contracts ORDER BY id`).all()
     const installments = db.prepare(`SELECT * FROM installments ORDER BY id`).all()
+    const shoppingCreditLedger = db.prepare(`SELECT * FROM shopping_credit_ledger ORDER BY id`).all()
 
     // 整合 checkout_items / checkout_payments 到 checkouts 內（方便閱讀）
     const coMap = new Map<number, { items: unknown[]; payments: unknown[] }>()
@@ -53,6 +54,7 @@ export async function GET() {
       expenses,
       installment_contracts: installmentContracts,
       installments,
+      shopping_credit_ledger: shoppingCreditLedger,
     }
 
     const filename = `NINI備份_${now}.json`
