@@ -90,7 +90,7 @@ export default function InstallmentsPage() {
           {contracts.map(c => {
             const isOverdue = c.next_due_date && c.next_due_date < todayStr && !c.is_completed
             return (
-              <Link key={c.id} href={`/clients/${c.client_id}`}>
+              <Link key={c.id} href={`/installments/${c.id}`}>
                 <div style={{
                   background: '#faf8f5',
                   border: `1px solid ${isOverdue ? '#c9a882' : '#e0d9d0'}`,
