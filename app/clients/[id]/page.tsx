@@ -1038,12 +1038,56 @@ function StoredValueTab({ client, refresh }: { client: ClientDetail; refresh: ()
 // ─── Packages Tab ─────────────────────────────────────────────────────────────
 function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () => void }) {
   const [recalcing, setRecalcing] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState<Partial<Package>>({})
+  const [saving, setSaving] = useState(false)
 
   async function recalc(pkgId: number) {
     setRecalcing(pkgId)
     await fetch(`/api/packages/${pkgId}/recalc`, { method: 'POST' })
     setRecalcing(null)
     refresh()
+  }
+
+  function startEdit(pkg: Package) {
+    setEditingId(pkg.id)
+    setEditForm({
+      service_name: pkg.service_name,
+      total_sessions: pkg.total_sessions,
+      unit_price: pkg.unit_price,
+      prepaid_amount: pkg.prepaid_amount,
+      payment_method: pkg.payment_method,
+      date: pkg.date,
+      note: pkg.note ?? '',
+      include_in_accumulation: pkg.include_in_accumulation,
+      include_in_points: pkg.include_in_points,
+    })
+  }
+
+  async function saveEdit(pkg: Package) {
+    setSaving(true)
+    await fetch(`/api/packages/${pkg.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...editForm,
+        unit_price_orig: pkg.unit_price,
+      }),
+    })
+    setSaving(false)
+    setEditingId(null)
+    refresh()
+  }
+
+  async function deletePkg(pkg: Package) {
+    if (!confirm(`確定刪除套組「${pkg.service_name}」？`)) return
+    await fetch(`/api/packages/${pkg.id}`, { method: 'DELETE' })
+    refresh()
+  }
+
+  const miniInput: React.CSSProperties = {
+    width: '100%', padding: '4px 7px', borderRadius: '4px',
+    border: '1px solid #d9d0c5', fontSize: '0.78rem', background: '#faf8f5',
   }
 
   return (
@@ -1054,39 +1098,107 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       {client.packages.map(pkg => {
         const remaining = pkg.total_sessions - pkg.used_sessions
         const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
+        const isEditing = editingId === pkg.id
+
         return (
           <div key={pkg.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: '#2c2825', fontSize: '0.9rem' }}>{pkg.service_name}</div>
-                <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '2px' }}>
-                  {fmtShort(pkg.date)}　{pkg.payment_method}
-                </div>
-                {/* Progress bar */}
-                <div style={{ marginTop: '8px' }}>
-                  <div style={{ background: '#f0ebe4', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                    <div style={{
-                      background: remaining > 0 ? '#9ab89e' : '#c4b8aa',
-                      width: `${pct}%`, height: '100%', borderRadius: '4px',
-                      transition: 'width 0.3s',
-                    }} />
+            {!isEditing ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: '#2c2825', fontSize: '0.9rem' }}>{pkg.service_name}</div>
+                  <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '2px' }}>
+                    {fmtShort(pkg.date)}　{pkg.payment_method}
                   </div>
-                  <div style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '3px' }}>
-                    已用 {pkg.used_sessions} / {pkg.total_sessions} 次
+                  <div style={{ marginTop: '8px' }}>
+                    <div style={{ background: '#f0ebe4', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                      <div style={{
+                        background: remaining > 0 ? '#9ab89e' : '#c4b8aa',
+                        width: `${pct}%`, height: '100%', borderRadius: '4px', transition: 'width 0.3s',
+                      }} />
+                    </div>
+                    <div style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '3px' }}>
+                      已用 {pkg.used_sessions} / {pkg.total_sessions} 次
+                    </div>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', marginLeft: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                  <div style={{ color: remaining > 0 ? '#4a6b52' : '#9a8f84', fontSize: '0.9rem', fontWeight: 500 }}>
+                    剩 {remaining} 次
+                  </div>
+                  <div style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtAmt(pkg.prepaid_amount)}</div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button onClick={() => startEdit(pkg)}
+                      style={{ color: '#6b5f54', fontSize: '0.65rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}>
+                      編輯
+                    </button>
+                    <button onClick={() => recalc(pkg.id)} disabled={recalcing === pkg.id}
+                      style={{ color: '#9a8f84', fontSize: '0.65rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      {recalcing === pkg.id ? '…' : '重算'}
+                    </button>
+                    <button onClick={() => deletePkg(pkg)}
+                      style={{ color: '#9a4a4a', fontSize: '0.65rem', background: 'none', border: '1px solid #e8a8a8', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}>
+                      刪除
+                    </button>
                   </div>
                 </div>
               </div>
-              <div style={{ textAlign: 'right', marginLeft: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-                <div style={{ color: remaining > 0 ? '#4a6b52' : '#9a8f84', fontSize: '0.9rem', fontWeight: 500 }}>
-                  剩 {remaining} 次
+            ) : (
+              /* ── 編輯表單 ── */
+              <div className="space-y-2">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                  <div>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>服務名稱</label>
+                    <input value={editForm.service_name ?? ''} onChange={e => setEditForm(f => ({ ...f, service_name: e.target.value }))} style={miniInput} />
+                  </div>
+                  <div>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>日期</label>
+                    <input type="date" value={editForm.date ?? ''} onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))} style={miniInput} />
+                  </div>
+                  <div>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>總堂數</label>
+                    <input type="number" value={editForm.total_sessions ?? ''} onChange={e => setEditForm(f => ({ ...f, total_sessions: Number(e.target.value) }))} style={miniInput} />
+                  </div>
+                  <div>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>單堂單價</label>
+                    <input type="number" value={editForm.unit_price ?? ''} onChange={e => setEditForm(f => ({ ...f, unit_price: Number(e.target.value) }))} style={miniInput} />
+                  </div>
+                  <div>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>預收金額（實收現金）</label>
+                    <input type="number" value={editForm.prepaid_amount ?? ''} onChange={e => setEditForm(f => ({ ...f, prepaid_amount: Number(e.target.value) }))} style={miniInput} />
+                  </div>
+                  <div>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>付款方式</label>
+                    <select value={editForm.payment_method ?? '現金'} onChange={e => setEditForm(f => ({ ...f, payment_method: e.target.value }))} style={miniInput}>
+                      {['現金','匯款','LINE Pay','分期','核銷','其他'].map(m => <option key={m}>{m}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtAmt(pkg.prepaid_amount)}</div>
-                <button onClick={() => recalc(pkg.id)} disabled={recalcing === pkg.id}
-                  style={{ color: '#9a8f84', fontSize: '0.65rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                  {recalcing === pkg.id ? '…' : '重新計算'}
-                </button>
+                <div>
+                  <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>備註</label>
+                  <input value={editForm.note ?? ''} onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))} style={miniInput} />
+                </div>
+                <div style={{ display: 'flex', gap: '8px', fontSize: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#6b5f54', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!editForm.include_in_accumulation} onChange={e => setEditForm(f => ({ ...f, include_in_accumulation: e.target.checked ? 1 : 0 }))} />
+                    計入年度累積
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#6b5f54', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!editForm.include_in_points} onChange={e => setEditForm(f => ({ ...f, include_in_points: e.target.checked ? 1 : 0 }))} />
+                    計入金米
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                  <button onClick={() => setEditingId(null)}
+                    style={{ background: 'none', border: '1px solid #e0d9d0', color: '#9a8f84', fontSize: '0.78rem', padding: '5px 14px', borderRadius: '4px', cursor: 'pointer' }}>
+                    取消
+                  </button>
+                  <button onClick={() => saveEdit(pkg)} disabled={saving}
+                    style={{ background: saving ? '#c4b8aa' : '#2c2825', color: '#f7f4ef', border: 'none', fontSize: '0.78rem', padding: '5px 16px', borderRadius: '4px', cursor: 'pointer' }}>
+                    {saving ? '儲存中…' : '儲存'}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )
       })}
