@@ -345,7 +345,8 @@ export default function ReportsPage() {
           {fin && (() => {
             // ── 收入：以本期「已結帳」的服務價值為基準（含套組核銷）──────────
             // checkoutTotal = Σ 所有結帳品項（含商品券），這樣使用套組時P&L就會更新
-            const grossRevenue = fin.checkoutTotal + fin.installmentReceived
+            // 分期已收 = 預收款項，非損益收入，不計入此處
+            const grossRevenue = fin.checkoutTotal
 
             // ── 銷售折讓（隱沒成本）──────────────────────────────────────────
             // 套組讓利：本期核銷時，原定單價 vs 記帳單價的差（每堂計算）
@@ -376,7 +377,6 @@ export default function ReportsPage() {
                 <div style={{ marginBottom: '10px' }}>
                   <p style={{ color: '#b4aa9e', fontSize: '0.65rem', letterSpacing: '0.06em', marginBottom: '6px' }}>── 本期收入</p>
                   <Row label="本期結帳總額（含套組核銷）" value={fin.checkoutTotal} indent />
-                  {fin.installmentReceived > 0 && <Row label="分期已收" value={fin.installmentReceived} indent />}
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e0d9d0', paddingTop: '5px', marginTop: '4px' }}>
                     <span style={{ color: '#2c2825', fontSize: '0.8rem', fontWeight: 500 }}>收入小計</span>
                     <span style={{ color: '#2c2825', fontSize: '0.82rem', fontWeight: 600 }}>{fmtAmt(grossRevenue)}</span>
