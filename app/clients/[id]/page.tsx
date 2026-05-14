@@ -1055,6 +1055,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       service_name: pkg.service_name,
       total_sessions: pkg.total_sessions,
       unit_price: pkg.unit_price,
+      unit_price_orig: pkg.unit_price_orig,
       prepaid_amount: pkg.prepaid_amount,
       payment_method: pkg.payment_method,
       date: pkg.date,
@@ -1069,10 +1070,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     await fetch(`/api/packages/${pkg.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...editForm,
-        unit_price_orig: pkg.unit_price,
-      }),
+      body: JSON.stringify(editForm),
     })
     setSaving(false)
     setEditingId(null)
@@ -1158,7 +1156,14 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                     <input type="number" value={editForm.total_sessions ?? ''} onChange={e => setEditForm(f => ({ ...f, total_sessions: Number(e.target.value) }))} style={miniInput} />
                   </div>
                   <div>
-                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>單堂單價</label>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>
+                      單堂原價
+                      <span style={{ color: '#b4aa9e', marginLeft: '4px' }}>（定價，影響累積）</span>
+                    </label>
+                    <input type="number" value={editForm.unit_price_orig ?? ''} onChange={e => setEditForm(f => ({ ...f, unit_price_orig: Number(e.target.value) }))} style={miniInput} />
+                  </div>
+                  <div>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>單堂記帳價（折後）</label>
                     <input type="number" value={editForm.unit_price ?? ''} onChange={e => setEditForm(f => ({ ...f, unit_price: Number(e.target.value) }))} style={miniInput} />
                   </div>
                   <div>
