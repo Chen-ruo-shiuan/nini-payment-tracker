@@ -1090,18 +1090,17 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     border: '1px solid #d9d0c5', fontSize: '0.78rem', background: '#faf8f5',
   }
 
-  return (
-    <div className="space-y-2">
-      {client.packages.length === 0 && (
-        <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無套組</p>
-      )}
-      {client.packages.map(pkg => {
-        const remaining = pkg.total_sessions - pkg.used_sessions
-        const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
-        const isEditing = editingId === pkg.id
+  const activePkgs    = client.packages.filter(p => p.used_sessions < p.total_sessions)
+  const completedPkgs = client.packages.filter(p => p.used_sessions >= p.total_sessions)
+  const [showHistory, setShowHistory] = useState(false)
 
-        return (
-          <div key={pkg.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
+  function PkgCard({ pkg }: { pkg: Package }) {
+    const remaining = pkg.total_sessions - pkg.used_sessions
+    const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
+    const isDone    = remaining <= 0
+    const isEditing = editingId === pkg.id
+    return (
+      <div key={pkg.id} style={{ background: isDone ? '#f5f2ee' : '#faf8f5', border: `1px solid ${isDone ? '#d9d0c5' : '#e0d9d0'}`, borderRadius: '6px', padding: '12px' }}>
             {!isEditing ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
@@ -1199,9 +1198,44 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                 </div>
               </div>
             )}
-          </div>
-        )
-      })}
+        </div>
+      )
+  }   // end PkgCard
+
+  return (
+    <div className="space-y-2">
+      {/* 進行中套組 */}
+      {activePkgs.length === 0 && completedPkgs.length === 0 && (
+        <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無套組</p>
+      )}
+      {activePkgs.length === 0 && completedPkgs.length > 0 && (
+        <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '10px 0' }}>目前無進行中套組</p>
+      )}
+      {activePkgs.map(pkg => <PkgCard key={pkg.id} pkg={pkg} />)}
+
+      {/* 歷史套組（已核銷完畢） */}
+      {completedPkgs.length > 0 && (
+        <div style={{ marginTop: '8px' }}>
+          <button
+            onClick={() => setShowHistory(v => !v)}
+            style={{
+              width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: '#f0ede8', border: '1px solid #d9d0c5', borderRadius: '6px',
+              padding: '8px 12px', cursor: 'pointer', color: '#6b5f54', fontSize: '0.78rem',
+            }}>
+            <span>歷史套組（已完成）</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>{completedPkgs.length} 件</span>
+              <span>{showHistory ? '▲' : '▼'}</span>
+            </span>
+          </button>
+          {showHistory && (
+            <div className="space-y-2" style={{ marginTop: '6px' }}>
+              {completedPkgs.map(pkg => <PkgCard key={pkg.id} pkg={pkg} />)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
