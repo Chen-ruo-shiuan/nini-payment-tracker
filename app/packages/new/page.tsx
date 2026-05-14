@@ -57,6 +57,27 @@ function NewPackageForm() {
   const [instPeriods, setInstPeriods] = useState<InstPeriod[]>([])
   const [instPayMethod, setInstPayMethod] = useState('現金')
 
+  // 分期模式：新建 or 加入現有
+  type InstMode = 'new' | 'existing'
+  const [instMode, setInstMode] = useState<InstMode>('new')
+  interface ExistingContract { id: number; note: string | null; total_amount: number; remaining_amount: number; unpaid_count: number; total_periods: number; next_due_date: string | null }
+  const [existingContracts, setExistingContracts] = useState<ExistingContract[]>([])
+  const [selectedContractId, setSelectedContractId] = useState<number | null>(null)
+
+  // 當切換到「加入現有」時，撈取該客人的進行中分期計劃
+  useEffect(() => {
+    if (paymentMethod !== '分期' || instMode !== 'existing' || !selectedClient) {
+      setExistingContracts([]); setSelectedContractId(null); return
+    }
+    fetch(`/api/contracts?client_id=${selectedClient.id}&status=active`)
+      .then(r => r.json())
+      .then((data: ExistingContract[]) => {
+        setExistingContracts(data)
+        if (data.length > 0) setSelectedContractId(data[0].id)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instMode, paymentMethod, selectedClient])
+
   // 當付款方式切換為分期時，自動產生預設期數
   useEffect(() => {
     if (paymentMethod !== '分期') { setInstPeriods([]); return }
@@ -134,11 +155,14 @@ function NewPackageForm() {
     if (!selectedClient)   { setError('請選擇客人'); return }
     if (!finalServiceName) { setError('請選擇或輸入服務名稱'); return }
     if (!unitPriceOrig)    { setError('請輸入單堂原價'); return }
-    if (paymentMethod === '分期') {
+    if (paymentMethod === '分期' && instMode === 'new') {
       if (instPeriods.length === 0) { setError('請設定分期期數'); return }
       if (instPeriods.some(p => !p.amount || !p.due_date)) { setError('請填寫所有分期金額和日期'); return }
       const instTotal = instPeriods.reduce((s, p) => s + Number(p.amount), 0)
       if (instTotal !== prepaid) { setError(`分期合計 $${instTotal.toLocaleString()} 與預收金額 $${prepaid.toLocaleString()} 不符`); return }
+    }
+    if (paymentMethod === '分期' && instMode === 'existing' && !selectedContractId) {
+      setError('請選擇要加入的分期計劃'); return
     }
     setSaving(true); setError('')
     try {
@@ -162,19 +186,23 @@ function NewPackageForm() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || '發生錯誤'); return }
 
-      // 2. 若付款方式為分期，同步建立分期合約
+      // 2. 若付款方式為分期
       if (paymentMethod === '分期') {
-        const cRes = await fetch('/api/contracts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            client_id: selectedClient.id,
-            payment_method: instPayMethod,
-            note: `套組：${finalServiceName}`,
-            periods: instPeriods.map(p => ({ due_date: p.due_date, amount: Number(p.amount) })),
-          }),
-        })
-        if (!cRes.ok) { setError('套組建立成功，但分期合約建立失敗'); return }
+        if (instMode === 'new') {
+          // 新建分期合約
+          const cRes = await fetch('/api/contracts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_id: selectedClient.id,
+              payment_method: instPayMethod,
+              note: `套組：${finalServiceName}`,
+              periods: instPeriods.map(p => ({ due_date: p.due_date, amount: Number(p.amount) })),
+            }),
+          })
+          if (!cRes.ok) { setError('套組建立成功，但分期合約建立失敗'); return }
+        }
+        // instMode === 'existing'：加入現有計劃，不新建合約
       }
 
       router.push(`/clients/${selectedClient.id}`)
@@ -203,7 +231,7 @@ function NewPackageForm() {
                 <span style={{ color: '#2c2825' }}>{selectedClient.name}</span>
                 <MembershipBadge tier={selectedClient.level as MembershipLevel} />
               </div>
-              <button type="button" onClick={() => { setSelectedClient(null); setClientSearch('') }}
+              <button type="button" onClick={() => { setSelectedClient(null); setClientSearch(''); setInstMode('new'); setExistingContracts([]); setSelectedContractId(null) }}
                 style={{ color: '#9a8f84', fontSize: '0.8rem', background: 'none', border: 'none', cursor: 'pointer' }}>
                 更換
               </button>
@@ -361,62 +389,133 @@ function NewPackageForm() {
         {paymentMethod === '分期' && (
           <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }}
             className="space-y-3">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>分期設定</p>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {[2,3,4,6].map(n => (
-                  <button key={n} type="button"
-                    onClick={() => {
-                      const totalAmt = prepaid
-                      const base = Math.floor(totalAmt / n)
-                      const rem  = totalAmt - base * (n - 1)
-                      setInstPeriods(Array.from({ length: n }, (_, i) => ({
-                        due_date: addMonths(date, i),
-                        amount: String(i === n - 1 ? rem : base),
-                      })))
-                    }}
-                    style={{ background: instPeriods.length === n ? '#2c2825' : '#f0ebe4', color: instPeriods.length === n ? '#f7f4ef' : '#6b5f54', border: 'none', borderRadius: '4px', fontSize: '0.72rem', padding: '3px 10px', cursor: 'pointer' }}>
-                    {n}期
-                  </button>
-                ))}
-              </div>
+            <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>分期設定</p>
+
+            {/* 新建 / 加入現有 切換 */}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {([['new','新建分期計劃'],['existing','加入現有計劃']] as const).map(([mode, label]) => (
+                <button key={mode} type="button"
+                  onClick={() => { setInstMode(mode); if (mode === 'new') { setSelectedContractId(null) } }}
+                  style={{
+                    background: instMode === mode ? '#2c2825' : '#f0ebe4',
+                    color: instMode === mode ? '#f7f4ef' : '#6b5f54',
+                    border: 'none', borderRadius: '5px',
+                    fontSize: '0.78rem', padding: '5px 14px', cursor: 'pointer',
+                  }}>
+                  {label}
+                </button>
+              ))}
             </div>
 
-            {/* 分期付款方式 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <Field label="每期付款方式">
-                <select value={instPayMethod} onChange={e => setInstPayMethod(e.target.value)} style={iStyle}>
-                  {['現金','匯款','LINE Pay'].map(m => <option key={m}>{m}</option>)}
-                </select>
-              </Field>
-              <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
-                <span style={{ color: instPeriods.reduce((s,p)=>s+Number(p.amount),0) === prepaid ? '#4a6b52' : '#9a4a4a', fontSize: '0.78rem' }}>
-                  合計 ${instPeriods.reduce((s,p)=>s+Number(p.amount),0).toLocaleString()}
-                  {instPeriods.reduce((s,p)=>s+Number(p.amount),0) !== prepaid && ` ≠ $${prepaid.toLocaleString()}`}
-                </span>
+            {/* ── 加入現有計劃 ── */}
+            {instMode === 'existing' && (
+              <div className="space-y-2">
+                {!selectedClient ? (
+                  <p style={{ color: '#b4aa9e', fontSize: '0.78rem' }}>請先選擇客人</p>
+                ) : existingContracts.length === 0 ? (
+                  <p style={{ color: '#9a4a4a', fontSize: '0.78rem', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '5px', padding: '8px 12px' }}>
+                    此客人目前沒有進行中的分期計劃，請改用「新建分期計劃」
+                  </p>
+                ) : (
+                  <>
+                    <p style={{ color: '#9a8f84', fontSize: '0.72rem' }}>選擇要加入的分期計劃：</p>
+                    {existingContracts.map(c => (
+                      <button key={c.id} type="button"
+                        onClick={() => setSelectedContractId(c.id)}
+                        style={{
+                          width: '100%', textAlign: 'left', padding: '10px 12px',
+                          background: selectedContractId === c.id ? '#edf3eb' : '#f5f2ee',
+                          border: `1px solid ${selectedContractId === c.id ? '#9ab89e' : '#e0d9d0'}`,
+                          borderRadius: '6px', cursor: 'pointer',
+                        }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <span style={{ color: '#2c2825', fontSize: '0.82rem', fontWeight: selectedContractId === c.id ? 600 : 400 }}>
+                              {c.note || `分期計劃 #${c.id}`}
+                            </span>
+                            <div style={{ color: '#9a8f84', fontSize: '0.7rem', marginTop: '2px' }}>
+                              尚餘 {c.unpaid_count} 期未收
+                              {c.next_due_date && `　下期：${c.next_due_date}`}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ color: '#9a4a4a', fontSize: '0.78rem', fontWeight: 500 }}>
+                              待收 ${(c.remaining_amount ?? 0).toLocaleString()}
+                            </div>
+                            <div style={{ color: '#b4aa9e', fontSize: '0.68rem' }}>
+                              合計 ${c.total_amount.toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                    <p style={{ color: '#b4aa9e', fontSize: '0.68rem', paddingTop: '4px' }}>
+                      ＊ 此套組的預收金額將計入套組預收，付款仍由所選分期計劃追蹤
+                    </p>
+                  </>
+                )}
               </div>
-            </div>
+            )}
 
-            {/* 各期明細 */}
-            {instPeriods.map((p, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
-                <span style={{ color: '#9a8f84', fontSize: '0.78rem', minWidth: '32px' }}>第{i+1}期</span>
-                <input value={p.due_date}
-                  onChange={e => setInstPeriods(ps => ps.map((x,j) => j===i ? {...x, due_date: e.target.value} : x))}
-                  type="date" style={iStyle} />
-                <input value={p.amount}
-                  onChange={e => setInstPeriods(ps => ps.map((x,j) => j===i ? {...x, amount: e.target.value} : x))}
-                  type="number" min="0" style={iStyle} />
-                <button type="button"
-                  onClick={() => setInstPeriods(ps => ps.filter((_,j) => j!==i))}
-                  style={{ color: '#9a4a4a', background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer', padding: '0 4px' }}>×</button>
+            {/* ── 新建分期計劃 ── */}
+            {instMode === 'new' && (<>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>快速分期</span>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {[2,3,4,6].map(n => (
+                    <button key={n} type="button"
+                      onClick={() => {
+                        const totalAmt = prepaid
+                        const base = Math.floor(totalAmt / n)
+                        const rem  = totalAmt - base * (n - 1)
+                        setInstPeriods(Array.from({ length: n }, (_, i) => ({
+                          due_date: addMonths(date, i),
+                          amount: String(i === n - 1 ? rem : base),
+                        })))
+                      }}
+                      style={{ background: instPeriods.length === n ? '#2c2825' : '#f0ebe4', color: instPeriods.length === n ? '#f7f4ef' : '#6b5f54', border: 'none', borderRadius: '4px', fontSize: '0.72rem', padding: '3px 10px', cursor: 'pointer' }}>
+                      {n}期
+                    </button>
+                  ))}
+                </div>
               </div>
-            ))}
-            <button type="button"
-              onClick={() => setInstPeriods(ps => [...ps, { due_date: addMonths(date, ps.length), amount: '' }])}
-              style={{ color: '#9a8f84', background: 'none', border: '1px dashed #e0d9d0', borderRadius: '5px', fontSize: '0.78rem', padding: '5px 0', width: '100%', cursor: 'pointer' }}>
-              ＋ 新增一期
-            </button>
+
+              {/* 分期付款方式 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <Field label="每期付款方式">
+                  <select value={instPayMethod} onChange={e => setInstPayMethod(e.target.value)} style={iStyle}>
+                    {['現金','匯款','LINE Pay'].map(m => <option key={m}>{m}</option>)}
+                  </select>
+                </Field>
+                <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
+                  <span style={{ color: instPeriods.reduce((s,p)=>s+Number(p.amount),0) === prepaid ? '#4a6b52' : '#9a4a4a', fontSize: '0.78rem' }}>
+                    合計 ${instPeriods.reduce((s,p)=>s+Number(p.amount),0).toLocaleString()}
+                    {instPeriods.reduce((s,p)=>s+Number(p.amount),0) !== prepaid && ` ≠ $${prepaid.toLocaleString()}`}
+                  </span>
+                </div>
+              </div>
+
+              {/* 各期明細 */}
+              {instPeriods.map((p, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ color: '#9a8f84', fontSize: '0.78rem', minWidth: '32px' }}>第{i+1}期</span>
+                  <input value={p.due_date}
+                    onChange={e => setInstPeriods(ps => ps.map((x,j) => j===i ? {...x, due_date: e.target.value} : x))}
+                    type="date" style={iStyle} />
+                  <input value={p.amount}
+                    onChange={e => setInstPeriods(ps => ps.map((x,j) => j===i ? {...x, amount: e.target.value} : x))}
+                    type="number" min="0" style={iStyle} />
+                  <button type="button"
+                    onClick={() => setInstPeriods(ps => ps.filter((_,j) => j!==i))}
+                    style={{ color: '#9a4a4a', background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer', padding: '0 4px' }}>×</button>
+                </div>
+              ))}
+              <button type="button"
+                onClick={() => setInstPeriods(ps => [...ps, { due_date: addMonths(date, ps.length), amount: '' }])}
+                style={{ color: '#9a8f84', background: 'none', border: '1px dashed #e0d9d0', borderRadius: '5px', fontSize: '0.78rem', padding: '5px 0', width: '100%', cursor: 'pointer' }}>
+                ＋ 新增一期
+              </button>
+            </>)}
           </div>
         )}
 
