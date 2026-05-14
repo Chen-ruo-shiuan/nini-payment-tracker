@@ -124,6 +124,7 @@ export interface Package {
   total_sessions: number
   used_sessions: number
   unit_price: number
+  unit_price_orig: number
   prepaid_amount: number
   payment_method: string
   include_in_accumulation: number
