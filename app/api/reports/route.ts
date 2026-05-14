@@ -77,6 +77,17 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     WHERE paid_at LIKE ? AND paid_at IS NOT NULL
   `).get(dateFilter) as { total: number }).total
 
+  // 分期已收明細（本期）
+  const installmentReceivedDetails = db.prepare(`
+    SELECT i.id, i.period_number, i.paid_at, i.amount, i.due_date,
+           c.name AS client_name, ic.total_periods, ic.id AS contract_id
+    FROM installments i
+    JOIN installment_contracts ic ON ic.id = i.contract_id
+    JOIN clients c ON c.id = i.client_id
+    WHERE i.paid_at LIKE ? AND i.paid_at IS NOT NULL
+    ORDER BY i.paid_at DESC, c.name ASC
+  `).all(dateFilter)
+
   // 分期未收（全部，不限日期）
   const installmentOutstanding = (db.prepare(`
     SELECT COALESCE(SUM(amount), 0) AS total FROM installments WHERE paid_at IS NULL
@@ -129,7 +140,7 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     svBalance:        svAll.sv_balance,
     svAllowanceAll:   svAll.sv_allowance_all,   // 全期儲值讓利（給預收區塊顯示）
     svAllowancePeriod,                           // 本期儲值讓利（預收區塊參考用，不計入P&L折讓）
-    installmentReceived, installmentOutstanding,
+    installmentReceived, installmentReceivedDetails, installmentOutstanding,
     checkoutTotal, byPayMethod,
     pkgDiscount,
     expensesTotal, expensesByCategory,

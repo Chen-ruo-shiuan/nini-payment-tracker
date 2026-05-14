@@ -10,7 +10,9 @@ interface Financials {
   pkgRealized: number; svUsed: number; pointsUsed: number; discountUsed: number
   shoppingCreditUsed: number
   svDeposited: number; svBalance: number; svAllowanceAll: number; svAllowancePeriod: number
-  installmentReceived: number; installmentOutstanding: number
+  installmentReceived: number
+  installmentReceivedDetails: { id: number; period_number: number; paid_at: string; amount: number; due_date: string; client_name: string; total_periods: number; contract_id: number }[]
+  installmentOutstanding: number
   checkoutTotal: number
   byPayMethod: { method: string; total: number }[]
   pkgDiscount: number           // 套組讓利（依本期核銷計算）
@@ -49,6 +51,60 @@ function getTaipeiMonth() { return getTaipeiToday().slice(0, 7) }
 function getTaipeiYear()  { return getTaipeiToday().slice(0, 4) }
 
 type PeriodType = '日' | '月' | '年'
+
+// ─── Installment Received Card（可展開明細）────────────────────────────────────
+function InstallmentReceivedCard({ fin }: { fin: Financials | undefined }) {
+  const [open, setOpen] = useState(false)
+  const details = fin?.installmentReceivedDetails ?? []
+  const fmtShort = (d: string) =>
+    new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div
+        onClick={() => details.length > 0 && setOpen(v => !v)}
+        style={{
+          background: '#edf3eb', border: '1px solid #9ab89e', borderRadius: open ? '7px 7px 0 0' : '7px',
+          padding: '12px', cursor: details.length > 0 ? 'pointer' : 'default',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ color: '#9a8f84', fontSize: '0.65rem', letterSpacing: '0.07em' }}>分期已收</div>
+          {details.length > 0 && (
+            <span style={{ color: '#9a8f84', fontSize: '0.65rem' }}>{open ? '▲' : '▼'} {details.length} 筆</span>
+          )}
+        </div>
+        <div style={{ color: '#4a6b52', fontSize: '0.95rem', fontWeight: 600, marginTop: '4px' }}>
+          {fmtAmt(fin?.installmentReceived ?? 0)}
+        </div>
+      </div>
+      {open && details.length > 0 && (
+        <div style={{
+          background: '#f5f9f5', border: '1px solid #9ab89e', borderTop: 'none',
+          borderRadius: '0 0 7px 7px', padding: '8px 10px',
+        }}>
+          {details.map(d => (
+            <div key={d.id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '5px 0', borderBottom: '1px solid #e0ebe0', fontSize: '0.78rem',
+            }}>
+              <div>
+                <span style={{ color: '#2c2825', fontWeight: 500 }}>{d.client_name}</span>
+                <span style={{ color: '#9a8f84', marginLeft: '6px' }}>
+                  第 {d.period_number}/{d.total_periods} 期
+                </span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ color: '#4a6b52', fontWeight: 500 }}>{fmtAmt(d.amount)}</div>
+                <div style={{ color: '#b4aa9e', fontSize: '0.68rem' }}>{fmtShort(d.paid_at)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, color = '#2c2825', bg = '#faf8f5', border = '#e0d9d0' }: {
@@ -273,11 +329,8 @@ export default function ReportsPage() {
               <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px 14px' }}>
                 <p style={{ color: '#9a8f84', fontSize: '0.68rem', letterSpacing: '0.08em', marginBottom: '8px' }}>分期款項</p>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <StatCard
-                    label="分期已收"
-                    value={fmtAmt(fin?.installmentReceived ?? 0)}
-                    color="#4a6b52" bg="#edf3eb" border="#9ab89e"
-                  />
+                  {/* 分期已收：可點開看明細 */}
+                  <InstallmentReceivedCard fin={fin} />
                   <StatCard
                     label="分期未收（全部）"
                     value={fmtAmt(fin?.installmentOutstanding ?? 0)}
