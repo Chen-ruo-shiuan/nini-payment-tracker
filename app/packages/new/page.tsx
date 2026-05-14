@@ -80,6 +80,14 @@ function NewPackageForm() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instMode, paymentMethod, selectedClient])
 
+  // Derived values（必須在使用 prepaid 的 useEffect 之前宣告）
+  const origTotal   = Number(unitPriceOrig) * Number(totalSessions)  // 原價小計
+  const discTotal   = Number(discountedTotal) || 0                    // 優惠總價（最終預收）
+  const unitBooking = discTotal > 0 && Number(totalSessions) > 0      // 記帳單堂價
+    ? Math.round(discTotal / Number(totalSessions))
+    : (Number(unitPriceOrig) || 0)
+  const prepaid = discTotal > 0 ? discTotal : origTotal               // 預收金額
+
   // 選好合約 / prepaid 改變時，自動預填此套組的新增期數（1期 = 全額）
   useEffect(() => {
     if (instMode !== 'existing' || !selectedContractId || prepaid <= 0) { setAddPeriods([]); return }
@@ -102,14 +110,6 @@ function NewPackageForm() {
     })))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentMethod])
-
-  // Derived values
-  const origTotal   = Number(unitPriceOrig) * Number(totalSessions)  // 原價小計
-  const discTotal   = Number(discountedTotal) || 0                    // 優惠總價（最終預收）
-  const unitBooking = discTotal > 0 && Number(totalSessions) > 0      // 記帳單堂價
-    ? Math.round(discTotal / Number(totalSessions))
-    : (Number(unitPriceOrig) || 0)
-  const prepaid = discTotal > 0 ? discTotal : origTotal               // 預收金額
 
   // 折數 → 優惠總價
   useEffect(() => {
