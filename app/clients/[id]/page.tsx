@@ -1225,10 +1225,10 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
   const checkoutCourseAmt = allItems
     .filter(i => ['服務', '加購', '活動'].includes(i.category))
     .reduce((s, i) => s + i.price * i.qty, 0)
-  // Add packages with include_in_accumulation (all time)
+  // Add packages with include_in_accumulation (all time) — 用原價計算，讓利不影響客人累積
   const pkgAccumAmt = (client.packages ?? [])
     .filter(pkg => pkg.include_in_accumulation === 1)
-    .reduce((s, pkg) => s + pkg.prepaid_amount, 0)
+    .reduce((s, pkg) => s + (pkg.unit_price_orig > 0 ? pkg.unit_price_orig * pkg.total_sessions : pkg.prepaid_amount), 0)
   // Add sv_ledger deposits with include_in_accumulation (all time)
   const svAccumAmt = (client.sv_ledger ?? [])
     .filter(e => e.include_in_accumulation === 1 && e.amount > 0)
@@ -1409,10 +1409,10 @@ export default function ClientDetailPage() {
     .flatMap(co => co.items ?? [])
     .filter(item => ['服務', '加購', '活動'].includes(item.category))
     .reduce((s, item) => s + item.price * item.qty, 0)
-  // Packages with include_in_accumulation purchased this year
+  // Packages with include_in_accumulation purchased this year — 用原價計算，讓利不影響客人累積
   const pkgCourseSpending = (client.packages ?? [])
     .filter(pkg => pkg.include_in_accumulation === 1 && pkg.date.startsWith(currentYear))
-    .reduce((s, pkg) => s + pkg.prepaid_amount, 0)
+    .reduce((s, pkg) => s + (pkg.unit_price_orig > 0 ? pkg.unit_price_orig * pkg.total_sessions : pkg.prepaid_amount), 0)
   // sv_ledger deposits with include_in_accumulation this year
   const svCourseSpending = (client.sv_ledger ?? [])
     .filter(e => e.include_in_accumulation === 1 && e.amount > 0 && e.date.startsWith(currentYear))
