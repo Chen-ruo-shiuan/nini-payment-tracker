@@ -38,28 +38,50 @@ export async function POST(req: NextRequest) {
   if (!total_sessions || total_sessions < 1)
     return NextResponse.json({ error: '請輸入堂數' }, { status: 400 })
 
-  const res = db.prepare(`
-    INSERT INTO packages
-      (client_id, service_name, total_sessions, used_sessions,
-       unit_price, unit_price_orig, prepaid_amount, payment_method,
-       include_in_accumulation, include_in_points, note, date)
-    VALUES
-      (@client_id, @service_name, @total_sessions, 0,
-       @unit_price, @unit_price_orig, @prepaid_amount, @payment_method,
-       @include_in_acc, @include_in_pts, @note, @date)
-  `).run({
-    client_id: Number(client_id),
-    service_name,
-    total_sessions:  Number(total_sessions),
-    unit_price:      Number(unit_price)      || 0,
-    unit_price_orig: Number(unit_price_orig) || 0,
-    prepaid_amount:  Number(prepaid_amount)  || 0,
-    payment_method: payment_method || '現金',
-    include_in_acc: include_in_accumulation ? 1 : 0,
-    include_in_pts: include_in_points       ? 1 : 0,
-    note:  note  || null,
-    date:  date  || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }),
-  })
+  const finalDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  const finalAmount = Number(prepaid_amount) || 0
+  const finalMethod = payment_method || '現金'
 
-  return NextResponse.json({ id: res.lastInsertRowid }, { status: 201 })
+  let pkgId: bigint | number = 0
+
+  db.transaction(() => {
+    const res = db.prepare(`
+      INSERT INTO packages
+        (client_id, service_name, total_sessions, used_sessions,
+         unit_price, unit_price_orig, prepaid_amount, payment_method,
+         include_in_accumulation, include_in_points, note, date)
+      VALUES
+        (@client_id, @service_name, @total_sessions, 0,
+         @unit_price, @unit_price_orig, @prepaid_amount, @payment_method,
+         @include_in_acc, @include_in_pts, @note, @date)
+    `).run({
+      client_id: Number(client_id),
+      service_name,
+      total_sessions:  Number(total_sessions),
+      unit_price:      Number(unit_price)      || 0,
+      unit_price_orig: Number(unit_price_orig) || 0,
+      prepaid_amount:  finalAmount,
+      payment_method:  finalMethod,
+      include_in_acc: include_in_accumulation ? 1 : 0,
+      include_in_pts: include_in_points       ? 1 : 0,
+      note:  note  || null,
+      date:  finalDate,
+    })
+    pkgId = res.lastInsertRowid
+
+    // 若以儲值金付款，自動扣除儲值金餘額
+    if (finalMethod === '儲值金' && finalAmount > 0) {
+      db.prepare(`
+        INSERT INTO sv_ledger (client_id, amount, paid_amount, note, date, payment_method, include_in_accumulation)
+        VALUES (?, ?, NULL, ?, ?, NULL, 0)
+      `).run(
+        Number(client_id),
+        -finalAmount,
+        `套組扣款：${service_name}`,
+        finalDate,
+      )
+    }
+  })()
+
+  return NextResponse.json({ id: pkgId }, { status: 201 })
 }
