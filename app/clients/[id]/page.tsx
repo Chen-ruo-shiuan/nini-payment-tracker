@@ -6,7 +6,7 @@ import MembershipBadge from '@/components/MembershipBadge'
 import {
   Client, MembershipLevel, InstallmentContract, Installment,
   Package, SvLedgerEntry, TEA_QUOTA, LEVEL_POINTS, YODOMO_MILESTONES,
-  BIRTHDAY_GIFT, HARVEST_GIFT, NEXT_LEVEL, LEVEL_THRESHOLDS,
+  BIRTHDAY_GIFT, HARVEST_GIFT, NEXT_LEVEL, LEVEL_THRESHOLDS, PAYMENT_METHODS,
 } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1173,7 +1173,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   <div>
                     <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>付款方式</label>
                     <select value={editForm.payment_method ?? '現金'} onChange={e => setEditForm(f => ({ ...f, payment_method: e.target.value }))} style={miniInput}>
-                      {['現金','匯款','LINE Pay','分期','核銷','其他'].map(m => <option key={m}>{m}</option>)}
+                      {PAYMENT_METHODS.filter(m => m !== '商品券').map(m => <option key={m}>{m}</option>)}
                     </select>
                   </div>
                 </div>
