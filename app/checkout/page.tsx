@@ -12,16 +12,26 @@ interface PkgOption { id: number; service_name: string; remaining: number; unit_
 
 const PRESET_SERVICES  = ['精細光彩', '原液調理', '泡光氧彗', '小顏骨氣', '雨林頭療', '森林癒撥筋']
 const PRESET_ADDONS    = ['全臉粉清', '深皮超導', '光波嫩膚', '臭氧離子']
-const LS_PRODUCTS_KEY  = 'nini_custom_products'
 
-function getStoredProducts(): string[] {
-  if (typeof window === 'undefined') return []
-  try { return JSON.parse(localStorage.getItem(LS_PRODUCTS_KEY) || '[]') } catch { return [] }
+// ─── Item memory (label + price per category) ─────────────────────────────────
+type SavedItem = { label: string; price: number }
+const LS_ITEM_KEYS: Record<string, string> = {
+  '服務': 'nini_items_service',
+  '加購': 'nini_items_addon',
+  '產品': 'nini_items_product',
+  '活動': 'nini_items_event',
 }
-function saveProduct(name: string) {
-  if (typeof window === 'undefined' || !name) return
-  const list = getStoredProducts()
-  if (!list.includes(name)) localStorage.setItem(LS_PRODUCTS_KEY, JSON.stringify([name, ...list].slice(0, 30)))
+function getSavedItems(cat: string): SavedItem[] {
+  if (typeof window === 'undefined') return []
+  try { return JSON.parse(localStorage.getItem(LS_ITEM_KEYS[cat] ?? '') || '[]') } catch { return [] }
+}
+function upsertSavedItem(cat: string, label: string, price: number) {
+  if (!label || price <= 0 || !LS_ITEM_KEYS[cat]) return
+  const list = getSavedItems(cat)
+  const idx = list.findIndex(i => i.label === label)
+  if (idx >= 0) list[idx].price = price
+  else list.unshift({ label, price })
+  localStorage.setItem(LS_ITEM_KEYS[cat], JSON.stringify(list.slice(0, 50)))
 }
 interface DailyCheckout {
   id: number; client_id: number | null; client_name: string | null
@@ -138,9 +148,14 @@ export default function CheckoutPage() {
   const [inclYodomo,  setInclYodomo]  = useState(false)
   const [inclPoints,  setInclPoints]  = useState(false)
 
-  // Custom product memory
-  const [customProducts, setCustomProducts] = useState<string[]>([])
-  useEffect(() => { setCustomProducts(getStoredProducts()) }, [])
+  // Custom item memory (label + price per category)
+  const [savedItems, setSavedItems] = useState<Record<string, SavedItem[]>>({ '服務': [], '加購': [], '產品': [], '活動': [] })
+  useEffect(() => {
+    setSavedItems({ '服務': getSavedItems('服務'), '加購': getSavedItems('加購'), '產品': getSavedItems('產品'), '活動': getSavedItems('活動') })
+  }, [])
+  function refreshSaved() {
+    setSavedItems({ '服務': getSavedItems('服務'), '加購': getSavedItems('加購'), '產品': getSavedItems('產品'), '活動': getSavedItems('活動') })
+  }
 
   // Client search
   const searchClients = useCallback(async (q: string) => {
@@ -369,7 +384,7 @@ export default function CheckoutPage() {
               <select value={item.category}
                 onChange={e => {
                   setItems(p => p.map(i => i.id === item.id
-                    ? { ...i, category: e.target.value, label: '', custom: false, pkg_id: undefined }
+                    ? { ...i, category: e.target.value, label: '', price: '', custom: false, pkg_id: undefined }
                     : i))
                 }}
                 style={{ ...iStyle, fontSize: '0.78rem', padding: '6px 8px', width: 'auto' }}>
@@ -397,13 +412,21 @@ export default function CheckoutPage() {
                 ) : (
                   <select value={item.label}
                     onChange={e => {
-                      if (e.target.value === '__custom__') setItem(item.id, 'custom', 1)
-                      else setItem(item.id, 'label', e.target.value)
+                      const val = e.target.value
+                      if (val === '__custom__') { setItem(item.id, 'custom', 1); return }
+                      const saved = savedItems['服務']?.find(s => s.label === val)
+                      setItems(p => p.map(i => i.id === item.id ? { ...i, label: val, price: saved ? String(saved.price) : '' } : i))
                     }}
                     style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
                     <option value="">選擇服務…</option>
-                    {PRESET_SERVICES.map(s => <option key={s} value={s}>{s}</option>)}
-                    <option value="__custom__">自定義…</option>
+                    {PRESET_SERVICES.map(s => {
+                      const saved = savedItems['服務']?.find(sv => sv.label === s)
+                      return <option key={s} value={s}>{s}{saved ? `　$${saved.price.toLocaleString()}` : ''}</option>
+                    })}
+                    {savedItems['服務']?.filter(s => !PRESET_SERVICES.includes(s.label)).map(s => (
+                      <option key={s.label} value={s.label}>{s.label}　${s.price.toLocaleString()}</option>
+                    ))}
+                    <option value="__custom__">＋ 自定義…</option>
                   </select>
                 )
               ) : item.category === '加購' ? (
@@ -413,31 +436,62 @@ export default function CheckoutPage() {
                 ) : (
                   <select value={item.label}
                     onChange={e => {
-                      if (e.target.value === '__custom__') setItem(item.id, 'custom', 1)
-                      else setItem(item.id, 'label', e.target.value)
+                      const val = e.target.value
+                      if (val === '__custom__') { setItem(item.id, 'custom', 1); return }
+                      const saved = savedItems['加購']?.find(s => s.label === val)
+                      setItems(p => p.map(i => i.id === item.id ? { ...i, label: val, price: saved ? String(saved.price) : '' } : i))
                     }}
                     style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
                     <option value="">選擇加購…</option>
-                    {PRESET_ADDONS.map(s => <option key={s} value={s}>{s}</option>)}
-                    <option value="__custom__">自定義…</option>
+                    {PRESET_ADDONS.map(s => {
+                      const saved = savedItems['加購']?.find(sv => sv.label === s)
+                      return <option key={s} value={s}>{s}{saved ? `　$${saved.price.toLocaleString()}` : ''}</option>
+                    })}
+                    {savedItems['加購']?.filter(s => !PRESET_ADDONS.includes(s.label)).map(s => (
+                      <option key={s.label} value={s.label}>{s.label}　${s.price.toLocaleString()}</option>
+                    ))}
+                    <option value="__custom__">＋ 自定義…</option>
                   </select>
                 )
               ) : item.category === '產品' ? (
                 item.custom ? (
                   <input value={item.label}
                     onChange={e => setItem(item.id, 'label', e.target.value)}
-                    onBlur={e => { if (e.target.value) { saveProduct(e.target.value); setCustomProducts(getStoredProducts()) } }}
                     placeholder="產品名稱" autoFocus style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />
                 ) : (
                   <select value={item.label}
                     onChange={e => {
-                      if (e.target.value === '__custom__') setItem(item.id, 'custom', 1)
-                      else setItem(item.id, 'label', e.target.value)
+                      const val = e.target.value
+                      if (val === '__custom__') { setItem(item.id, 'custom', 1); return }
+                      const saved = savedItems['產品']?.find(s => s.label === val)
+                      setItems(p => p.map(i => i.id === item.id ? { ...i, label: val, price: saved ? String(saved.price) : '' } : i))
                     }}
                     style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
                     <option value="">選擇產品…</option>
-                    {customProducts.map(s => <option key={s} value={s}>{s}</option>)}
-                    <option value="__custom__">新增產品…</option>
+                    {savedItems['產品']?.map(s => (
+                      <option key={s.label} value={s.label}>{s.label}　${s.price.toLocaleString()}</option>
+                    ))}
+                    <option value="__custom__">＋ 新增產品…</option>
+                  </select>
+                )
+              ) : item.category === '活動' ? (
+                item.custom ? (
+                  <input value={item.label} onChange={e => setItem(item.id, 'label', e.target.value)}
+                    placeholder="活動名稱" autoFocus style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />
+                ) : (
+                  <select value={item.label}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (val === '__custom__') { setItem(item.id, 'custom', 1); return }
+                      const saved = savedItems['活動']?.find(s => s.label === val)
+                      setItems(p => p.map(i => i.id === item.id ? { ...i, label: val, price: saved ? String(saved.price) : '' } : i))
+                    }}
+                    style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
+                    <option value="">選擇活動…</option>
+                    {savedItems['活動']?.map(s => (
+                      <option key={s.label} value={s.label}>{s.label}　${s.price.toLocaleString()}</option>
+                    ))}
+                    <option value="__custom__">＋ 自定義…</option>
                   </select>
                 )
               ) : (
@@ -446,7 +500,14 @@ export default function CheckoutPage() {
               )}
 
               {/* Price */}
-              <input value={item.price} onChange={e => setItem(item.id, 'price', e.target.value)}
+              <input value={item.price}
+                onChange={e => setItem(item.id, 'price', e.target.value)}
+                onBlur={() => {
+                  if (item.label && Number(item.price) > 0 && !item.pkg_id) {
+                    upsertSavedItem(item.category, item.label, Number(item.price))
+                    refreshSaved()
+                  }
+                }}
                 type="number" placeholder="金額"
                 style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px', width: '80px' }} />
 
