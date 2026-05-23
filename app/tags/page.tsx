@@ -41,6 +41,7 @@ export default function TagsPage() {
   const [newColor, setNewColor] = useState(TAG_COLORS[0])
   const [creating, setCreating] = useState(false)
   const [createErr, setCreateErr] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
 
   // Edit
   const [editingId, setEditingId]   = useState<number | null>(null)
@@ -64,8 +65,11 @@ export default function TagsPage() {
     })
     setCreating(false)
     if (!res.ok) { const d = await res.json(); setCreateErr(d.error || '建立失敗'); return }
+    const created = newName.trim()
     setNewName(''); setNewColor(TAG_COLORS[0]); setShowForm(false)
     load()
+    setSuccessMsg(`標籤「${created}」已建立`)
+    setTimeout(() => setSuccessMsg(''), 3000)
   }
 
   function startEdit(tag: Tag) {
@@ -106,6 +110,16 @@ export default function TagsPage() {
           {showForm ? '取消' : '＋ 新增標籤'}
         </button>
       </div>
+
+      {/* Success toast */}
+      {successMsg && (
+        <div style={{
+          background: '#edf3eb', border: '1px solid #9ab89e', borderRadius: '6px',
+          color: '#4a6b52', fontSize: '0.85rem', padding: '10px 14px',
+        }}>
+          ✓ {successMsg}
+        </div>
+      )}
 
       {/* New tag form */}
       {showForm && (

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { MEMBERSHIP_LEVELS } from '@/types'
+import ClientTagsSection from '@/components/ClientTagsSection'
 
 export default function EditClientPage() {
   const router = useRouter()
@@ -98,6 +99,8 @@ export default function EditClientPage() {
             placeholder="備註（選填）" rows={3}
             style={{ ...inputStyle, resize: 'none' }} />
         </Field>
+
+        <ClientTagsSection clientId={id} />
 
         {error && (
           <p style={{ color: '#9a4a4a', fontSize: '0.85rem', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '5px' }}
