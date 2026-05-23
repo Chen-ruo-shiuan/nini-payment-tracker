@@ -100,8 +100,6 @@ export default function EditClientPage() {
             style={{ ...inputStyle, resize: 'none' }} />
         </Field>
 
-        <ClientTagsSection clientId={id} />
-
         {error && (
           <p style={{ color: '#9a4a4a', fontSize: '0.85rem', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '5px' }}
             className="px-3 py-2">
@@ -119,6 +117,9 @@ export default function EditClientPage() {
           {saving ? '儲存中…' : '儲存變更'}
         </button>
       </form>
+
+      {/* 標籤獨立於 form 之外，避免 nested form 衝突 */}
+      <ClientTagsSection clientId={id} />
     </div>
   )
 }

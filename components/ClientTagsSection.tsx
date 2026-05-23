@@ -39,8 +39,7 @@ export default function ClientTagsSection({ clientId }: { clientId: string | num
     loadClientTags()
   }
 
-  async function createAndAdd(e: React.FormEvent) {
-    e.preventDefault()
+  async function createAndAdd() {
     if (!newName.trim()) return
     setCreating(true)
     const res = await fetch('/api/tags', {
@@ -130,7 +129,7 @@ export default function ClientTagsSection({ clientId }: { clientId: string | num
 
           {/* Create new tag inline */}
           <p style={{ color: '#9a8f84', fontSize: '0.68rem', letterSpacing: '0.06em', marginBottom: '6px' }}>建立新標籤</p>
-          <form onSubmit={createAndAdd} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <input
               value={newName} onChange={e => setNewName(e.target.value)}
               placeholder="標籤名稱…"
@@ -163,7 +162,10 @@ export default function ClientTagsSection({ clientId }: { clientId: string | num
               </div>
             )}
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button type="submit" disabled={creating || !newName.trim()}
+              <button
+                type="button"
+                disabled={creating || !newName.trim()}
+                onClick={createAndAdd}
                 style={{
                   flex: 1, background: creating || !newName.trim() ? '#c4b8aa' : '#2c2825',
                   color: '#f7f4ef', border: 'none', borderRadius: '5px',
@@ -179,7 +181,7 @@ export default function ClientTagsSection({ clientId }: { clientId: string | num
                 取消
               </button>
             </div>
-          </form>
+          </div>
         </div>
       )}
     </div>
