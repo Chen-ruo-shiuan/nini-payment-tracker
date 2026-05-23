@@ -1401,9 +1401,170 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
   )
 }
 
+// ─── Timeline Tab ─────────────────────────────────────────────────────────────
+interface TimelineEntry {
+  key: string
+  type: 'checkout' | 'package' | 'session' | 'installment' | 'sv' | 'points' | 'shopping_credit'
+  date: string
+  amount: number
+  title: string
+  subtitle: string | null
+  note: string | null
+  detail: string | null  // JSON
+}
+
+const TL_TYPE: Record<string, { icon: string; color: string; bg: string; border: string }> = {
+  checkout:        { icon: '🧾', color: '#2c2825', bg: '#faf8f5',  border: '#8a7a6e' },
+  package:         { icon: '📦', color: '#4a6b52', bg: '#edf3eb',  border: '#9ab89e' },
+  session:         { icon: '✓',  color: '#1a6b5a', bg: '#e6f5f0',  border: '#5ab89e' },
+  installment:     { icon: '💴', color: '#7a5a00', bg: '#fdf5e0',  border: '#d4a830' },
+  sv_pos:          { icon: '＋', color: '#2d4f9a', bg: '#e8f0fc',  border: '#9ab0e8' },
+  sv_neg:          { icon: '－', color: '#7a3020', bg: '#fdf0f0',  border: '#e8a8a8' },
+  points_pos:      { icon: '⭐', color: '#7a5a00', bg: '#fdf8e8',  border: '#d4a830' },
+  points_neg:      { icon: '⭐', color: '#7a3020', bg: '#fdf0f0',  border: '#e8a8a8' },
+  shopping_credit_pos: { icon: '🛍', color: '#3a6b7a', bg: '#e6f0f5', border: '#7ab0c8' },
+  shopping_credit_neg: { icon: '🛍', color: '#7a3020', bg: '#fdf0f0', border: '#e8a8a8' },
+}
+
+function tlKey(entry: TimelineEntry): string {
+  if (entry.type === 'sv') return entry.amount >= 0 ? 'sv_pos' : 'sv_neg'
+  if (entry.type === 'points') return entry.amount >= 0 ? 'points_pos' : 'points_neg'
+  if (entry.type === 'shopping_credit') return entry.amount >= 0 ? 'shopping_credit_pos' : 'shopping_credit_neg'
+  return entry.type
+}
+
+function TimelineTab({ client }: { client: ClientDetail }) {
+  const [entries, setEntries] = useState<TimelineEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/clients/${client.id}/timeline`)
+      .then(r => r.json())
+      .then((data: TimelineEntry[]) => { setEntries(data); setLoading(false) })
+  }, [client.id])
+
+  if (loading) return (
+    <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '40px 0', fontSize: '0.85rem' }}>載入中…</div>
+  )
+  if (entries.length === 0) return (
+    <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '40px 0', fontSize: '0.85rem' }}>尚無任何紀錄</div>
+  )
+
+  // Group by date
+  const grouped: Record<string, TimelineEntry[]> = {}
+  for (const e of entries) {
+    if (!grouped[e.date]) grouped[e.date] = []
+    grouped[e.date].push(e)
+  }
+  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
+
+  return (
+    <div className="space-y-5">
+      {sortedDates.map(date => (
+        <div key={date}>
+          {/* Date header */}
+          <div style={{
+            color: '#9a8f84', fontSize: '0.72rem', letterSpacing: '0.08em',
+            marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px',
+          }}>
+            <span>{fmtDate(date)}</span>
+            <div style={{ flex: 1, height: '1px', background: '#e0d9d0' }} />
+          </div>
+
+          <div className="space-y-2">
+            {grouped[date].map(entry => {
+              const cfg = TL_TYPE[tlKey(entry)]
+              let detail: { items?: { cat: string; label: string; price: number; qty: number }[]; pays?: { method: string; amount: number }[]; payment_method?: string } | null = null
+              try { if (entry.detail) detail = JSON.parse(entry.detail) } catch { /* ignore */ }
+
+              return (
+                <div key={entry.key} style={{
+                  background: cfg.bg,
+                  border: `1px solid ${cfg.border}`,
+                  borderLeft: `3px solid ${cfg.border}`,
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Title row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.82rem' }}>{cfg.icon}</span>
+                        <span style={{ color: cfg.color, fontWeight: 500, fontSize: '0.85rem' }}>{entry.title}</span>
+                        {entry.subtitle && (
+                          <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>　{entry.subtitle}</span>
+                        )}
+                      </div>
+
+                      {/* Checkout items detail */}
+                      {entry.type === 'checkout' && detail?.items && detail.items.length > 0 && (
+                        <div style={{ marginTop: '6px', paddingLeft: '20px' }} className="space-y-0.5">
+                          {detail.items.map((item, i) => (
+                            <div key={i} style={{ display: 'flex', gap: '6px', fontSize: '0.72rem' }}>
+                              <span style={{ color: '#b4aa9e', minWidth: '36px' }}>{item.cat}</span>
+                              <span style={{ color: '#4a4642' }}>{item.label}</span>
+                              {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
+                              <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>
+                                {fmtAmt(item.price * item.qty)}
+                              </span>
+                            </div>
+                          ))}
+                          {detail.pays && detail.pays.length > 0 && (
+                            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '4px' }}>
+                              {detail.pays.map((p, i) => (
+                                <span key={i} style={{ fontSize: '0.68rem', color: '#9a8f84', background: 'rgba(0,0,0,0.04)', borderRadius: '8px', padding: '1px 7px' }}>
+                                  {p.method} {fmtAmt(p.amount)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Package payment method */}
+                      {entry.type === 'package' && detail?.payment_method && (
+                        <div style={{ fontSize: '0.72rem', color: '#9a8f84', marginTop: '3px', paddingLeft: '20px' }}>
+                          {detail.payment_method}
+                        </div>
+                      )}
+
+                      {/* Note */}
+                      {entry.note && (
+                        <div style={{ fontSize: '0.72rem', color: '#9a8f84', marginTop: '3px', paddingLeft: '20px' }}>
+                          {entry.note}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Amount */}
+                    {entry.type !== 'session' && entry.amount !== 0 && (
+                      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '10px' }}>
+                        {entry.type === 'points' ? (
+                          <span style={{ color: cfg.color, fontSize: '0.9rem', fontWeight: 600 }}>
+                            {entry.amount >= 0 ? '+' : ''}{entry.amount} 點
+                          </span>
+                        ) : (
+                          <span style={{ color: cfg.color, fontSize: '0.9rem', fontWeight: 600 }}>
+                            {['sv', 'shopping_credit'].includes(entry.type) && entry.amount >= 0 ? '+' : ''}
+                            {fmtAmt(entry.amount)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = '分期' | '福利' | '套組' | '儲值' | '消費紀錄'
-const TABS: Tab[] = ['分期', '福利', '套組', '儲值', '消費紀錄']
+type Tab = '時間軸' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄'
+const TABS: Tab[] = ['時間軸', '分期', '福利', '套組', '儲值', '消費紀錄']
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -1412,7 +1573,7 @@ export default function ClientDetailPage() {
 
   const [client, setClient] = useState<ClientDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<Tab>('分期')
+  const [tab, setTab] = useState<Tab>('時間軸')
 
   const load = useCallback(async () => {
     try {
@@ -1569,6 +1730,7 @@ export default function ClientDetailPage() {
         {TABS.map(t => <TabBtn key={t} label={t} active={tab === t} onClick={() => setTab(t)} />)}
       </div>
 
+      {tab === '時間軸' && <TimelineTab client={client} />}
       {tab === '分期' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
