@@ -36,6 +36,10 @@ export default function NavBar() {
             NINI の 療癒所　管理系統
           </span>
           <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+            <Link href="/tags"
+              style={{ color: '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
+              標籤
+            </Link>
             <Link href="/export"
               style={{ color: '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
               匯出
