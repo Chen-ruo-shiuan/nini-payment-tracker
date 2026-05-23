@@ -247,6 +247,19 @@ function initSchema(db: Database.Database) {
       sent_at     TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(client_id, year, days_before)
     );
+
+    -- ═══════════════════════════════
+    --  SERVICE LOGS（服務日誌）
+    -- ═══════════════════════════════
+    CREATE TABLE IF NOT EXISTS service_logs (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      date        TEXT NOT NULL,
+      title       TEXT,
+      content     TEXT NOT NULL,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `)
 
 }

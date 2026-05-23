@@ -1401,10 +1401,231 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
   )
 }
 
+// ─── Service Log Tab ──────────────────────────────────────────────────────────
+interface ServiceLog {
+  id: number
+  client_id: number
+  date: string
+  title: string | null
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+function ServiceLogTab({ client }: { client: ClientDetail }) {
+  const [logs, setLogs]           = useState<ServiceLog[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [showForm, setShowForm]   = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [deleting, setDeleting]   = useState<number | null>(null)
+
+  // New log form
+  const [newDate, setNewDate]       = useState(todayStr())
+  const [newTitle, setNewTitle]     = useState('')
+  const [newContent, setNewContent] = useState('')
+
+  // Edit form
+  const [editDate, setEditDate]       = useState('')
+  const [editTitle, setEditTitle]     = useState('')
+  const [editContent, setEditContent] = useState('')
+
+  function loadLogs() {
+    fetch(`/api/clients/${client.id}/service-logs`)
+      .then(r => r.json())
+      .then((data: ServiceLog[]) => { setLogs(data); setLoading(false) })
+  }
+  useEffect(() => { loadLogs() }, [client.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function submitNew(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newContent.trim()) return
+    setSaving(true)
+    await fetch(`/api/clients/${client.id}/service-logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: newDate, title: newTitle, content: newContent }),
+    })
+    setSaving(false)
+    setShowForm(false)
+    setNewTitle(''); setNewContent(''); setNewDate(todayStr())
+    loadLogs()
+  }
+
+  function startEdit(log: ServiceLog) {
+    setEditingId(log.id)
+    setEditDate(log.date)
+    setEditTitle(log.title ?? '')
+    setEditContent(log.content)
+  }
+
+  async function saveEdit(id: number) {
+    if (!editContent.trim()) return
+    setSaving(true)
+    await fetch(`/api/service-logs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: editDate, title: editTitle, content: editContent }),
+    })
+    setSaving(false)
+    setEditingId(null)
+    loadLogs()
+  }
+
+  async function deleteLog(id: number) {
+    if (!confirm('確定刪除這筆服務日誌？')) return
+    setDeleting(id)
+    await fetch(`/api/service-logs/${id}`, { method: 'DELETE' })
+    setDeleting(null)
+    loadLogs()
+  }
+
+  const slStyle: React.CSSProperties = {
+    width: '100%', background: '#faf8f5', border: '1px solid #e0d9d0',
+    borderRadius: '6px', color: '#2c2825', fontSize: '0.88rem',
+    outline: 'none', padding: '9px 12px',
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Add button */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => { setShowForm(v => !v); setEditingId(null) }}
+          style={{
+            background: showForm ? '#f0ebe4' : '#2c2825',
+            color: showForm ? '#6b5f54' : '#f7f4ef',
+            border: 'none', borderRadius: '5px',
+            fontSize: '0.8rem', padding: '6px 16px', cursor: 'pointer',
+          }}>
+          {showForm ? '取消' : '＋ 新增日誌'}
+        </button>
+      </div>
+
+      {/* New log form */}
+      {showForm && (
+        <form onSubmit={submitNew}
+          style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }}
+          className="space-y-3">
+          <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>新增服務日誌</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div>
+              <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '4px' }}>日期</label>
+              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={slStyle} />
+            </div>
+            <div>
+              <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '4px' }}>標題（選填）</label>
+              <input value={newTitle} onChange={e => setNewTitle(e.target.value)}
+                placeholder="例：精細光彩 第3次" style={slStyle} />
+            </div>
+          </div>
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '4px' }}>內容 *</label>
+            <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
+              placeholder="膚況、使用產品、特殊反應、下次注意事項…"
+              rows={4}
+              style={{ ...slStyle, resize: 'vertical', lineHeight: 1.6 }} />
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="submit" disabled={saving || !newContent.trim()}
+              style={{
+                flex: 1, background: saving || !newContent.trim() ? '#c4b8aa' : '#2c2825',
+                color: '#f7f4ef', border: 'none', borderRadius: '5px',
+                fontSize: '0.85rem', padding: '9px', cursor: 'pointer',
+              }}>
+              {saving ? '儲存中…' : '儲存'}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)}
+              style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '5px', fontSize: '0.85rem', padding: '9px 16px', cursor: 'pointer' }}>
+              取消
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Log list */}
+      {loading ? (
+        <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '30px 0', fontSize: '0.85rem' }}>載入中…</div>
+      ) : logs.length === 0 ? (
+        <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '40px 0' }}>
+          <div style={{ fontSize: '1.6rem', marginBottom: '8px' }}>📋</div>
+          <p style={{ fontSize: '0.85rem' }}>尚無服務日誌</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {logs.map(log => (
+            <div key={log.id} style={{
+              background: '#faf8f5', border: '1px solid #e0d9d0',
+              borderLeft: '3px solid #c0a88a', borderRadius: '6px', padding: '12px 14px',
+            }}>
+              {editingId === log.id ? (
+                /* ── 編輯模式 ── */
+                <div className="space-y-3">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '4px' }}>日期</label>
+                      <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={slStyle} />
+                    </div>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '4px' }}>標題</label>
+                      <input value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="選填" style={slStyle} />
+                    </div>
+                  </div>
+                  <textarea value={editContent} onChange={e => setEditContent(e.target.value)}
+                    rows={4} style={{ ...slStyle, resize: 'vertical', lineHeight: 1.6 }} />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => saveEdit(log.id)} disabled={saving || !editContent.trim()}
+                      style={{ flex: 1, background: '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '5px', fontSize: '0.82rem', padding: '7px', cursor: 'pointer' }}>
+                      {saving ? '儲存中…' : '儲存'}
+                    </button>
+                    <button onClick={() => setEditingId(null)}
+                      style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '5px', fontSize: '0.82rem', padding: '7px 14px', cursor: 'pointer' }}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* ── 顯示模式 ── */
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>{fmtDate(log.date)}</span>
+                        {log.title && (
+                          <span style={{ color: '#2c2825', fontSize: '0.85rem', fontWeight: 500 }}>{log.title}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
+                      <button onClick={() => startEdit(log)}
+                        style={{ color: '#6b5f54', fontSize: '0.68rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer' }}>
+                        編輯
+                      </button>
+                      <button onClick={() => deleteLog(log.id)} disabled={deleting === log.id}
+                        style={{ color: '#c4a898', fontSize: '0.68rem', background: 'none', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer' }}>
+                        {deleting === log.id ? '…' : '✕'}
+                      </button>
+                    </div>
+                  </div>
+                  <p style={{
+                    color: '#4a4642', fontSize: '0.85rem', lineHeight: 1.7,
+                    marginTop: '8px', whiteSpace: 'pre-wrap',
+                  }}>
+                    {log.content}
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Timeline Tab ─────────────────────────────────────────────────────────────
 interface TimelineEntry {
   key: string
-  type: 'checkout' | 'package' | 'session' | 'installment' | 'sv' | 'points' | 'shopping_credit'
+  type: 'checkout' | 'package' | 'session' | 'installment' | 'sv' | 'points' | 'shopping_credit' | 'service_log'
   date: string
   amount: number
   title: string
@@ -1424,6 +1645,7 @@ const TL_TYPE: Record<string, { icon: string; color: string; bg: string; border:
   points_neg:      { icon: '⭐', color: '#7a3020', bg: '#fdf0f0',  border: '#e8a8a8' },
   shopping_credit_pos: { icon: '🛍', color: '#3a6b7a', bg: '#e6f0f5', border: '#7ab0c8' },
   shopping_credit_neg: { icon: '🛍', color: '#7a3020', bg: '#fdf0f0', border: '#e8a8a8' },
+  service_log:     { icon: '📋', color: '#6b5044', bg: '#faf3ee',  border: '#c0a88a' },
 }
 
 function tlKey(entry: TimelineEntry): string {
@@ -1528,8 +1750,21 @@ function TimelineTab({ client }: { client: ClientDetail }) {
                         </div>
                       )}
 
-                      {/* Note */}
-                      {entry.note && (
+                      {/* Service log content */}
+                      {entry.type === 'service_log' && entry.note && (
+                        <p style={{
+                          color: '#4a4642', fontSize: '0.78rem', lineHeight: 1.65,
+                          marginTop: '6px', paddingLeft: '20px',
+                          whiteSpace: 'pre-wrap',
+                          display: '-webkit-box', WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                        }}>
+                          {entry.note}
+                        </p>
+                      )}
+
+                      {/* Note (non service_log) */}
+                      {entry.type !== 'service_log' && entry.note && (
                         <div style={{ fontSize: '0.72rem', color: '#9a8f84', marginTop: '3px', paddingLeft: '20px' }}>
                           {entry.note}
                         </div>
@@ -1563,8 +1798,8 @@ function TimelineTab({ client }: { client: ClientDetail }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = '時間軸' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄'
-const TABS: Tab[] = ['時間軸', '分期', '福利', '套組', '儲值', '消費紀錄']
+type Tab = '時間軸' | '服務日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄'
+const TABS: Tab[] = ['時間軸', '服務日誌', '分期', '福利', '套組', '儲值', '消費紀錄']
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -1730,7 +1965,8 @@ export default function ClientDetailPage() {
         {TABS.map(t => <TabBtn key={t} label={t} active={tab === t} onClick={() => setTab(t)} />)}
       </div>
 
-      {tab === '時間軸' && <TimelineTab client={client} />}
+      {tab === '時間軸'   && <TimelineTab client={client} />}
+      {tab === '服務日誌' && <ServiceLogTab client={client} />}
       {tab === '分期' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>

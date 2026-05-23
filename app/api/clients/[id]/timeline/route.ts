@@ -150,6 +150,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     })
   }
 
+  // ── 服務日誌 ─────────────────────────────────────────────────────────────────
+  const slRows = db.prepare(`
+    SELECT id, date, title, content FROM service_logs WHERE client_id = ?
+    ORDER BY date DESC, id DESC
+  `).all(id) as { id: number; date: string; title: string | null; content: string }[]
+
+  for (const sl of slRows) {
+    entries.push({
+      key: `sl_${sl.id}`, type: 'service_log', date: sl.date,
+      amount: 0,
+      title: '服務日誌',
+      subtitle: sl.title || null,
+      note: sl.content,
+      detail: null,
+    })
+  }
+
   // 按日期 desc 排序，同日按 key desc（確保 checkout 在最前）
   entries.sort((a, b) => {
     if (b.date !== a.date) return b.date.localeCompare(a.date)
