@@ -249,6 +249,23 @@ function initSchema(db: Database.Database) {
     );
 
     -- ═══════════════════════════════
+    --  TAGS（標籤）
+    -- ═══════════════════════════════
+    CREATE TABLE IF NOT EXISTS tags (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL UNIQUE,
+      color      TEXT NOT NULL DEFAULT '#9ab89e',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS client_tags (
+      client_id  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      tag_id     INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (client_id, tag_id)
+    );
+
+    -- ═══════════════════════════════
     --  SERVICE LOGS（服務日誌）
     -- ═══════════════════════════════
     CREATE TABLE IF NOT EXISTS service_logs (
