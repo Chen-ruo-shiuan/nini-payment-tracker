@@ -1622,6 +1622,150 @@ function ServiceLogTab({ client }: { client: ClientDetail }) {
   )
 }
 
+// ─── Client Tags Row ──────────────────────────────────────────────────────────
+const TAG_COLORS = [
+  '#9ab89e','#c0a88a','#8ab0c8','#c4a8d8',
+  '#e0a8a8','#a8c4b0','#d4b840','#a89890',
+  '#d49870','#8ab8b0','#e0b890','#b8a0c0',
+]
+
+interface Tag { id: number; name: string; color: string; client_count?: number }
+
+function ClientTagsRow({ clientId }: { clientId: number }) {
+  const [clientTags, setClientTags] = useState<Tag[]>([])
+  const [allTags, setAllTags]       = useState<Tag[]>([])
+  const [showPicker, setShowPicker] = useState(false)
+  const [newName, setNewName]       = useState('')
+  const [newColor, setNewColor]     = useState(TAG_COLORS[0])
+  const [creating, setCreating]     = useState(false)
+
+  function loadClientTags() {
+    fetch(`/api/clients/${clientId}/tags`).then(r => r.json()).then(setClientTags)
+  }
+  function loadAllTags() {
+    fetch('/api/tags').then(r => r.json()).then(setAllTags)
+  }
+  useEffect(() => { loadClientTags(); loadAllTags() }, [clientId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function addTag(tagId: number) {
+    await fetch(`/api/clients/${clientId}/tags`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag_id: tagId }),
+    })
+    loadClientTags()
+  }
+
+  async function removeTag(tagId: number) {
+    await fetch(`/api/clients/${clientId}/tags/${tagId}`, { method: 'DELETE' })
+    loadClientTags()
+  }
+
+  async function createAndAdd(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newName.trim()) return
+    setCreating(true)
+    const res = await fetch('/api/tags', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName.trim(), color: newColor }),
+    })
+    if (res.ok) {
+      const { id } = await res.json()
+      await addTag(id)
+      loadAllTags()
+    }
+    setCreating(false)
+    setNewName(''); setNewColor(TAG_COLORS[0])
+    setShowPicker(false)
+  }
+
+  const unattached = allTags.filter(t => !clientTags.some(ct => ct.id === t.id))
+
+  return (
+    <div style={{ marginTop: '8px', position: 'relative' }}>
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+        {clientTags.map(tag => (
+          <span key={tag.id}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '4px',
+              background: tag.color + '28', color: tag.color,
+              border: `1px solid ${tag.color}70`,
+              borderRadius: '12px', fontSize: '0.75rem', padding: '2px 8px 2px 10px',
+              fontWeight: 500,
+            }}>
+            {tag.name}
+            <button onClick={() => removeTag(tag.id)}
+              style={{ background: 'none', border: 'none', color: tag.color, cursor: 'pointer', fontSize: '0.8rem', lineHeight: 1, padding: '0 1px', opacity: 0.7 }}>
+              ✕
+            </button>
+          </span>
+        ))}
+
+        {/* Add tag button */}
+        <button onClick={() => setShowPicker(v => !v)}
+          style={{
+            background: 'none', border: '1px dashed #d9d0c5', borderRadius: '12px',
+            color: '#9a8f84', fontSize: '0.72rem', padding: '2px 10px', cursor: 'pointer',
+          }}>
+          ＋ 標籤
+        </button>
+      </div>
+
+      {/* Tag picker dropdown */}
+      {showPicker && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 30, marginTop: '6px',
+          background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px',
+          padding: '12px', minWidth: '220px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+        }}>
+          {/* Existing tags */}
+          {unattached.length > 0 && (
+            <div style={{ marginBottom: '10px' }}>
+              <p style={{ color: '#9a8f84', fontSize: '0.68rem', marginBottom: '6px' }}>選擇現有標籤</p>
+              <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                {unattached.map(tag => (
+                  <button key={tag.id} onClick={() => { addTag(tag.id); setShowPicker(false) }}
+                    style={{
+                      background: tag.color + '28', color: tag.color,
+                      border: `1px solid ${tag.color}70`,
+                      borderRadius: '12px', fontSize: '0.75rem', padding: '3px 10px',
+                      cursor: 'pointer', fontWeight: 500,
+                    }}>
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Create new */}
+          <form onSubmit={createAndAdd} className="space-y-2">
+            <p style={{ color: '#9a8f84', fontSize: '0.68rem' }}>建立新標籤</p>
+            <input value={newName} onChange={e => setNewName(e.target.value)}
+              placeholder="標籤名稱…" autoFocus
+              style={{ width: '100%', background: '#f5f2ee', border: '1px solid #e0d9d0', borderRadius: '5px', color: '#2c2825', fontSize: '0.82rem', padding: '6px 10px', outline: 'none', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+              {TAG_COLORS.map(c => (
+                <button key={c} type="button" onClick={() => setNewColor(c)}
+                  style={{ width: '20px', height: '20px', borderRadius: '50%', background: c, border: newColor === c ? '2px solid #2c2825' : '2px solid transparent', cursor: 'pointer', outline: 'none' }} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button type="submit" disabled={creating || !newName.trim()}
+                style={{ flex: 1, background: creating || !newName.trim() ? '#c4b8aa' : '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '4px', fontSize: '0.78rem', padding: '6px', cursor: 'pointer' }}>
+                {creating ? '…' : '建立並加入'}
+              </button>
+              <button type="button" onClick={() => setShowPicker(false)}
+                style={{ background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 10px', cursor: 'pointer' }}>
+                取消
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Timeline Tab ─────────────────────────────────────────────────────────────
 interface TimelineEntry {
   key: string
@@ -1893,6 +2037,9 @@ export default function ClientDetailPage() {
           </div>
           <Link href={`/clients/${id}/edit`} style={{ color: '#9a8f84', fontSize: '0.8rem', marginTop: '28px' }}>編輯</Link>
         </div>
+
+        {/* Tags */}
+        <ClientTagsRow clientId={Number(id)} />
 
         {/* Quick stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '14px' }}>

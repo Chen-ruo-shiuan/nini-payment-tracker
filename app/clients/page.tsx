@@ -1,8 +1,11 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import MembershipBadge from '@/components/MembershipBadge'
 import { ClientWithStats, MembershipLevel, MEMBERSHIP_LEVELS } from '@/types'
+
+interface Tag { id: number; name: string; color: string }
 
 function formatAmount(n: number) {
   return `$ ${n.toLocaleString()}`
@@ -93,14 +96,23 @@ function ClientCard({ client, onDelete, showBirthday }: {
 
 const currentMonth = new Date().getMonth() + 1
 
-export default function ClientsPage() {
-  const [clients, setClients] = useState<ClientWithStats[]>([])
-  const [search, setSearch] = useState('')
+function ClientsPageInner() {
+  const searchParams = useSearchParams()
+  const initTagId = searchParams.get('tag') ? Number(searchParams.get('tag')) : null
+
+  const [clients, setClients]         = useState<ClientWithStats[]>([])
+  const [search, setSearch]           = useState('')
   const [levelFilter, setLevelFilter] = useState<string>('全部')
   const [birthdayMonth, setBirthdayMonth] = useState<number>(currentMonth)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]         = useState(true)
+  const [tags, setTags]               = useState<Tag[]>([])
+  const [tagFilter, setTagFilter]     = useState<number | null>(initTagId)
 
   const isBirthdayMode = levelFilter === '壽星'
+
+  useEffect(() => {
+    fetch('/api/tags').then(r => r.json()).then(setTags)
+  }, [])
 
   const fetchClients = useCallback(async () => {
     setLoading(true)
@@ -112,9 +124,9 @@ export default function ClientsPage() {
       } else if (levelFilter !== '全部') {
         params.set('level', levelFilter)
       }
+      if (tagFilter) params.set('tag_id', String(tagFilter))
       const res = await fetch(`/api/clients?${params.toString()}`)
       const data: ClientWithStats[] = await res.json()
-      // In birthday mode: sort by day within the month
       if (isBirthdayMode) {
         data.sort((a, b) => {
           const da = a.birthday ? Number(a.birthday.split('-')[1]) : 99
@@ -128,7 +140,7 @@ export default function ClientsPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, levelFilter, birthdayMonth, isBirthdayMode])
+  }, [search, levelFilter, birthdayMonth, isBirthdayMode, tagFilter])
 
   useEffect(() => {
     const t = setTimeout(fetchClients, 250)
@@ -194,6 +206,31 @@ export default function ClientsPage() {
         </button>
       </div>
 
+      {/* Tag filter */}
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ color: '#9a8f84', fontSize: '0.7rem' }}>🏷</span>
+          {tagFilter && (
+            <button onClick={() => setTagFilter(null)}
+              style={{ background: '#f0ebe4', color: '#6b5f54', border: '1px solid #e0d9d0', borderRadius: '20px', fontSize: '0.72rem', padding: '3px 10px', cursor: 'pointer' }}>
+              清除篩選 ✕
+            </button>
+          )}
+          {tags.map(tag => (
+            <button key={tag.id} onClick={() => setTagFilter(tagFilter === tag.id ? null : tag.id)}
+              style={{
+                background: tagFilter === tag.id ? tag.color + '55' : tag.color + '20',
+                color: tag.color,
+                border: `1px solid ${tag.color}${tagFilter === tag.id ? 'cc' : '60'}`,
+                borderRadius: '20px', fontSize: '0.75rem', padding: '3px 12px',
+                cursor: 'pointer', fontWeight: tagFilter === tag.id ? 600 : 400,
+              }}>
+              {tag.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Birthday month selector */}
       {isBirthdayMode && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fdf5fa', border: '1px solid #d4a8c8', borderRadius: '8px', padding: '10px 14px' }}>
@@ -244,4 +281,8 @@ export default function ClientsPage() {
       )}
     </div>
   )
+}
+
+export default function ClientsPage() {
+  return <Suspense><ClientsPageInner /></Suspense>
 }

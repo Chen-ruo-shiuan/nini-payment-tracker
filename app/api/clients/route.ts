@@ -37,9 +37,10 @@ export async function GET(req: NextRequest) {
   const search        = req.nextUrl.searchParams.get('q') || ''
   const level         = req.nextUrl.searchParams.get('level') || ''
   const birthdayMonth = req.nextUrl.searchParams.get('birthday_month') || ''
+  const tagId         = req.nextUrl.searchParams.get('tag_id') || ''
 
   const conditions: string[] = []
-  const bindParams: string[] = []
+  const bindParams: (string | number)[] = []
 
   if (search) {
     conditions.push('c.name LIKE ?')
@@ -53,6 +54,10 @@ export async function GET(req: NextRequest) {
     const mm = String(Number(birthdayMonth)).padStart(2, '0')
     conditions.push("c.birthday IS NOT NULL AND SUBSTR(c.birthday, 1, 2) = ?")
     bindParams.push(mm)
+  }
+  if (tagId) {
+    conditions.push('EXISTS (SELECT 1 FROM client_tags ct WHERE ct.client_id = c.id AND ct.tag_id = ?)')
+    bindParams.push(Number(tagId))
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
