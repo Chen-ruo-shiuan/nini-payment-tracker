@@ -69,6 +69,8 @@ export async function GET(req: NextRequest) {
       (SELECT MIN(i.due_date) FROM installments i
         JOIN installment_contracts ic ON ic.id = i.contract_id
         WHERE ic.client_id = c.id AND i.paid_at IS NULL) as next_due_date,
+      (SELECT MIN(date) FROM appointment_logs
+        WHERE client_id = c.id AND date >= date('now','localtime')) as next_appointment_date,
       (SELECT COUNT(*) FROM packages p
         WHERE p.client_id = c.id AND p.used_sessions < p.total_sessions) as active_packages,
       (SELECT MAX(

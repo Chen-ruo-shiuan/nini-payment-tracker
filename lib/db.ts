@@ -279,6 +279,17 @@ function initSchema(db: Database.Database) {
       created_at  TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- ═══════════════════════════════
+    --  APPOINTMENT LOGS（預約記錄）
+    -- ═══════════════════════════════
+    CREATE TABLE IF NOT EXISTS appointment_logs (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      date        TEXT NOT NULL,
+      note        TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `)
 
 }

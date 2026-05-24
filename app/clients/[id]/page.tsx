@@ -1109,15 +1109,15 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     refresh()
   }
 
-  function PkgCard({ pkg }: { pkg: Package }) {
+  function renderPkgCard(pkg: Package) {
     const remaining = pkg.total_sessions - pkg.used_sessions
     const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
     const isDone    = remaining <= 0
     const isEditing = editingId === pkg.id
 
-    // 任務倒數計算（含展延）
-    const hasTask = !isDone && !!pkg.bonus_desc && !!pkg.timing_max_weeks && pkg.bonus_active
-    const lastDate = pkg.last_session_date || pkg.date
+    // 任務倒數計算（含展延）— 從最後一次施作日開始算，尚未施作時不顯示截止
+    const lastDate = pkg.last_session_date  // null = 尚未施作
+    const hasTask = !isDone && !!pkg.bonus_desc && !!pkg.timing_max_weeks && !!pkg.bonus_active && !!lastDate
     const effectiveMaxWeeks = (pkg.timing_max_weeks ?? 0) + (pkg.extension_count ?? 0)
     const deadlineDays = hasTask && lastDate && effectiveMaxWeeks
       ? Math.round((new Date(lastDate).getTime() + effectiveMaxWeeks * 7 * 86400000 - Date.now()) / 86400000)
@@ -1131,7 +1131,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       : null
 
     return (
-      <div key={pkg.id} style={{ background: isDone ? '#f5f2ee' : '#faf8f5', border: `1px solid ${isDone ? '#d9d0c5' : '#e0d9d0'}`, borderRadius: '6px', padding: '12px' }}>
+      <div style={{ background: isDone ? '#f5f2ee' : '#faf8f5', border: `1px solid ${isDone ? '#d9d0c5' : '#e0d9d0'}`, borderRadius: '6px', padding: '12px' }}>
             {!isEditing ? (
               <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1201,9 +1201,11 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                                     : deadlineDays === 0 ? '⚡ 今天截止！'
                                     : `截止還有 ${deadlineDays} 天`}
                                 </span>
-                                <span style={{ fontSize: '0.65rem', color: '#b4aa9e' }}>
-                                  上次 {fmtShort(lastDate)}
-                                </span>
+                                {lastDate && (
+                                  <span style={{ fontSize: '0.65rem', color: '#b4aa9e' }}>
+                                    上次 {fmtShort(lastDate)}
+                                  </span>
+                                )}
                                 {(pkg.extension_count ?? 0) > 0 && (
                                   <span style={{ fontSize: '0.65rem', color: '#7a6a9a', background: '#f0eef8', border: '1px solid #c4b8d8', borderRadius: '4px', padding: '1px 6px' }}>
                                     已展延 {pkg.extension_count}/2 次
@@ -1383,7 +1385,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       {activePkgs.length === 0 && completedPkgs.length > 0 && (
         <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '10px 0' }}>目前無進行中套組</p>
       )}
-      {activePkgs.map(pkg => <PkgCard key={pkg.id} pkg={pkg} />)}
+      {activePkgs.map(pkg => <div key={pkg.id}>{renderPkgCard(pkg)}</div>)}
 
       {/* 歷史套組（已核銷完畢） */}
       {completedPkgs.length > 0 && (
@@ -1403,7 +1405,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
           </button>
           {showHistory && (
             <div className="space-y-2" style={{ marginTop: '6px' }}>
-              {completedPkgs.map(pkg => <PkgCard key={pkg.id} pkg={pkg} />)}
+              {completedPkgs.map(pkg => <div key={pkg.id}>{renderPkgCard(pkg)}</div>)}
             </div>
           )}
         </div>
@@ -2108,6 +2110,129 @@ function TimelineTab({ client }: { client: ClientDetail }) {
   )
 }
 
+// ─── Appointment Section ──────────────────────────────────────────────────────
+interface ApptLog { id: number; client_id: number; date: string; note: string | null; created_at: string }
+
+function AppointmentSection({ clientId }: { clientId: string }) {
+  const [appts, setAppts] = useState<ApptLog[]>([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [newDate, setNewDate] = useState('')
+  const [newNote, setNewNote] = useState('')
+  const [showPast, setShowPast] = useState(false)
+
+  function load() {
+    fetch(`/api/clients/${clientId}/appointments`).then(r => r.json()).then(setAppts)
+  }
+  useEffect(() => { load() }, [clientId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  const upcoming = appts.filter(a => a.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date))
+  const past     = appts.filter(a => a.date < todayStr).sort((a, b) => b.date.localeCompare(a.date))
+
+  async function addAppt() {
+    if (!newDate) return
+    await fetch(`/api/clients/${clientId}/appointments`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: newDate, note: newNote }),
+    })
+    setNewDate(''); setNewNote(''); setShowAdd(false)
+    load()
+  }
+
+  async function delAppt(id: number) {
+    await fetch(`/api/appointments/${id}`, { method: 'DELETE' })
+    load()
+  }
+
+  function fmtAppt(d: string) {
+    return new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short' })
+  }
+
+  const daysUntil = (d: string) => Math.round((new Date(d + 'T00:00:00').getTime() - Date.now()) / 86400000)
+
+  return (
+    <div style={{ marginTop: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+        <span style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.06em' }}>📅 預約記錄</span>
+        <button onClick={() => setShowAdd(v => !v)}
+          style={{ fontSize: '0.68rem', color: '#9a8f84', background: 'none', border: '1px dashed #c4b8aa', borderRadius: '10px', padding: '1px 10px', cursor: 'pointer' }}>
+          ＋ 新增
+        </button>
+      </div>
+
+      {showAdd && (
+        <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+              style={{ border: '1px solid #d9d0c5', borderRadius: '5px', padding: '5px 8px', fontSize: '0.82rem', background: '#fff', color: '#2c2825', outline: 'none' }} />
+            <input value={newNote} onChange={e => setNewNote(e.target.value)}
+              placeholder="備註（選填）"
+              style={{ flex: 1, minWidth: '100px', border: '1px solid #d9d0c5', borderRadius: '5px', padding: '5px 8px', fontSize: '0.82rem', background: '#fff', color: '#2c2825', outline: 'none' }} />
+            <button onClick={addAppt} disabled={!newDate}
+              style={{ background: newDate ? '#2c2825' : '#c4b8aa', color: '#f7f4ef', border: 'none', borderRadius: '5px', fontSize: '0.78rem', padding: '5px 14px', cursor: 'pointer' }}>
+              確認
+            </button>
+            <button onClick={() => { setShowAdd(false); setNewDate(''); setNewNote('') }}
+              style={{ background: 'none', border: '1px solid #e0d9d0', borderRadius: '5px', fontSize: '0.78rem', padding: '5px 10px', cursor: 'pointer', color: '#9a8f84' }}>
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
+      {upcoming.length === 0 && past.length === 0 && (
+        <span style={{ color: '#c4b8aa', fontSize: '0.75rem' }}>尚無預約記錄</span>
+      )}
+
+      {/* Upcoming */}
+      {upcoming.map(a => {
+        const d = daysUntil(a.date)
+        return (
+          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span style={{
+              fontSize: '0.78rem', fontWeight: 600,
+              color: d === 0 ? '#c4622d' : d <= 3 ? '#9a4a4a' : '#4a6b52',
+            }}>
+              {fmtAppt(a.date)}
+            </span>
+            <span style={{
+              fontSize: '0.65rem', background: d < 0 ? '#f5f2ee' : d === 0 ? '#fff3ed' : d <= 3 ? '#fdf0f0' : '#edf3eb',
+              color: d === 0 ? '#c4622d' : d <= 3 ? '#9a4a4a' : '#4a6b52',
+              border: `1px solid ${d === 0 ? '#e0a070' : d <= 3 ? '#e8a8a8' : '#9ab89e'}`,
+              borderRadius: '4px', padding: '1px 6px',
+            }}>
+              {d === 0 ? '今天' : d > 0 ? `還有 ${d} 天` : `${Math.abs(d)} 天前`}
+            </span>
+            {a.note && <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>{a.note}</span>}
+            <button onClick={() => delAppt(a.id)}
+              style={{ marginLeft: 'auto', color: '#c4b8aa', background: 'none', border: 'none', fontSize: '0.75rem', cursor: 'pointer', padding: '0 4px' }}>
+              ✕
+            </button>
+          </div>
+        )
+      })}
+
+      {/* Past */}
+      {past.length > 0 && (
+        <div style={{ marginTop: '4px' }}>
+          <button onClick={() => setShowPast(v => !v)}
+            style={{ color: '#b4aa9e', fontSize: '0.68rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            {showPast ? '▲' : '▼'} 過去記錄 {past.length} 筆
+          </button>
+          {showPast && past.map(a => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
+              <span style={{ fontSize: '0.75rem', color: '#9a8f84' }}>{fmtAppt(a.date)}</span>
+              {a.note && <span style={{ color: '#b4aa9e', fontSize: '0.7rem' }}>{a.note}</span>}
+              <button onClick={() => delAppt(a.id)}
+                style={{ marginLeft: 'auto', color: '#c4b8aa', background: 'none', border: 'none', fontSize: '0.72rem', cursor: 'pointer' }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 type Tab = '時間軸' | '服務日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄'
 const TABS: Tab[] = ['時間軸', '服務日誌', '分期', '福利', '套組', '儲值', '消費紀錄']
@@ -2272,6 +2397,7 @@ export default function ClientDetailPage() {
             </div>
           </div>
         )}
+        <AppointmentSection clientId={id} />
       </div>
 
       {/* Tabs */}

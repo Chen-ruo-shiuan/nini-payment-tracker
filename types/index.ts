@@ -68,6 +68,7 @@ export interface ClientWithStats extends Client {
   active_contracts: number        // count of incomplete installment contracts
   next_due_date: string | null    // nearest unpaid installment due
   active_packages: number         // packages with remaining sessions
+  next_appointment_date: string | null // 下次預約日期（from appointment_logs）
   overdue_task_days: number | null // 最嚴重逾期天數（有任務且超過上限）
 }
 

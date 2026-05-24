@@ -35,8 +35,8 @@ function ClientCard({ client, onDelete, showBirthday }: {
   const overdue = client.overdue_task_days !== null && client.overdue_task_days !== undefined ? Number(client.overdue_task_days) : null
 
   // 下次預約距今天數
-  const apptDays = client.next_appointment
-    ? Math.round((new Date(client.next_appointment + 'T00:00:00').getTime() - Date.now()) / 86400000)
+  const apptDays = client.next_appointment_date
+    ? Math.round((new Date(client.next_appointment_date + 'T00:00:00').getTime() - Date.now()) / 86400000)
     : null
 
   return (
@@ -93,18 +93,18 @@ function ClientCard({ client, onDelete, showBirthday }: {
       {/* Right column */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', padding: '10px 10px 10px 0', flexShrink: 0, gap: '6px' }}>
         <div style={{ textAlign: 'right' }}>
-          {client.next_appointment && (
+          {client.next_appointment_date && (
             <div>
               <div style={{ color: '#9a8f84', fontSize: '0.65rem' }}>下次預約</div>
               <div style={{
                 fontSize: '0.78rem', fontWeight: 500,
                 color: apptDays !== null && apptDays < 0 ? '#9a8f84' : apptDays !== null && apptDays <= 3 ? '#9a4a4a' : '#4a6b52',
               }}>
-                {fmtDate(client.next_appointment)}
+                {fmtDate(client.next_appointment_date)}
               </div>
             </div>
           )}
-          {!client.next_appointment && client.next_due_date && (
+          {!client.next_appointment_date && client.next_due_date && (
             <div>
               <div style={{ color: '#9a8f84', fontSize: '0.68rem' }}>下期到期</div>
               <div style={{ color: '#9a6a4a', fontSize: '0.8rem' }}>
