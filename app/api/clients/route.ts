@@ -70,7 +70,19 @@ export async function GET(req: NextRequest) {
         JOIN installment_contracts ic ON ic.id = i.contract_id
         WHERE ic.client_id = c.id AND i.paid_at IS NULL) as next_due_date,
       (SELECT COUNT(*) FROM packages p
-        WHERE p.client_id = c.id AND p.used_sessions < p.total_sessions) as active_packages
+        WHERE p.client_id = c.id AND p.used_sessions < p.total_sessions) as active_packages,
+      (SELECT MAX(
+          CAST(julianday('now') - julianday(
+            COALESCE((SELECT MAX(s.date) FROM sessions s WHERE s.package_id = p.id), p.date)
+          ) - (p.timing_max_weeks * 7) AS INTEGER)
+        )
+        FROM packages p
+        WHERE p.client_id = c.id
+          AND p.used_sessions < p.total_sessions
+          AND p.bonus_active = 1
+          AND p.timing_max_weeks IS NOT NULL
+          AND p.bonus_desc IS NOT NULL
+      ) as overdue_task_days
     FROM clients c
     ${where}
     ORDER BY c.name ASC

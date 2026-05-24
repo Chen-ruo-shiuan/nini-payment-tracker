@@ -25,6 +25,8 @@ export function getDb(): Database.Database {
     migrateSvLedgerPaidAmount(db)
     migratePointsLedger(db)
     migrateShoppingCredit(db)
+    migratePackageIncentive(db)
+    migrateClientNextAppointment(db)
   }
   return db
 }
@@ -376,6 +378,23 @@ function migrateShoppingCredit(db: Database.Database) {
   const cols = (db.prepare('PRAGMA table_info(clients)').all() as { name: string }[]).map(c => c.name)
   if (!cols.includes('shopping_credit')) {
     db.exec(`ALTER TABLE clients ADD COLUMN shopping_credit INTEGER NOT NULL DEFAULT 0`)
+  }
+}
+
+// ─── 遷移：packages 新增鼓勵任務欄位 ────────────────────────────────────────
+function migratePackageIncentive(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(packages)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('timing_note'))      db.exec(`ALTER TABLE packages ADD COLUMN timing_note TEXT`)
+  if (!cols.includes('bonus_desc'))       db.exec(`ALTER TABLE packages ADD COLUMN bonus_desc TEXT`)
+  if (!cols.includes('timing_max_weeks')) db.exec(`ALTER TABLE packages ADD COLUMN timing_max_weeks INTEGER`)
+  if (!cols.includes('bonus_active'))     db.exec(`ALTER TABLE packages ADD COLUMN bonus_active INTEGER NOT NULL DEFAULT 1`)
+}
+
+// ─── 遷移：clients 新增 next_appointment（下次預約日期）────────────────────
+function migrateClientNextAppointment(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(clients)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('next_appointment')) {
+    db.exec(`ALTER TABLE clients ADD COLUMN next_appointment TEXT`)
   }
 }
 

@@ -57,6 +57,7 @@ export interface Client {
   birthday_perks: string   // JSON string: Record<year, {donation?:string, cash?:string, gift?:string}>
   harvest_given: string | null  // date string when harvest gift was given
   shopping_credit: number  // 購物金餘額
+  next_appointment: string | null  // 下次預約日期 YYYY-MM-DD
   legacy_id: string | null
   created_at: string
   updated_at: string
@@ -67,6 +68,7 @@ export interface ClientWithStats extends Client {
   active_contracts: number        // count of incomplete installment contracts
   next_due_date: string | null    // nearest unpaid installment due
   active_packages: number         // packages with remaining sessions
+  overdue_task_days: number | null // 最嚴重逾期天數（有任務且超過上限）
 }
 
 // ═══════════════════════════════
@@ -133,6 +135,12 @@ export interface Package {
   date: string
   legacy_id: string | null
   created_at: string
+  // 鼓勵任務
+  timing_note: string | null       // 顯示用，例如「3-4 週」
+  bonus_desc: string | null        // 贈品說明，例如「B5熱導+頸部」
+  timing_max_weeks: number | null  // 計算用上限週數，例如 4
+  bonus_active: number             // 1=進行中，0=已撤銷
+  last_session_date: string | null // API 計算，上次施作日期
 }
 
 export interface PackageWithClient extends Package {

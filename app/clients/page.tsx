@@ -22,20 +22,36 @@ function daysUntilBirthday(mmdd: string): number {
   return Math.round((bday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 }
 
+function fmtDate(d: string) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+}
+
 function ClientCard({ client, onDelete, showBirthday }: {
   client: ClientWithStats; onDelete: (id: number) => void; showBirthday?: boolean
 }) {
   const days = showBirthday && client.birthday ? daysUntilBirthday(client.birthday) : null
   const [mm, dd] = client.birthday ? client.birthday.split('-') : []
 
+  const overdue = client.overdue_task_days !== null && client.overdue_task_days !== undefined ? Number(client.overdue_task_days) : null
+
+  // 下次預約距今天數
+  const apptDays = client.next_appointment
+    ? Math.round((new Date(client.next_appointment + 'T00:00:00').getTime() - Date.now()) / 86400000)
+    : null
+
   return (
-    <div style={{ display: 'flex', background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px' }}>
+    <div style={{ display: 'flex', background: '#faf8f5', border: `1px solid ${overdue !== null && overdue > 0 ? '#e8a8a8' : '#e0d9d0'}`, borderRadius: '6px' }}>
       {/* Main clickable area */}
       <Link href={`/clients/${client.id}`} style={{ flex: 1, minWidth: 0, padding: '14px 16px' }}
         className="hover:opacity-80 transition-opacity">
         <div className="flex items-center gap-2 flex-wrap">
           <span style={{ color: '#2c2825', fontSize: '1rem' }}>{client.name}</span>
           <MembershipBadge tier={client.level as MembershipLevel} />
+          {overdue !== null && overdue > 0 && (
+            <span style={{ fontSize: '0.65rem', color: '#9a4a4a', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '4px', padding: '1px 6px' }}>
+              ⚠ 套組逾期 {overdue} 天
+            </span>
+          )}
         </div>
         {client.phone && (
           <div style={{ color: '#9a8f84', fontSize: '0.78rem', marginTop: '2px' }}>{client.phone}</div>
@@ -74,16 +90,29 @@ function ClientCard({ client, onDelete, showBirthday }: {
         </div>
       </Link>
 
-      {/* Right column: next due date + delete — separate from the link */}
+      {/* Right column */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', padding: '10px 10px 10px 0', flexShrink: 0, gap: '6px' }}>
-        {client.next_due_date ? (
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ color: '#9a8f84', fontSize: '0.68rem' }}>下期到期</div>
-            <div style={{ color: '#9a6a4a', fontSize: '0.8rem' }}>
-              {new Date(client.next_due_date + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+        <div style={{ textAlign: 'right' }}>
+          {client.next_appointment && (
+            <div>
+              <div style={{ color: '#9a8f84', fontSize: '0.65rem' }}>下次預約</div>
+              <div style={{
+                fontSize: '0.78rem', fontWeight: 500,
+                color: apptDays !== null && apptDays < 0 ? '#9a8f84' : apptDays !== null && apptDays <= 3 ? '#9a4a4a' : '#4a6b52',
+              }}>
+                {fmtDate(client.next_appointment)}
+              </div>
             </div>
-          </div>
-        ) : <div />}
+          )}
+          {!client.next_appointment && client.next_due_date && (
+            <div>
+              <div style={{ color: '#9a8f84', fontSize: '0.68rem' }}>下期到期</div>
+              <div style={{ color: '#9a6a4a', fontSize: '0.8rem' }}>
+                {fmtDate(client.next_due_date)}
+              </div>
+            </div>
+          )}
+        </div>
         <button
           onClick={() => onDelete(client.id)}
           style={{ color: '#c4b8aa', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', fontSize: '0.68rem', padding: '2px 8px', cursor: 'pointer' }}>

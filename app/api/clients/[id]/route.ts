@@ -33,10 +33,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     `).all(contract.id)
   }
 
-  // Fetch packages
-  const packages = db.prepare(`
-    SELECT * FROM packages WHERE client_id = ? ORDER BY date DESC
-  `).all(id)
+  // Fetch packages (with last_session_date computed)
+  const packages = (db.prepare(`
+    SELECT p.*,
+      (SELECT MAX(s.date) FROM sessions s WHERE s.package_id = p.id) AS last_session_date
+    FROM packages p WHERE p.client_id = ? ORDER BY p.date DESC
+  `).all(id))
 
   // Fetch sv_ledger
   const sv_ledger = db.prepare(`
@@ -71,7 +73,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const db = getDb()
   const body = await req.json()
-  const { name, phone, note, level, level_since, birthday } = body
+  const { name, phone, note, level, level_since, birthday, next_appointment } = body
 
   if (!name) return NextResponse.json({ error: '請輸入姓名' }, { status: 400 })
 
@@ -86,9 +88,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       level = @level,
       level_since = @level_since,
       birthday = @birthday,
+      next_appointment = @next_appointment,
       updated_at = datetime('now')
     WHERE id = @id
-  `).run({ id: Number(id), name, phone: phone || null, note: note || null, level: level || '癒米', level_since: level_since || null, birthday: birthday || null })
+  `).run({ id: Number(id), name, phone: phone || null, note: note || null, level: level || '癒米', level_since: level_since || null, birthday: birthday || null, next_appointment: next_appointment || null })
 
   return NextResponse.json({ success: true })
 }

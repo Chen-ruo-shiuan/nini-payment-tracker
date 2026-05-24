@@ -1062,6 +1062,10 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       note: pkg.note ?? '',
       include_in_accumulation: pkg.include_in_accumulation,
       include_in_points: pkg.include_in_points,
+      timing_note: pkg.timing_note ?? '',
+      bonus_desc: pkg.bonus_desc ?? '',
+      timing_max_weeks: pkg.timing_max_weeks ?? undefined,
+      bonus_active: pkg.bonus_active ?? 1,
     })
   }
 
@@ -1092,14 +1096,36 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
   const completedPkgs = client.packages.filter(p => p.used_sessions >= p.total_sessions)
   const [showHistory, setShowHistory] = useState(false)
 
+  async function toggleBonus(pkg: Package) {
+    const newActive = pkg.bonus_active ? 0 : 1
+    const msg = newActive ? `確定恢復「${pkg.service_name}」的達標任務？` : `確定撤銷「${pkg.service_name}」的達標任務？\n客人已無法享有贈品。`
+    if (!confirm(msg)) return
+    await fetch(`/api/packages/${pkg.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...pkg, bonus_active: newActive }),
+    })
+    refresh()
+  }
+
   function PkgCard({ pkg }: { pkg: Package }) {
     const remaining = pkg.total_sessions - pkg.used_sessions
     const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
     const isDone    = remaining <= 0
     const isEditing = editingId === pkg.id
+
+    // 任務倒數計算
+    const hasTask = !isDone && !!pkg.bonus_desc && !!pkg.timing_max_weeks && pkg.bonus_active
+    const lastDate = pkg.last_session_date || pkg.date
+    const deadlineDays = hasTask && lastDate && pkg.timing_max_weeks
+      ? Math.round((new Date(lastDate).getTime() + pkg.timing_max_weeks * 7 * 86400000 - Date.now()) / 86400000)
+      : null
+    const taskColor = deadlineDays === null ? '' : deadlineDays < 0 ? '#9a4a4a' : deadlineDays <= 7 ? '#9a6a2a' : '#4a6b52'
+    const taskBg    = deadlineDays === null ? '' : deadlineDays < 0 ? '#fdf0f0' : deadlineDays <= 7 ? '#fdf5e8' : '#edf3eb'
+
     return (
       <div key={pkg.id} style={{ background: isDone ? '#f5f2ee' : '#faf8f5', border: `1px solid ${isDone ? '#d9d0c5' : '#e0d9d0'}`, borderRadius: '6px', padding: '12px' }}>
             {!isEditing ? (
+              <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ color: '#2c2825', fontSize: '0.9rem' }}>{pkg.service_name}</div>
@@ -1139,6 +1165,56 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   </div>
                 </div>
               </div>
+
+              {/* 鼓勵任務區塊 */}
+              {pkg.bonus_desc && !isDone && (
+                <div style={{
+                  marginTop: '10px', borderTop: '1px solid #e8e2db', paddingTop: '8px',
+                  display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px',
+                }}>
+                  <div style={{ flex: 1 }}>
+                    {pkg.bonus_active ? (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.72rem', color: '#9a6a2a' }}>🎁 達標贈</span>
+                          <span style={{ fontSize: '0.78rem', color: '#6b5044', fontWeight: 500 }}>{pkg.bonus_desc}</span>
+                          {pkg.timing_note && (
+                            <span style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '4px', padding: '1px 6px' }}>
+                              {pkg.timing_note}內回來
+                            </span>
+                          )}
+                        </div>
+                        {deadlineDays !== null && (
+                          <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '0.68rem', background: taskBg, color: taskColor, border: `1px solid ${taskColor}55`, borderRadius: '4px', padding: '2px 8px', fontWeight: 600 }}>
+                              {deadlineDays < 0
+                                ? `⚠ 已逾期 ${Math.abs(deadlineDays)} 天`
+                                : deadlineDays === 0 ? '⚡ 今天截止！'
+                                : `截止還有 ${deadlineDays} 天`}
+                            </span>
+                            <span style={{ fontSize: '0.65rem', color: '#b4aa9e' }}>
+                              上次 {fmtShort(lastDate)}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '0.72rem', color: '#b4aa9e' }}>🎁 達標任務已撤銷（{pkg.bonus_desc}）</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => toggleBonus(pkg)}
+                    style={{
+                      fontSize: '0.65rem', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                      color: pkg.bonus_active ? '#9a4a4a' : '#4a6b52',
+                      border: `1px solid ${pkg.bonus_active ? '#e8a8a8' : '#9ab89e'}`,
+                      borderRadius: '4px', padding: '2px 8px',
+                    }}>
+                    {pkg.bonus_active ? '撤銷任務' : '恢復任務'}
+                  </button>
+                </div>
+              )}
+              </>
             ) : (
               /* ── 編輯表單 ── */
               <div className="space-y-2">
@@ -1181,6 +1257,30 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>備註</label>
                   <input value={editForm.note ?? ''} onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))} style={miniInput} />
                 </div>
+
+                {/* 鼓勵任務設定 */}
+                <div style={{ borderTop: '1px solid #e8e2db', paddingTop: '8px' }}>
+                  <p style={{ color: '#9a6a2a', fontSize: '0.68rem', marginBottom: '6px', letterSpacing: '0.05em' }}>🎁 達標任務（選填）</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>回訪間隔（顯示用）</label>
+                      <input value={editForm.timing_note ?? ''} onChange={e => setEditForm(f => ({ ...f, timing_note: e.target.value }))}
+                        placeholder="例：3-4 週" style={miniInput} />
+                    </div>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>最長幾週（計算截止日）</label>
+                      <input type="number" min="1" max="12" value={editForm.timing_max_weeks ?? ''}
+                        onChange={e => setEditForm(f => ({ ...f, timing_max_weeks: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="例：4" style={miniInput} />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '6px' }}>
+                    <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>達標贈品內容</label>
+                    <input value={editForm.bonus_desc ?? ''} onChange={e => setEditForm(f => ({ ...f, bonus_desc: e.target.value }))}
+                      placeholder="例：B5熱導+頸部" style={miniInput} />
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', gap: '8px', fontSize: '0.75rem' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#6b5f54', cursor: 'pointer' }}>
                     <input type="checkbox" checked={!!editForm.include_in_accumulation} onChange={e => setEditForm(f => ({ ...f, include_in_accumulation: e.target.checked ? 1 : 0 }))} />
