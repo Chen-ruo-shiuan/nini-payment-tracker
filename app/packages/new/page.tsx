@@ -52,6 +52,21 @@ function NewPackageForm() {
   const [inclAccum, setInclAccum] = useState(true)
   const [inclPoints, setInclPoints] = useState(true)
 
+  // 鼓勵任務
+  const [bonusDesc, setBonusDesc]           = useState('')        // 贈品說明
+  const [timingNote, setTimingNote]         = useState('')        // 回訪週期顯示文字
+  const [timingMaxWeeks, setTimingMaxWeeks] = useState('')        // 最長週數（計算用）
+  const [expiryDate, setExpiryDate]         = useState('')        // 建議使用期限
+  const [showTask, setShowTask]             = useState(false)     // 展開/收起
+
+  // 購買日改變時，自動更新期限預設（6個月後）
+  function autoExpiry(d: string) {
+    if (!d) return ''
+    const dt = new Date(d + 'T00:00:00')
+    dt.setMonth(dt.getMonth() + 6)
+    return dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  }
+
   // 分期設定
   interface InstPeriod { due_date: string; amount: string }
   const [instPeriods, setInstPeriods] = useState<InstPeriod[]>([])
@@ -190,6 +205,10 @@ function NewPackageForm() {
           date, note,
           include_in_accumulation: inclAccum,
           include_in_points: inclPoints,
+          bonus_desc:       bonusDesc       || null,
+          timing_note:      timingNote      || null,
+          timing_max_weeks: timingMaxWeeks  ? Number(timingMaxWeeks) : null,
+          expiry_date:      expiryDate      || null,
         }),
       })
       const data = await res.json()
@@ -558,13 +577,69 @@ function NewPackageForm() {
 
         {/* ── 購買日期 ── */}
         <Field label="購買日期">
-          <input value={date} onChange={e => setDate(e.target.value)} type="date" style={iStyle} />
+          <input value={date} onChange={e => {
+            setDate(e.target.value)
+            if (showTask) setExpiryDate(autoExpiry(e.target.value))
+          }} type="date" style={iStyle} />
         </Field>
 
         {/* ── 備註 ── */}
         <Field label="備註">
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="選填" style={iStyle} />
         </Field>
+
+        {/* ── 鼓勵任務（選填）── */}
+        <div style={{ background: '#faf8f5', border: `1px solid ${showTask ? '#c4a8d8' : '#e0d9d0'}`, borderRadius: '8px', overflow: 'hidden' }}>
+          <button type="button"
+            onClick={() => {
+              setShowTask(v => !v)
+              if (!showTask && !expiryDate) setExpiryDate(autoExpiry(date))
+            }}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <span style={{ color: showTask ? '#7a3d8a' : '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>
+              🎁 鼓勵任務（選填）
+            </span>
+            <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{showTask ? '▲' : '▼'}</span>
+          </button>
+          {showTask && (
+            <div style={{ borderTop: '1px solid #e8d8f0', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ color: '#9a8f84', fontSize: '0.72rem', margin: 0 }}>
+                若客人確認可達標，建立時即啟動任務（首次施作起開始計算回訪倒數）
+              </p>
+
+              <Field label="贈品說明">
+                <input value={bonusDesc} onChange={e => setBonusDesc(e.target.value)}
+                  placeholder="例：B5熱導＋頸部" style={iStyle} />
+              </Field>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <Field label="回訪週期（顯示用）">
+                  <input value={timingNote} onChange={e => setTimingNote(e.target.value)}
+                    placeholder="例：3-4週" style={iStyle} />
+                </Field>
+                <Field label="最長週數（計算用）">
+                  <input value={timingMaxWeeks} onChange={e => setTimingMaxWeeks(e.target.value)}
+                    type="number" min="1" placeholder="例：4" style={iStyle} />
+                </Field>
+              </div>
+
+              <Field label="建議使用期限">
+                <input value={expiryDate} onChange={e => setExpiryDate(e.target.value)}
+                  type="date" style={iStyle} />
+                <p style={{ color: '#b4aa9e', fontSize: '0.7rem', marginTop: '4px', margin: '4px 0 0' }}>
+                  預設購買日起 6 個月
+                </p>
+              </Field>
+
+              {bonusDesc && (
+                <div style={{ background: '#f5eaf8', border: '1px solid #c4a8d8', borderRadius: '6px', padding: '10px 12px', fontSize: '0.78rem', color: '#7a3d8a' }}>
+                  🎁 {bonusDesc}
+                  {timingNote && <span style={{ color: '#9a6ab0', marginLeft: '8px' }}>（{timingNote}回訪）</span>}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* ── 計算設定 ── */}
         <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }} className="space-y-2">

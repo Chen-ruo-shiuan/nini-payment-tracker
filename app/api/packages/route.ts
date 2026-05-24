@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     client_id, service_name, total_sessions,
     unit_price, unit_price_orig, prepaid_amount, payment_method,
     date, note, include_in_accumulation, include_in_points,
+    timing_note, bonus_desc, timing_max_weeks, bonus_active, expiry_date,
   } = body
 
   if (!client_id)    return NextResponse.json({ error: '請選擇客人' }, { status: 400 })
@@ -49,11 +50,13 @@ export async function POST(req: NextRequest) {
       INSERT INTO packages
         (client_id, service_name, total_sessions, used_sessions,
          unit_price, unit_price_orig, prepaid_amount, payment_method,
-         include_in_accumulation, include_in_points, note, date)
+         include_in_accumulation, include_in_points, note, date,
+         timing_note, bonus_desc, timing_max_weeks, bonus_active, expiry_date)
       VALUES
         (@client_id, @service_name, @total_sessions, 0,
          @unit_price, @unit_price_orig, @prepaid_amount, @payment_method,
-         @include_in_acc, @include_in_pts, @note, @date)
+         @include_in_acc, @include_in_pts, @note, @date,
+         @timing_note, @bonus_desc, @timing_max_weeks, @bonus_active, @expiry_date)
     `).run({
       client_id: Number(client_id),
       service_name,
@@ -66,6 +69,11 @@ export async function POST(req: NextRequest) {
       include_in_pts: include_in_points       ? 1 : 0,
       note:  note  || null,
       date:  finalDate,
+      timing_note:      timing_note      || null,
+      bonus_desc:       bonus_desc       || null,
+      timing_max_weeks: timing_max_weeks ? Number(timing_max_weeks) : null,
+      bonus_active:     bonus_desc ? 1 : 0,   // 有設贈品才啟動任務
+      expiry_date:      expiry_date      || null,
     })
     pkgId = res.lastInsertRowid
 
