@@ -140,6 +140,8 @@ export interface Package {
   bonus_desc: string | null        // 贈品說明，例如「B5熱導+頸部」
   timing_max_weeks: number | null  // 計算用上限週數，例如 4
   bonus_active: number             // 1=進行中，0=已撤銷
+  extension_count: number          // 已展延次數，最多 2
+  expiry_date: string | null       // 建議使用期限（整個套組）
   last_session_date: string | null // API 計算，上次施作日期
 }
 

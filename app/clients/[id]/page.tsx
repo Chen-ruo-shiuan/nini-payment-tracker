@@ -1066,6 +1066,8 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       bonus_desc: pkg.bonus_desc ?? '',
       timing_max_weeks: pkg.timing_max_weeks ?? undefined,
       bonus_active: pkg.bonus_active ?? 1,
+      extension_count: pkg.extension_count ?? 0,
+      expiry_date: pkg.expiry_date ?? '',
     })
   }
 
@@ -1113,14 +1115,20 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     const isDone    = remaining <= 0
     const isEditing = editingId === pkg.id
 
-    // 任務倒數計算
+    // 任務倒數計算（含展延）
     const hasTask = !isDone && !!pkg.bonus_desc && !!pkg.timing_max_weeks && pkg.bonus_active
     const lastDate = pkg.last_session_date || pkg.date
-    const deadlineDays = hasTask && lastDate && pkg.timing_max_weeks
-      ? Math.round((new Date(lastDate).getTime() + pkg.timing_max_weeks * 7 * 86400000 - Date.now()) / 86400000)
+    const effectiveMaxWeeks = (pkg.timing_max_weeks ?? 0) + (pkg.extension_count ?? 0)
+    const deadlineDays = hasTask && lastDate && effectiveMaxWeeks
+      ? Math.round((new Date(lastDate).getTime() + effectiveMaxWeeks * 7 * 86400000 - Date.now()) / 86400000)
       : null
     const taskColor = deadlineDays === null ? '' : deadlineDays < 0 ? '#9a4a4a' : deadlineDays <= 7 ? '#9a6a2a' : '#4a6b52'
     const taskBg    = deadlineDays === null ? '' : deadlineDays < 0 ? '#fdf0f0' : deadlineDays <= 7 ? '#fdf5e8' : '#edf3eb'
+
+    // 建議使用期限
+    const expiryDays = pkg.expiry_date
+      ? Math.round((new Date(pkg.expiry_date + 'T00:00:00').getTime() - Date.now()) / 86400000)
+      : null
 
     return (
       <div key={pkg.id} style={{ background: isDone ? '#f5f2ee' : '#faf8f5', border: `1px solid ${isDone ? '#d9d0c5' : '#e0d9d0'}`, borderRadius: '6px', padding: '12px' }}>
@@ -1167,51 +1175,101 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
               </div>
 
               {/* 鼓勵任務區塊 */}
-              {pkg.bonus_desc && !isDone && (
-                <div style={{
-                  marginTop: '10px', borderTop: '1px solid #e8e2db', paddingTop: '8px',
-                  display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px',
-                }}>
-                  <div style={{ flex: 1 }}>
-                    {pkg.bonus_active ? (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '0.72rem', color: '#9a6a2a' }}>🎁 達標贈</span>
-                          <span style={{ fontSize: '0.78rem', color: '#6b5044', fontWeight: 500 }}>{pkg.bonus_desc}</span>
-                          {pkg.timing_note && (
-                            <span style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '4px', padding: '1px 6px' }}>
-                              {pkg.timing_note}內回來
-                            </span>
-                          )}
-                        </div>
-                        {deadlineDays !== null && (
-                          <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '0.68rem', background: taskBg, color: taskColor, border: `1px solid ${taskColor}55`, borderRadius: '4px', padding: '2px 8px', fontWeight: 600 }}>
-                              {deadlineDays < 0
-                                ? `⚠ 已逾期 ${Math.abs(deadlineDays)} 天`
-                                : deadlineDays === 0 ? '⚡ 今天截止！'
-                                : `截止還有 ${deadlineDays} 天`}
-                            </span>
-                            <span style={{ fontSize: '0.65rem', color: '#b4aa9e' }}>
-                              上次 {fmtShort(lastDate)}
-                            </span>
-                          </div>
+              {(pkg.bonus_desc || pkg.expiry_date) && !isDone && (
+                <div style={{ marginTop: '10px', borderTop: '1px solid #e8e2db', paddingTop: '8px' }}>
+
+                  {/* 達標任務 */}
+                  {pkg.bonus_desc && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: pkg.expiry_date ? '6px' : 0 }}>
+                      <div style={{ flex: 1 }}>
+                        {pkg.bonus_active ? (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#9a6a2a' }}>🎁 達標贈</span>
+                              <span style={{ fontSize: '0.78rem', color: '#6b5044', fontWeight: 500 }}>{pkg.bonus_desc}</span>
+                              {pkg.timing_note && (
+                                <span style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '4px', padding: '1px 6px' }}>
+                                  {pkg.timing_note}內回來
+                                </span>
+                              )}
+                            </div>
+                            {deadlineDays !== null && (
+                              <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.68rem', background: taskBg, color: taskColor, border: `1px solid ${taskColor}55`, borderRadius: '4px', padding: '2px 8px', fontWeight: 600 }}>
+                                  {deadlineDays < 0
+                                    ? `⚠ 已逾期 ${Math.abs(deadlineDays)} 天`
+                                    : deadlineDays === 0 ? '⚡ 今天截止！'
+                                    : `截止還有 ${deadlineDays} 天`}
+                                </span>
+                                <span style={{ fontSize: '0.65rem', color: '#b4aa9e' }}>
+                                  上次 {fmtShort(lastDate)}
+                                </span>
+                                {(pkg.extension_count ?? 0) > 0 && (
+                                  <span style={{ fontSize: '0.65rem', color: '#7a6a9a', background: '#f0eef8', border: '1px solid #c4b8d8', borderRadius: '4px', padding: '1px 6px' }}>
+                                    已展延 {pkg.extension_count}/2 次
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span style={{ fontSize: '0.72rem', color: '#b4aa9e' }}>🎁 達標任務已撤銷（{pkg.bonus_desc}）</span>
                         )}
-                      </>
-                    ) : (
-                      <span style={{ fontSize: '0.72rem', color: '#b4aa9e' }}>🎁 達標任務已撤銷（{pkg.bonus_desc}）</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => toggleBonus(pkg)}
-                    style={{
-                      fontSize: '0.65rem', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                      color: pkg.bonus_active ? '#9a4a4a' : '#4a6b52',
-                      border: `1px solid ${pkg.bonus_active ? '#e8a8a8' : '#9ab89e'}`,
-                      borderRadius: '4px', padding: '2px 8px',
-                    }}>
-                    {pkg.bonus_active ? '撤銷任務' : '恢復任務'}
-                  </button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
+                        {pkg.bonus_active && pkg.timing_max_weeks && (
+                          <button
+                            onClick={async () => {
+                              const ext = pkg.extension_count ?? 0
+                              if (ext >= 2) { alert('已達最大展延次數（2 次）'); return }
+                              if (!confirm(`確定為「${pkg.service_name}」申請第 ${ext + 1} 次展延（+1 週）？`)) return
+                              await fetch(`/api/packages/${pkg.id}`, {
+                                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ ...pkg, extension_count: ext + 1 }),
+                              })
+                              refresh()
+                            }}
+                            disabled={(pkg.extension_count ?? 0) >= 2}
+                            style={{
+                              fontSize: '0.65rem', background: 'none', cursor: (pkg.extension_count ?? 0) >= 2 ? 'not-allowed' : 'pointer',
+                              color: (pkg.extension_count ?? 0) >= 2 ? '#c4b8aa' : '#7a6a9a',
+                              border: `1px solid ${(pkg.extension_count ?? 0) >= 2 ? '#e0d9d0' : '#c4b8d8'}`,
+                              borderRadius: '4px', padding: '2px 8px', whiteSpace: 'nowrap',
+                            }}>
+                            展延 {(pkg.extension_count ?? 0)}/2
+                          </button>
+                        )}
+                        <button
+                          onClick={() => toggleBonus(pkg)}
+                          style={{
+                            fontSize: '0.65rem', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                            color: pkg.bonus_active ? '#9a4a4a' : '#4a6b52',
+                            border: `1px solid ${pkg.bonus_active ? '#e8a8a8' : '#9ab89e'}`,
+                            borderRadius: '4px', padding: '2px 8px',
+                          }}>
+                          {pkg.bonus_active ? '撤銷任務' : '恢復任務'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 建議使用期限 */}
+                  {pkg.expiry_date && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: pkg.bonus_desc ? '4px' : 0 }}>
+                      <span style={{ fontSize: '0.68rem', color: '#9a8f84' }}>📅 建議使用期限</span>
+                      <span style={{
+                        fontSize: '0.72rem', fontWeight: 500,
+                        color: expiryDays !== null && expiryDays < 0 ? '#9a4a4a' : expiryDays !== null && expiryDays <= 30 ? '#9a6a2a' : '#6b5f54',
+                      }}>
+                        {new Date(pkg.expiry_date + 'T00:00:00').toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                        {expiryDays !== null && (
+                          <span style={{ marginLeft: '4px', fontWeight: 400, color: expiryDays < 0 ? '#9a4a4a' : '#9a8f84', fontSize: '0.65rem' }}>
+                            {expiryDays < 0 ? `（已過期 ${Math.abs(expiryDays)} 天）` : `（剩 ${expiryDays} 天）`}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
               </>
@@ -1278,6 +1336,15 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                     <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>達標贈品內容</label>
                     <input value={editForm.bonus_desc ?? ''} onChange={e => setEditForm(f => ({ ...f, bonus_desc: e.target.value }))}
                       placeholder="例：B5熱導+頸部" style={miniInput} />
+                  </div>
+                  <div style={{ marginTop: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>建議使用期限</label>
+                      <input type="date" value={editForm.expiry_date ?? ''} onChange={e => setEditForm(f => ({ ...f, expiry_date: e.target.value }))} style={miniInput} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
+                      <span style={{ color: '#b4aa9e', fontSize: '0.65rem' }}>提示：購買日 +6 個月</span>
+                    </div>
                   </div>
                 </div>
 

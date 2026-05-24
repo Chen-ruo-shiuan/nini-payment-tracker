@@ -22,7 +22,7 @@ export async function PATCH(
     unit_price, unit_price_orig, prepaid_amount, payment_method,
     date, note,
     include_in_accumulation, include_in_points,
-    timing_note, bonus_desc, timing_max_weeks, bonus_active,
+    timing_note, bonus_desc, timing_max_weeks, bonus_active, extension_count, expiry_date,
   } = body
 
   db.prepare(`
@@ -41,7 +41,9 @@ export async function PATCH(
       timing_note             = @timing_note,
       bonus_desc              = @bonus_desc,
       timing_max_weeks        = @timing_max_weeks,
-      bonus_active            = @bonus_active
+      bonus_active            = @bonus_active,
+      extension_count         = @extension_count,
+      expiry_date             = @expiry_date
     WHERE id = @id
   `).run({
     id: Number(id),
@@ -60,6 +62,8 @@ export async function PATCH(
     bonus_desc:              bonus_desc || null,
     timing_max_weeks:        timing_max_weeks ? Number(timing_max_weeks) : null,
     bonus_active:            bonus_active !== undefined ? (bonus_active ? 1 : 0) : 1,
+    extension_count:         Number(extension_count) || 0,
+    expiry_date:             expiry_date || null,
   })
 
   return NextResponse.json({ success: true })
