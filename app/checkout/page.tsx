@@ -131,12 +131,30 @@ export default function CheckoutPage() {
     fetchDailyLog(logDate)
   }
 
+  // Today's appointments (quick-select)
+  interface ApptWithClient { id: number; client_id: number; date: string; note: string | null; client_name: string; client_level: string; client_phone: string | null }
+  const [todayAppts, setTodayAppts] = useState<ApptWithClient[]>([])
+  useEffect(() => {
+    fetch(`/api/appointments?date=${today()}`)
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setTodayAppts(data) })
+      .catch(() => {})
+  }, [])
+
   // Client
   const [clientSearch, setClientSearch] = useState('')
   const [clients, setClients] = useState<ClientWithStats[]>([])
   const [selectedClient, setSelectedClient] = useState<ClientWithStats | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const [clientPkgs, setClientPkgs] = useState<PkgOption[]>([])
+
+  async function selectClientById(clientId: number, clientName: string) {
+    // Use client detail endpoint (returns superset of ClientWithStats fields)
+    const data = await (await fetch(`/api/clients/${clientId}`)).json() as ClientWithStats
+    setSelectedClient(data)
+    setClientSearch(clientName)
+    setShowDropdown(false)
+  }
 
   // Form
   const [date, setDate] = useState(today())
@@ -311,6 +329,30 @@ export default function CheckoutPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+
+        {/* ── 今日預約快選 ── */}
+        {todayAppts.length > 0 && !selectedClient && (
+          <div style={{ background: '#f5f2ee', border: '1px solid #ddd8d0', borderRadius: '8px', padding: '12px' }}>
+            <div style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.06em', marginBottom: '8px' }}>
+              📅 今日預約
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {todayAppts.map(appt => (
+                <button key={appt.id} type="button"
+                  onClick={() => selectClientById(appt.client_id, appt.client_name)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                    background: '#faf8f5', border: '1px solid #c8c4be', borderRadius: '8px',
+                    padding: '8px 14px', cursor: 'pointer', textAlign: 'left',
+                    transition: 'border-color 0.15s',
+                  }}>
+                  <span style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500 }}>{appt.client_name}</span>
+                  {appt.note && <span style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '2px' }}>{appt.note}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── 客人 & 日期 ── */}
         <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }} className="space-y-3">
