@@ -8,7 +8,7 @@ import { PAYMENT_METHODS, ClientWithStats, MembershipLevel, LEVEL_POINTS, YODOMO
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Item  { id: string; category: string; label: string; price: string; qty: number; pkg_id?: number; custom?: boolean }
 interface Pay   { id: string; method: string; amount: string }
-interface PkgOption { id: number; service_name: string; remaining: number; unit_price: number }
+interface PkgOption { id: number; service_name: string; remaining: number; unit_price: number; bonus_desc: string | null; timing_note: string | null; bonus_active: number }
 
 const PRESET_SERVICES  = ['精細光彩', '原液調理', '泡光氧彗', '小顏骨氣', '雨林頭療', '森林癒撥筋']
 const PRESET_ADDONS    = ['全臉粉清', '深皮超導', '光波嫩膚', '臭氧離子']
@@ -37,7 +37,7 @@ interface DailyCheckout {
   id: number; client_id: number | null; client_name: string | null
   date: string; note: string | null; total_amount: number
   incl_course: number; incl_product: number
-  items: { id: number; category: string; label: string; price: number; qty: number; pkg_id?: number }[]
+  items: { id: number; category: string; label: string; price: number; qty: number; pkg_id?: number; bonus_desc?: string | null; timing_note?: string | null; bonus_active?: number }[]
   payments: { id: number; method: string; amount: number }[]
 }
 
@@ -191,11 +191,14 @@ export default function CheckoutPage() {
     if (!selectedClient) { setClientPkgs([]); return }
     fetch(`/api/packages?client_id=${selectedClient.id}&status=active`)
       .then(r => r.json())
-      .then((pkgs: { id: number; service_name: string; total_sessions: number; used_sessions: number; unit_price: number }[]) =>
+      .then((pkgs: { id: number; service_name: string; total_sessions: number; used_sessions: number; unit_price: number; bonus_desc?: string | null; timing_note?: string | null; bonus_active?: number }[]) =>
         setClientPkgs(pkgs.map(p => ({
           id: p.id, service_name: p.service_name,
           remaining: p.total_sessions - p.used_sessions,
           unit_price: p.unit_price,
+          bonus_desc:  p.bonus_desc  ?? null,
+          timing_note: p.timing_note ?? null,
+          bonus_active: p.bonus_active ?? 0,
         }))))
   }, [selectedClient])
 
@@ -304,6 +307,32 @@ export default function CheckoutPage() {
               )}
             </div>
           )}
+
+          {/* 🎁 本次套組鼓勵任務 */}
+          {(() => {
+            const tasks = items
+              .filter(i => i.category === '商品券' && i.pkg_id)
+              .map(i => clientPkgs.find(p => p.id === i.pkg_id))
+              .filter((p): p is PkgOption => !!p?.bonus_desc && !!p.bonus_active)
+            if (tasks.length === 0) return null
+            return (
+              <div style={{ marginTop: '20px', background: '#f5eaf8', border: '1px solid #c4a8d8', borderRadius: '8px', padding: '12px 16px' }}>
+                <div style={{ color: '#7a3d8a', fontSize: '0.72rem', letterSpacing: '0.06em', marginBottom: '8px' }}>
+                  📋 今日鼓勵任務
+                </div>
+                {tasks.map((pkg, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: i > 0 ? '6px' : 0 }}>
+                    <span style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500 }}>🎁 {pkg.bonus_desc}</span>
+                    {pkg.timing_note && (
+                      <span style={{ fontSize: '0.72rem', color: '#9a6ab0', background: '#ede0f5', borderRadius: '4px', padding: '2px 8px' }}>
+                        {pkg.timing_note}回訪
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={reset}
@@ -421,7 +450,7 @@ export default function CheckoutPage() {
           </div>
 
           {items.map((item, idx) => (
-            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: '6px', alignItems: 'center' }}>
+            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: '6px', alignItems: 'center', rowGap: '4px' }}>
               {/* Category */}
               <select value={item.category}
                 onChange={e => {
@@ -567,6 +596,18 @@ export default function CheckoutPage() {
                 <button type="button" onClick={() => removeItem(item.id)}
                   style={{ color: '#c4b8aa', background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer' }}>✕</button>
               )}
+
+              {/* 🎁 鼓勵任務提示（商品券且套組有任務）*/}
+              {item.category === '商品券' && item.pkg_id && (() => {
+                const pkg = clientPkgs.find(p => p.id === item.pkg_id)
+                if (!pkg?.bonus_desc || !pkg.bonus_active) return null
+                return (
+                  <div style={{ gridColumn: '1 / -1', background: '#f5eaf8', border: '1px solid #c4a8d8', borderRadius: '6px', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#7a3d8a', fontWeight: 500 }}>🎁 {pkg.bonus_desc}</span>
+                    {pkg.timing_note && <span style={{ fontSize: '0.68rem', color: '#9a6ab0', background: '#ede0f5', borderRadius: '4px', padding: '1px 8px' }}>{pkg.timing_note}回訪</span>}
+                  </div>
+                )
+              })()}
             </div>
           ))}
 
@@ -770,11 +811,23 @@ export default function CheckoutPage() {
                           </div>
                           <div className="space-y-0.5">
                             {co.items.map(item => (
-                              <div key={item.id} style={{ display: 'flex', gap: '6px', fontSize: '0.75rem' }}>
-                                <span style={{ color: '#b4aa9e', minWidth: '44px' }}>{item.category}</span>
-                                <span style={{ color: '#4a4642' }}>{item.label}</span>
-                                {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
-                                <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
+                              <div key={item.id}>
+                                <div style={{ display: 'flex', gap: '6px', fontSize: '0.75rem' }}>
+                                  <span style={{ color: '#b4aa9e', minWidth: '44px' }}>{item.category}</span>
+                                  <span style={{ color: '#4a4642' }}>{item.label}</span>
+                                  {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
+                                  <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
+                                </div>
+                                {item.category === '商品券' && item.bonus_desc && item.bonus_active === 1 && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', paddingLeft: '50px' }}>
+                                    <span style={{ fontSize: '0.68rem', color: '#7a3d8a', background: '#f5eaf8', border: '1px solid #d4b8e8', borderRadius: '4px', padding: '1px 7px' }}>
+                                      🎁 {item.bonus_desc}
+                                    </span>
+                                    {item.timing_note && (
+                                      <span style={{ fontSize: '0.65rem', color: '#9a8f84' }}>{item.timing_note}回訪</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
