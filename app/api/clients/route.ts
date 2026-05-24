@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
         WHERE p.client_id = c.id AND p.used_sessions < p.total_sessions) as active_packages,
       (SELECT MAX(
           CAST(julianday('now') - julianday(
-            COALESCE((SELECT MAX(s.date) FROM sessions s WHERE s.package_id = p.id), p.date)
+            (SELECT MAX(s.date) FROM sessions s WHERE s.package_id = p.id)
           ) - (p.timing_max_weeks * 7) AS INTEGER)
         )
         FROM packages p
@@ -84,6 +84,7 @@ export async function GET(req: NextRequest) {
           AND p.bonus_active = 1
           AND p.timing_max_weeks IS NOT NULL
           AND p.bonus_desc IS NOT NULL
+          AND (SELECT MAX(s.date) FROM sessions s WHERE s.package_id = p.id) IS NOT NULL
       ) as overdue_task_days
     FROM clients c
     ${where}
