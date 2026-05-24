@@ -16,7 +16,8 @@ export async function PATCH(
     unit_price: number; unit_price_orig: number; prepaid_amount: number; payment_method: string;
     date: string; note: string | null; include_in_accumulation: number; include_in_points: number;
     timing_note: string | null; bonus_desc: string | null; timing_max_weeks: number | null;
-    bonus_active: number; extension_count: number; expiry_date: string | null; opened_date: string | null; legacy_id: string | null;
+    bonus_active: number; extension_count: number; expiry_date: string | null; opened_date: string | null;
+    completion_bonus_desc: string | null; completion_weeks: number | null; legacy_id: string | null;
   } | undefined
   if (!existing) return NextResponse.json({ error: '找不到套組' }, { status: 404 })
 
@@ -45,7 +46,9 @@ export async function PATCH(
       bonus_active            = @bonus_active,
       extension_count         = @extension_count,
       expiry_date             = @expiry_date,
-      opened_date             = @opened_date
+      opened_date             = @opened_date,
+      completion_bonus_desc   = @completion_bonus_desc,
+      completion_weeks        = @completion_weeks
     WHERE id = @id
   `).run({
     id: Number(id),
@@ -67,6 +70,8 @@ export async function PATCH(
     extension_count:         has('extension_count')         ? (Number(body.extension_count) || 0) : existing.extension_count,
     expiry_date:             has('expiry_date')             ? (body.expiry_date || null)       : existing.expiry_date,
     opened_date:             has('opened_date')             ? (body.opened_date || null)       : existing.opened_date,
+    completion_bonus_desc:   has('completion_bonus_desc')   ? (body.completion_bonus_desc || null) : existing.completion_bonus_desc,
+    completion_weeks:        has('completion_weeks')        ? (body.completion_weeks ? Number(body.completion_weeks) : null) : existing.completion_weeks,
   })
 
   return NextResponse.json({ success: true })

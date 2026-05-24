@@ -401,7 +401,9 @@ function migratePackageIncentive(db: Database.Database) {
   if (!cols.includes('bonus_active'))     db.exec(`ALTER TABLE packages ADD COLUMN bonus_active INTEGER NOT NULL DEFAULT 1`)
   if (!cols.includes('extension_count'))  db.exec(`ALTER TABLE packages ADD COLUMN extension_count INTEGER NOT NULL DEFAULT 0`)
   if (!cols.includes('expiry_date'))      db.exec(`ALTER TABLE packages ADD COLUMN expiry_date TEXT`)
-  if (!cols.includes('opened_date'))      db.exec(`ALTER TABLE packages ADD COLUMN opened_date TEXT`)
+  if (!cols.includes('opened_date'))           db.exec(`ALTER TABLE packages ADD COLUMN opened_date TEXT`)
+  if (!cols.includes('completion_bonus_desc')) db.exec(`ALTER TABLE packages ADD COLUMN completion_bonus_desc TEXT`)
+  if (!cols.includes('completion_weeks'))      db.exec(`ALTER TABLE packages ADD COLUMN completion_weeks INTEGER`)
 }
 
 // ─── 遷移：clients 新增 next_appointment（下次預約日期）────────────────────

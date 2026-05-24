@@ -1070,6 +1070,8 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       extension_count: pkg.extension_count ?? 0,
       expiry_date: pkg.expiry_date ?? '',
       opened_date: pkg.opened_date ?? '',
+      completion_bonus_desc: pkg.completion_bonus_desc ?? '',
+      completion_weeks: pkg.completion_weeks ?? undefined,
     })
   }
 
@@ -1130,6 +1132,17 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     // 建議使用期限
     const expiryDays = pkg.expiry_date
       ? Math.round((new Date(pkg.expiry_date + 'T00:00:00').getTime() - Date.now()) / 86400000)
+      : null
+
+    // 完成鼓勵計算
+    // 達標條件：已完成全部堂數 + 開封日到最後施作日在 completion_weeks 週內
+    const hasCompletionBonus = !!pkg.completion_bonus_desc && !!pkg.completion_weeks
+    const completionAchieved = hasCompletionBonus && isDone && !!pkg.opened_date && !!pkg.last_session_date
+      && Math.round((new Date(pkg.last_session_date).getTime() - new Date(pkg.opened_date).getTime()) / 86400000)
+        <= (pkg.completion_weeks! * 7)
+    // 進行中：尚未完成但有開封日，計算剩餘期限
+    const completionDeadlineDays = hasCompletionBonus && !isDone && pkg.opened_date
+      ? Math.round((new Date(pkg.opened_date).getTime() + pkg.completion_weeks! * 7 * 86400000 - Date.now()) / 86400000)
       : null
 
     return (
@@ -1279,6 +1292,46 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                       </span>
                     </div>
                   )}
+
+                  {/* 完成鼓勵 */}
+                  {hasCompletionBonus && (
+                    <div style={{ marginTop: '8px', background: completionAchieved ? '#edf3eb' : '#faf5fe', border: `1px solid ${completionAchieved ? '#9ab89e' : '#d4b0e8'}`, borderRadius: '6px', padding: '8px 10px' }}>
+                      {completionAchieved ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#3a7a4a', fontWeight: 600 }}>🎉 完成鼓勵達標！</span>
+                          <span style={{ fontSize: '0.75rem', color: '#4a6b52' }}>{pkg.completion_bonus_desc}</span>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.72rem', color: '#7a4a9a', fontWeight: 500 }}>🎯 完成鼓勵</span>
+                            <span style={{ fontSize: '0.72rem', color: '#6b5f54' }}>{pkg.completion_bonus_desc}</span>
+                          </div>
+                          {pkg.opened_date && completionDeadlineDays !== null && (
+                            <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '0.68rem', color: '#9a8f84' }}>
+                                {pkg.completion_weeks} 週內完成全部 {pkg.total_sessions} 堂
+                              </span>
+                              <span style={{
+                                fontSize: '0.68rem', fontWeight: 600,
+                                color: completionDeadlineDays < 0 ? '#9a4a4a' : completionDeadlineDays <= 14 ? '#9a6a2a' : '#7a4a9a',
+                                background: completionDeadlineDays < 0 ? '#fdf0f0' : completionDeadlineDays <= 14 ? '#fdf5e8' : '#f0ebf8',
+                                border: `1px solid ${completionDeadlineDays < 0 ? '#e8a8a8' : completionDeadlineDays <= 14 ? '#e8c878' : '#c4a8d8'}`,
+                                borderRadius: '4px', padding: '1px 7px',
+                              }}>
+                                {completionDeadlineDays < 0
+                                  ? `已逾期 ${Math.abs(completionDeadlineDays)} 天`
+                                  : `還有 ${completionDeadlineDays} 天截止`}
+                              </span>
+                            </div>
+                          )}
+                          {!pkg.opened_date && (
+                            <div style={{ marginTop: '2px', fontSize: '0.65rem', color: '#b4aa9e' }}>開封後開始計算</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               </>
@@ -1358,6 +1411,26 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   </div>
                   <div style={{ marginTop: '2px' }}>
                     <span style={{ color: '#b4aa9e', fontSize: '0.65rem' }}>開封日：首次施作會自動填入；期限：購買日 +6 個月</span>
+                  </div>
+                </div>
+
+                {/* 完成鼓勵設定 */}
+                <div style={{ borderTop: '1px solid #e8e2db', paddingTop: '8px' }}>
+                  <p style={{ color: '#7a4a9a', fontSize: '0.68rem', marginBottom: '6px', letterSpacing: '0.05em' }}>🎯 完成鼓勵（選填）</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>附加內容（完成後可獲得）</label>
+                      <input value={editForm.completion_bonus_desc ?? ''} onChange={e => setEditForm(f => ({ ...f, completion_bonus_desc: e.target.value }))}
+                        placeholder="例：附加泡光氧彗（梅）$2,880" style={miniInput} />
+                    </div>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>完成期限（週）</label>
+                      <input type="number" min="1" max="52" value={editForm.completion_weeks ?? ''} onChange={e => setEditForm(f => ({ ...f, completion_weeks: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="例：8（= 2個月）" style={miniInput} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
+                      <span style={{ color: '#b4aa9e', fontSize: '0.65rem' }}>開封日起算，全部堂數在期限內完成即達標</span>
+                    </div>
                   </div>
                 </div>
 

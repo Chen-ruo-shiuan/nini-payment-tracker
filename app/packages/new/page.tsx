@@ -52,6 +52,11 @@ function NewPackageForm() {
   const [inclAccum, setInclAccum] = useState(true)
   const [inclPoints, setInclPoints] = useState(true)
 
+  // 完成鼓勵
+  const [completionBonusDesc, setCompletionBonusDesc] = useState('')
+  const [completionWeeks, setCompletionWeeks]         = useState('')
+  const [showCompletion, setShowCompletion]           = useState(false)
+
   // 鼓勵任務
   const [bonusDesc, setBonusDesc]           = useState('')        // 贈品說明
   const [timingNote, setTimingNote]         = useState('')        // 回訪週期顯示文字
@@ -205,10 +210,12 @@ function NewPackageForm() {
           date, note,
           include_in_accumulation: inclAccum,
           include_in_points: inclPoints,
-          bonus_desc:       bonusDesc       || null,
-          timing_note:      timingNote      || null,
-          timing_max_weeks: timingMaxWeeks  ? Number(timingMaxWeeks) : null,
-          expiry_date:      expiryDate      || null,
+          bonus_desc:            bonusDesc            || null,
+          timing_note:           timingNote           || null,
+          timing_max_weeks:      timingMaxWeeks       ? Number(timingMaxWeeks) : null,
+          expiry_date:           expiryDate           || null,
+          completion_bonus_desc: completionBonusDesc  || null,
+          completion_weeks:      completionWeeks      ? Number(completionWeeks) : null,
         }),
       })
       const data = await res.json()
@@ -635,6 +642,38 @@ function NewPackageForm() {
                 <div style={{ background: '#f5eaf8', border: '1px solid #c4a8d8', borderRadius: '6px', padding: '10px 12px', fontSize: '0.78rem', color: '#7a3d8a' }}>
                   🎁 {bonusDesc}
                   {timingNote && <span style={{ color: '#9a6ab0', marginLeft: '8px' }}>（{timingNote}回訪）</span>}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── 完成鼓勵（選填）── */}
+        <div style={{ background: '#faf8f5', border: `1px solid ${showCompletion ? '#c4a0d8' : '#e0d9d0'}`, borderRadius: '8px', overflow: 'hidden' }}>
+          <button type="button"
+            onClick={() => setShowCompletion(v => !v)}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <span style={{ color: showCompletion ? '#7a4a9a' : '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>
+              🎯 完成鼓勵（選填）
+            </span>
+            <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{showCompletion ? '▲' : '▼'}</span>
+          </button>
+          {showCompletion && (
+            <div style={{ borderTop: '1px solid #e8d8f0', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ color: '#9a8f84', fontSize: '0.72rem', margin: 0 }}>
+                在期限內完成全部堂數，即獲得附加課程（從開封日起算）
+              </p>
+              <Field label="附加內容（完成後可獲得）">
+                <input value={completionBonusDesc} onChange={e => setCompletionBonusDesc(e.target.value)}
+                  placeholder="例：附加泡光氧彗（梅）$2,880" style={iStyle} />
+              </Field>
+              <Field label="完成期限（週）">
+                <input value={completionWeeks} onChange={e => setCompletionWeeks(e.target.value)}
+                  type="number" min="1" max="52" placeholder="例：8（= 約 2 個月）" style={iStyle} />
+              </Field>
+              {completionBonusDesc && completionWeeks && (
+                <div style={{ background: '#f0ebf8', border: '1px solid #c4a8d8', borderRadius: '6px', padding: '10px 12px', fontSize: '0.78rem', color: '#7a4a9a' }}>
+                  🎯 {completionWeeks} 週內完成所有堂數，可獲得：{completionBonusDesc}
                 </div>
               )}
             </div>
