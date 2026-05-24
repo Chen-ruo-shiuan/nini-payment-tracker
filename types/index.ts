@@ -144,8 +144,11 @@ export interface Package {
   extension_count: number          // 已展延次數，最多 2
   expiry_date: string | null       // 建議使用期限（整個套組）
   opened_date: string | null            // 開封日（第一次施作日，任務回訪從此開始）
-  completion_bonus_desc: string | null  // 完成鼓勵說明（例：贈泡光氧彗梅 $2,880）
-  completion_weeks: number | null       // 完成鼓勵期限（週數，例：8 = 2個月）
+  completion_bonus_desc: string | null    // 完成鼓勵說明（顯示用）
+  completion_weeks: number | null         // 完成鼓勵期限（週數，例：8 = 2個月）
+  completion_bonus_service: string | null // 達標後建立的套組名稱
+  completion_bonus_price: number | null   // 達標套組的價值（用於記帳）
+  completion_claimed: number              // 0=未領取，1=已領取
   last_session_date: string | null      // API 計算，上次施作日期
 }
 

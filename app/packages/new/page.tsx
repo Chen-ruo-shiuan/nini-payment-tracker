@@ -53,9 +53,11 @@ function NewPackageForm() {
   const [inclPoints, setInclPoints] = useState(true)
 
   // 完成鼓勵
-  const [completionBonusDesc, setCompletionBonusDesc] = useState('')
-  const [completionWeeks, setCompletionWeeks]         = useState('')
-  const [showCompletion, setShowCompletion]           = useState(false)
+  const [completionBonusDesc, setCompletionBonusDesc]       = useState('')
+  const [completionBonusService, setCompletionBonusService] = useState('')
+  const [completionBonusPrice, setCompletionBonusPrice]     = useState('')
+  const [completionWeeks, setCompletionWeeks]               = useState('')
+  const [showCompletion, setShowCompletion]                 = useState(false)
 
   // 鼓勵任務
   const [bonusDesc, setBonusDesc]           = useState('')        // 贈品說明
@@ -214,8 +216,10 @@ function NewPackageForm() {
           timing_note:           timingNote           || null,
           timing_max_weeks:      timingMaxWeeks       ? Number(timingMaxWeeks) : null,
           expiry_date:           expiryDate           || null,
-          completion_bonus_desc: completionBonusDesc  || null,
-          completion_weeks:      completionWeeks      ? Number(completionWeeks) : null,
+          completion_bonus_desc:    completionBonusDesc    || null,
+          completion_bonus_service: completionBonusService || null,
+          completion_bonus_price:   completionBonusPrice   ? Number(completionBonusPrice) : null,
+          completion_weeks:         completionWeeks        ? Number(completionWeeks) : null,
         }),
       })
       const data = await res.json()
@@ -663,7 +667,15 @@ function NewPackageForm() {
               <p style={{ color: '#9a8f84', fontSize: '0.72rem', margin: 0 }}>
                 在期限內完成全部堂數，即獲得附加課程（從開封日起算）
               </p>
-              <Field label="附加內容（完成後可獲得）">
+              <Field label="附加課程名稱（商品券名稱）">
+                <input value={completionBonusService} onChange={e => setCompletionBonusService(e.target.value)}
+                  placeholder="例：泡光氧彗（梅）" style={iStyle} />
+              </Field>
+              <Field label="附加課程單價">
+                <input value={completionBonusPrice} onChange={e => setCompletionBonusPrice(e.target.value)}
+                  type="number" min="0" placeholder="例：2880" style={iStyle} />
+              </Field>
+              <Field label="附加說明（顯示用）">
                 <input value={completionBonusDesc} onChange={e => setCompletionBonusDesc(e.target.value)}
                   placeholder="例：附加泡光氧彗（梅）$2,880" style={iStyle} />
               </Field>
@@ -671,9 +683,10 @@ function NewPackageForm() {
                 <input value={completionWeeks} onChange={e => setCompletionWeeks(e.target.value)}
                   type="number" min="1" max="52" placeholder="例：8（= 約 2 個月）" style={iStyle} />
               </Field>
-              {completionBonusDesc && completionWeeks && (
+              {completionBonusService && completionWeeks && (
                 <div style={{ background: '#f0ebf8', border: '1px solid #c4a8d8', borderRadius: '6px', padding: '10px 12px', fontSize: '0.78rem', color: '#7a4a9a' }}>
-                  🎯 {completionWeeks} 週內完成所有堂數，可獲得：{completionBonusDesc}
+                  🎯 {completionWeeks} 週內完成所有堂數，可獲得：{completionBonusService}
+                  {completionBonusPrice && <span style={{ marginLeft: '6px', color: '#9a6ab0' }}>${Number(completionBonusPrice).toLocaleString()}</span>}
                 </div>
               )}
             </div>

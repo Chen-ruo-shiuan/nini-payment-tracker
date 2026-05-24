@@ -1070,8 +1070,10 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       extension_count: pkg.extension_count ?? 0,
       expiry_date: pkg.expiry_date ?? '',
       opened_date: pkg.opened_date ?? '',
-      completion_bonus_desc: pkg.completion_bonus_desc ?? '',
-      completion_weeks: pkg.completion_weeks ?? undefined,
+      completion_bonus_desc:    pkg.completion_bonus_desc    ?? '',
+      completion_weeks:         pkg.completion_weeks         ?? undefined,
+      completion_bonus_service: pkg.completion_bonus_service ?? '',
+      completion_bonus_price:   pkg.completion_bonus_price   ?? undefined,
     })
   }
 
@@ -1295,11 +1297,29 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
 
                   {/* 完成鼓勵 */}
                   {hasCompletionBonus && (
-                    <div style={{ marginTop: '8px', background: completionAchieved ? '#edf3eb' : '#faf5fe', border: `1px solid ${completionAchieved ? '#9ab89e' : '#d4b0e8'}`, borderRadius: '6px', padding: '8px 10px' }}>
+                    <div style={{ marginTop: '8px', background: completionAchieved ? (pkg.completion_claimed ? '#f0ede8' : '#edf3eb') : '#faf5fe', border: `1px solid ${completionAchieved ? (pkg.completion_claimed ? '#d9d0c5' : '#9ab89e') : '#d4b0e8'}`, borderRadius: '6px', padding: '8px 10px' }}>
                       {completionAchieved ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '0.78rem', color: '#3a7a4a', fontWeight: 600 }}>🎉 完成鼓勵達標！</span>
-                          <span style={{ fontSize: '0.75rem', color: '#4a6b52' }}>{pkg.completion_bonus_desc}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.78rem', color: pkg.completion_claimed ? '#9a8f84' : '#3a7a4a', fontWeight: 600 }}>
+                              {pkg.completion_claimed ? '✓ 完成鼓勵已領取' : '🎉 完成鼓勵達標！'}
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: pkg.completion_claimed ? '#b4aa9e' : '#4a6b52' }}>
+                              {pkg.completion_bonus_service || pkg.completion_bonus_desc}
+                            </span>
+                          </div>
+                          {!pkg.completion_claimed && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`確定要為此客人領取「${pkg.completion_bonus_service}」附加課程嗎？`)) return
+                                const res = await fetch(`/api/packages/${pkg.id}/claim-completion`, { method: 'POST' })
+                                if (res.ok) { refresh() }
+                                else { const d = await res.json(); alert(d.error || '領取失敗') }
+                              }}
+                              style={{ background: '#3a7a4a', color: '#fff', border: 'none', borderRadius: '5px', fontSize: '0.72rem', padding: '4px 12px', cursor: 'pointer', flexShrink: 0 }}>
+                              一鍵領取
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <div>
@@ -1419,18 +1439,28 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   <p style={{ color: '#7a4a9a', fontSize: '0.68rem', marginBottom: '6px', letterSpacing: '0.05em' }}>🎯 完成鼓勵（選填）</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>附加內容（完成後可獲得）</label>
-                      <input value={editForm.completion_bonus_desc ?? ''} onChange={e => setEditForm(f => ({ ...f, completion_bonus_desc: e.target.value }))}
-                        placeholder="例：附加泡光氧彗（梅）$2,880" style={miniInput} />
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>附加課程名稱（達標時自動建立）</label>
+                      <input value={editForm.completion_bonus_service ?? ''} onChange={e => setEditForm(f => ({ ...f, completion_bonus_service: e.target.value }))}
+                        placeholder="例：泡光氧彗（梅）" style={miniInput} />
+                    </div>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>課程價值（記帳用）</label>
+                      <input type="number" min="0" value={editForm.completion_bonus_price ?? ''} onChange={e => setEditForm(f => ({ ...f, completion_bonus_price: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="例：2880" style={miniInput} />
                     </div>
                     <div>
                       <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>完成期限（週）</label>
                       <input type="number" min="1" max="52" value={editForm.completion_weeks ?? ''} onChange={e => setEditForm(f => ({ ...f, completion_weeks: e.target.value ? Number(e.target.value) : undefined }))}
                         placeholder="例：8（= 2個月）" style={miniInput} />
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
-                      <span style={{ color: '#b4aa9e', fontSize: '0.65rem' }}>開封日起算，全部堂數在期限內完成即達標</span>
+                    <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>說明文字（顯示用）</label>
+                      <input value={editForm.completion_bonus_desc ?? ''} onChange={e => setEditForm(f => ({ ...f, completion_bonus_desc: e.target.value }))}
+                        placeholder="例：附加泡光氧彗（梅）" style={miniInput} />
                     </div>
+                  </div>
+                  <div style={{ marginTop: '2px' }}>
+                    <span style={{ color: '#b4aa9e', fontSize: '0.65rem' }}>開封日起算，全部堂數在期限內完成即達標，可一鍵領取</span>
                   </div>
                 </div>
 

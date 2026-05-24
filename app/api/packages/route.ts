@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     unit_price, unit_price_orig, prepaid_amount, payment_method,
     date, note, include_in_accumulation, include_in_points,
     timing_note, bonus_desc, timing_max_weeks, bonus_active, expiry_date,
-    completion_bonus_desc, completion_weeks,
+    completion_bonus_desc, completion_weeks, completion_bonus_service, completion_bonus_price,
   } = body
 
   if (!client_id)    return NextResponse.json({ error: '請選擇客人' }, { status: 400 })
@@ -53,13 +53,13 @@ export async function POST(req: NextRequest) {
          unit_price, unit_price_orig, prepaid_amount, payment_method,
          include_in_accumulation, include_in_points, note, date,
          timing_note, bonus_desc, timing_max_weeks, bonus_active, expiry_date,
-         completion_bonus_desc, completion_weeks)
+         completion_bonus_desc, completion_weeks, completion_bonus_service, completion_bonus_price)
       VALUES
         (@client_id, @service_name, @total_sessions, 0,
          @unit_price, @unit_price_orig, @prepaid_amount, @payment_method,
          @include_in_acc, @include_in_pts, @note, @date,
          @timing_note, @bonus_desc, @timing_max_weeks, @bonus_active, @expiry_date,
-         @completion_bonus_desc, @completion_weeks)
+         @completion_bonus_desc, @completion_weeks, @completion_bonus_service, @completion_bonus_price)
     `).run({
       client_id: Number(client_id),
       service_name,
