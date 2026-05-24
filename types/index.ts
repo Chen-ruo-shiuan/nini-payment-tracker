@@ -143,6 +143,7 @@ export interface Package {
   bonus_active: number             // 1=進行中，0=已撤銷
   extension_count: number          // 已展延次數，最多 2
   expiry_date: string | null       // 建議使用期限（整個套組）
+  opened_date: string | null       // 開封日（第一次施作日，任務回訪從此開始）
   last_session_date: string | null // API 計算，上次施作日期
 }
 

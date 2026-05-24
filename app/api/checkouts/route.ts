@@ -80,10 +80,14 @@ export async function POST(req: NextRequest) {
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(coId, item.category, item.label, item.price, item.qty, item.pkg_id ?? null)
 
-      // 商品券: increment used_sessions
+      // 商品券: increment used_sessions，並在首次使用時設定開封日
       if (item.category === '商品券' && item.pkg_id) {
-        db.prepare(`UPDATE packages SET used_sessions = used_sessions + ? WHERE id = ?`)
-          .run(item.qty, item.pkg_id)
+        const pkgRow = db.prepare('SELECT used_sessions, opened_date FROM packages WHERE id = ?')
+          .get(item.pkg_id) as { used_sessions: number; opened_date: string | null } | undefined
+        const coDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+        const newOpened = pkgRow?.opened_date || coDate
+        db.prepare(`UPDATE packages SET used_sessions = used_sessions + ?, opened_date = COALESCE(opened_date, ?) WHERE id = ?`)
+          .run(item.qty, newOpened, item.pkg_id)
       }
     }
 

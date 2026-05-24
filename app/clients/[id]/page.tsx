@@ -1068,6 +1068,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       bonus_active: pkg.bonus_active ?? 1,
       extension_count: pkg.extension_count ?? 0,
       expiry_date: pkg.expiry_date ?? '',
+      opened_date: pkg.opened_date ?? '',
     })
   }
 
@@ -1138,7 +1139,12 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                 <div style={{ flex: 1 }}>
                   <div style={{ color: '#2c2825', fontSize: '0.9rem' }}>{pkg.service_name}</div>
                   <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '2px' }}>
-                    {fmtShort(pkg.date)}　{pkg.payment_method}
+                    購買 {fmtShort(pkg.date)}
+                    {pkg.opened_date
+                      ? <span style={{ marginLeft: '8px', color: '#7a6a9a' }}>開封 {fmtShort(pkg.opened_date)}</span>
+                      : <span style={{ marginLeft: '8px', color: '#c4b8aa' }}>未開封</span>
+                    }
+                    　{pkg.payment_method}
                   </div>
                   <div style={{ marginTop: '8px' }}>
                     <div style={{ background: '#f0ebe4', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
@@ -1341,12 +1347,16 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   </div>
                   <div style={{ marginTop: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                     <div>
+                      <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>開封日期</label>
+                      <input type="date" value={editForm.opened_date ?? ''} onChange={e => setEditForm(f => ({ ...f, opened_date: e.target.value }))} style={miniInput} />
+                    </div>
+                    <div>
                       <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>建議使用期限</label>
                       <input type="date" value={editForm.expiry_date ?? ''} onChange={e => setEditForm(f => ({ ...f, expiry_date: e.target.value }))} style={miniInput} />
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
-                      <span style={{ color: '#b4aa9e', fontSize: '0.65rem' }}>提示：購買日 +6 個月</span>
-                    </div>
+                  </div>
+                  <div style={{ marginTop: '2px' }}>
+                    <span style={{ color: '#b4aa9e', fontSize: '0.65rem' }}>開封日：首次施作會自動填入；期限：購買日 +6 個月</span>
                   </div>
                 </div>
 

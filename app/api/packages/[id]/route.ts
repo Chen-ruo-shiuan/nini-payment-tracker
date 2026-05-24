@@ -16,7 +16,7 @@ export async function PATCH(
     unit_price: number; unit_price_orig: number; prepaid_amount: number; payment_method: string;
     date: string; note: string | null; include_in_accumulation: number; include_in_points: number;
     timing_note: string | null; bonus_desc: string | null; timing_max_weeks: number | null;
-    bonus_active: number; extension_count: number; expiry_date: string | null; legacy_id: string | null;
+    bonus_active: number; extension_count: number; expiry_date: string | null; opened_date: string | null; legacy_id: string | null;
   } | undefined
   if (!existing) return NextResponse.json({ error: '找不到套組' }, { status: 404 })
 
@@ -44,7 +44,8 @@ export async function PATCH(
       timing_max_weeks        = @timing_max_weeks,
       bonus_active            = @bonus_active,
       extension_count         = @extension_count,
-      expiry_date             = @expiry_date
+      expiry_date             = @expiry_date,
+      opened_date             = @opened_date
     WHERE id = @id
   `).run({
     id: Number(id),
@@ -65,6 +66,7 @@ export async function PATCH(
     bonus_active:            has('bonus_active')            ? (body.bonus_active ? 1 : 0)     : existing.bonus_active,
     extension_count:         has('extension_count')         ? (Number(body.extension_count) || 0) : existing.extension_count,
     expiry_date:             has('expiry_date')             ? (body.expiry_date || null)       : existing.expiry_date,
+    opened_date:             has('opened_date')             ? (body.opened_date || null)       : existing.opened_date,
   })
 
   return NextResponse.json({ success: true })

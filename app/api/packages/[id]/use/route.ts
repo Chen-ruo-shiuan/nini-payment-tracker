@@ -11,7 +11,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const qty  = Number(body.qty) || 1
 
   const pkg = db.prepare('SELECT * FROM packages WHERE id = ?').get(id) as {
-    id: number; client_id: number; total_sessions: number; used_sessions: number; service_name: string
+    id: number; client_id: number; total_sessions: number; used_sessions: number; service_name: string; opened_date: string | null
   } | undefined
   if (!pkg) return NextResponse.json({ error: '找不到套組' }, { status: 404 })
 
@@ -19,7 +19,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (qty > remaining)
     return NextResponse.json({ error: `剩餘 ${remaining} 次，無法核銷 ${qty} 次` }, { status: 400 })
 
-  db.prepare('UPDATE packages SET used_sessions = used_sessions + ? WHERE id = ?').run(qty, id)
+  const useDate = body.date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  // 第一次核銷時自動設定開封日
+  const newOpenedDate = pkg.opened_date || useDate
+  db.prepare('UPDATE packages SET used_sessions = used_sessions + ?, opened_date = ? WHERE id = ?')
+    .run(qty, newOpenedDate, id)
 
   return NextResponse.json({ success: true, used: pkg.used_sessions + qty, remaining: remaining - qty })
 }
