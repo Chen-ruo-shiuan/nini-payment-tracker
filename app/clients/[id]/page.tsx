@@ -15,6 +15,7 @@ interface ContractWithInstallments extends InstallmentContract {
 }
 interface CheckoutItem {
   id: number; checkout_id: number; category: string; label: string; price: number; qty: number; pkg_id?: number
+  bonus_desc?: string | null; timing_note?: string | null; bonus_active?: number
 }
 interface CheckoutPayment {
   id: number; checkout_id: number; method: string; amount: number
@@ -1550,11 +1551,23 @@ function ConsumptionTab({ client, refresh }: { client: ClientDetail; refresh: ()
                     </div>
                     <div className="space-y-0.5">
                       {co.items.map(item => (
-                        <div key={item.id} style={{ display: 'flex', gap: '6px', fontSize: '0.75rem' }}>
-                          <span style={{ color: '#b4aa9e', minWidth: '44px' }}>{item.category}</span>
-                          <span style={{ color: '#4a4642' }}>{item.label}</span>
-                          {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
-                          <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
+                        <div key={item.id}>
+                          <div style={{ display: 'flex', gap: '6px', fontSize: '0.75rem' }}>
+                            <span style={{ color: '#b4aa9e', minWidth: '44px' }}>{item.category}</span>
+                            <span style={{ color: '#4a4642' }}>{item.label}</span>
+                            {item.qty > 1 && <span style={{ color: '#9a8f84' }}>×{item.qty}</span>}
+                            <span style={{ color: '#6b5f54', marginLeft: 'auto' }}>{fmtAmt(item.price * item.qty)}</span>
+                          </div>
+                          {item.category === '商品券' && item.bonus_desc && item.bonus_active === 1 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', paddingLeft: '50px' }}>
+                              <span style={{ fontSize: '0.68rem', color: '#7a3d8a', background: '#f5eaf8', border: '1px solid #d4b8e8', borderRadius: '4px', padding: '1px 7px' }}>
+                                🎁 {item.bonus_desc}
+                              </span>
+                              {item.timing_note && (
+                                <span style={{ fontSize: '0.65rem', color: '#9a8f84' }}>{item.timing_note}回訪</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

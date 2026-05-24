@@ -61,7 +61,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   `).all(id)
 
   for (const co of checkouts as { id: number; items?: unknown[]; payments?: unknown[] }[]) {
-    co.items    = db.prepare('SELECT * FROM checkout_items WHERE checkout_id = ?').all(co.id)
+    co.items    = db.prepare(`
+      SELECT ci.*, p.bonus_desc, p.timing_note, p.bonus_active
+      FROM checkout_items ci
+      LEFT JOIN packages p ON p.id = ci.pkg_id
+      WHERE ci.checkout_id = ?
+    `).all(co.id)
     co.payments = db.prepare('SELECT * FROM checkout_payments WHERE checkout_id = ?').all(co.id)
   }
 
