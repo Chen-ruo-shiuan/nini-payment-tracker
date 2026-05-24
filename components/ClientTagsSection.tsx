@@ -39,25 +39,38 @@ export default function ClientTagsSection({ clientId }: { clientId: string | num
     loadClientTags()
   }
 
+  const [createErr, setCreateErr] = useState('')
+
   async function createAndAdd() {
     if (!newName.trim()) return
     setCreating(true)
-    const res = await fetch('/api/tags', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim(), color: newColor }),
-    })
-    if (res.ok) {
-      const { id } = await res.json()
+    setCreateErr('')
+    try {
+      const res = await fetch('/api/tags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim(), color: newColor }),
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        let msg = '建立失敗'
+        try { msg = JSON.parse(text).error || msg } catch { msg = `錯誤 ${res.status}` }
+        setCreateErr(msg)
+        return
+      }
+      const { id } = JSON.parse(text)
       await fetch(`/api/clients/${clientId}/tags`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tag_id: id }),
       })
       loadClientTags()
       loadAllTags()
+      setNewName(''); setNewColor(TAG_COLORS[0])
+      setShowPicker(false)
+    } catch (err) {
+      setCreateErr(`網路錯誤：${String(err)}`)
+    } finally {
+      setCreating(false)
     }
-    setCreating(false)
-    setNewName(''); setNewColor(TAG_COLORS[0])
-    setShowPicker(false)
   }
 
   const unattached = allTags.filter(t => !clientTags.some(ct => ct.id === t.id))
@@ -160,6 +173,11 @@ export default function ClientTagsSection({ clientId }: { clientId: string | num
                   borderRadius: '12px', fontSize: '0.75rem', padding: '2px 10px', fontWeight: 500,
                 }}>{newName}</span>
               </div>
+            )}
+            {createErr && (
+              <p style={{ color: '#9a4a4a', fontSize: '0.78rem', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '5px', padding: '6px 10px' }}>
+                {createErr}
+              </p>
             )}
             <div style={{ display: 'flex', gap: '6px' }}>
               <button

@@ -59,17 +59,28 @@ export default function TagsPage() {
     e.preventDefault()
     if (!newName.trim()) return
     setCreating(true); setCreateErr('')
-    const res = await fetch('/api/tags', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim(), color: newColor }),
-    })
-    setCreating(false)
-    if (!res.ok) { const d = await res.json(); setCreateErr(d.error || '建立失敗'); return }
-    const created = newName.trim()
-    setNewName(''); setNewColor(TAG_COLORS[0]); setShowForm(false)
-    load()
-    setSuccessMsg(`標籤「${created}」已建立`)
-    setTimeout(() => setSuccessMsg(''), 3000)
+    try {
+      const res = await fetch('/api/tags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim(), color: newColor }),
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        let msg = '建立失敗'
+        try { msg = JSON.parse(text).error || msg } catch { msg = `錯誤 ${res.status}：${text.slice(0, 80)}` }
+        setCreateErr(msg)
+        return
+      }
+      const created = newName.trim()
+      setNewName(''); setNewColor(TAG_COLORS[0]); setShowForm(false)
+      load()
+      setSuccessMsg(`標籤「${created}」已建立`)
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } catch (err) {
+      setCreateErr(`網路錯誤：${String(err)}`)
+    } finally {
+      setCreating(false)
+    }
   }
 
   function startEdit(tag: Tag) {
