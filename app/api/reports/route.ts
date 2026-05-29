@@ -122,6 +122,15 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
   `).get(dateFilter) as { pkg_discount: number })
   const pkgDiscount = pkgDiscountRow.pkg_discount
 
+  // 品項折扣讓利（本期結帳的非商品券品項上的 discount 欄位加總）
+  const itemDiscountRow = (db.prepare(`
+    SELECT COALESCE(SUM(ci.discount), 0) AS item_discount
+    FROM checkout_items ci
+    JOIN checkouts co ON co.id = ci.checkout_id
+    WHERE ci.category != '商品券' AND co.date LIKE ?
+  `).get(dateFilter) as { item_discount: number })
+  const itemDiscount = itemDiscountRow.item_discount
+
   // 費用支出（本期）
   const expensesTotal = (db.prepare(`
     SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE date LIKE ?
@@ -143,6 +152,7 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     installmentReceived, installmentReceivedDetails, installmentOutstanding,
     checkoutTotal, byPayMethod,
     pkgDiscount,
+    itemDiscount,
     expensesTotal, expensesByCategory,
   }
 }

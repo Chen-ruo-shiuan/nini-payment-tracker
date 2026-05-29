@@ -27,6 +27,7 @@ export function getDb(): Database.Database {
     migrateShoppingCredit(db)
     migratePackageIncentive(db)
     migrateClientNextAppointment(db)
+    migrateCheckoutItemsDiscount(db)
   }
   return db
 }
@@ -553,4 +554,12 @@ function migrateOldInstallments(db: Database.Database) {
   migrate()
   db.prepare('DROP TABLE IF EXISTS installments_old').run()
   console.log(`[DB] Migrated ${oldInsts.length} legacy installments → new schema`)
+}
+
+// ─── 遷移：checkout_items 新增 discount 欄位（品項折扣，算入讓利）────────────────
+function migrateCheckoutItemsDiscount(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(checkout_items)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('discount')) {
+    db.exec(`ALTER TABLE checkout_items ADD COLUMN discount INTEGER NOT NULL DEFAULT 0`)
+  }
 }

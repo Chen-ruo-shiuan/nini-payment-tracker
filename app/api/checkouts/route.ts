@@ -53,8 +53,9 @@ export async function POST(req: NextRequest) {
   if (!items?.length)    return NextResponse.json({ error: '請新增消費品項' }, { status: 400 })
   if (!payments?.length) return NextResponse.json({ error: '請新增付款方式' }, { status: 400 })
 
-  const totalAmount = (items as { price: number; qty: number }[])
-    .reduce((s, i) => s + i.price * i.qty, 0)
+  // totalAmount = 實收金額（已扣除品項折扣）
+  const totalAmount = (items as { price: number; qty: number; discount?: number }[])
+    .reduce((s, i) => s + i.price * i.qty - (i.discount ?? 0), 0)
 
   const run = db.transaction(() => {
     // ── 1. Insert checkout ───────────────────────────────────────────────────
@@ -74,11 +75,11 @@ export async function POST(req: NextRequest) {
     const coId = Number(coRes.lastInsertRowid)
 
     // ── 2. Items ─────────────────────────────────────────────────────────────
-    for (const item of items as { category: string; label: string; price: number; qty: number; pkg_id?: number }[]) {
+    for (const item of items as { category: string; label: string; price: number; qty: number; pkg_id?: number; discount?: number }[]) {
       db.prepare(`
-        INSERT INTO checkout_items (checkout_id, category, label, price, qty, pkg_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(coId, item.category, item.label, item.price, item.qty, item.pkg_id ?? null)
+        INSERT INTO checkout_items (checkout_id, category, label, price, qty, pkg_id, discount)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(coId, item.category, item.label, item.price, item.qty, item.pkg_id ?? null, item.discount ?? 0)
 
       // 商品券: increment used_sessions，並在首次使用時設定開封日
       if (item.category === '商品券' && item.pkg_id) {

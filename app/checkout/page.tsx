@@ -6,7 +6,7 @@ import MembershipBadge from '@/components/MembershipBadge'
 import { PAYMENT_METHODS, ClientWithStats, MembershipLevel, LEVEL_POINTS, YODOMO_THRESHOLD } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Item  { id: string; category: string; label: string; price: string; qty: number; pkg_id?: number; custom?: boolean }
+interface Item  { id: string; category: string; label: string; price: string; qty: number; pkg_id?: number; custom?: boolean; discount: string; discountMode: '元' | '折' }
 interface Pay   { id: string; method: string; amount: string }
 interface PkgOption { id: number; service_name: string; remaining: number; unit_price: number; bonus_desc: string | null; timing_note: string | null; bonus_active: number }
 
@@ -101,6 +101,8 @@ export default function CheckoutPage() {
       id: uid(), category: i.category, label: i.label,
       price: String(i.price), qty: i.qty,
       pkg_id: (i as typeof i & { pkg_id?: number }).pkg_id,
+      discount: String((i as typeof i & { discount?: number }).discount ?? ''),
+      discountMode: '元' as const,
     })))
     setEditPays(co.payments.map(p => ({
       id: uid(), method: p.method, amount: String(p.amount),
@@ -159,7 +161,7 @@ export default function CheckoutPage() {
   // Form
   const [date, setDate] = useState(today())
   const [note, setNote] = useState('')
-  const [items, setItems] = useState<Item[]>([{ id: uid(), category: '服務', label: '', price: '', qty: 1 }])
+  const [items, setItems] = useState<Item[]>([{ id: uid(), category: '服務', label: '', price: '', qty: 1, discount: '', discountMode: '元' }])
   const [pays,  setPays]  = useState<Pay[]>([{ id: uid(), method: '現金', amount: '' }])
   const [inclCourse,  setInclCourse]  = useState(true)
   const [inclProduct, setInclProduct] = useState(false)
@@ -203,7 +205,7 @@ export default function CheckoutPage() {
   }, [selectedClient])
 
   // Auto-fill payment amount from items total
-  const itemsTotal = items.reduce((s, i) => s + (Number(i.price) || 0) * i.qty, 0)
+  const itemsTotal = items.reduce((s, i) => s + (Number(i.price) || 0) * i.qty - calcDiscountAmt(i), 0)
   const paysTotal  = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0)
   const diff       = itemsTotal - paysTotal  // >0 未足額  <0 超額
 
@@ -212,7 +214,17 @@ export default function CheckoutPage() {
   }
 
   // Items
-  function addItem() { setItems(p => [...p, { id: uid(), category: '服務', label: '', price: '', qty: 1 }]) }
+  // 計算單品項折扣金額（統一換算為元）
+  function calcDiscountAmt(item: Item): number {
+    const price = Number(item.price) || 0
+    const d = Number(item.discount) || 0
+    if (!d) return 0
+    if (item.discountMode === '元') return d
+    // 折模式：輸入 88 = 88折 = 付 88%，折扣 = 原價 × (100-88)/100
+    return Math.round(price * item.qty * (100 - d) / 100)
+  }
+
+  function addItem() { setItems(p => [...p, { id: uid(), category: '服務', label: '', price: '', qty: 1, discount: '', discountMode: '元' }]) }
   function removeItem(id: string) { setItems(p => p.filter(i => i.id !== id)) }
   function setItem(id: string, k: keyof Item, v: string | number) {
     setItems(p => p.map(i => i.id === id ? { ...i, [k]: v } : i))
@@ -240,7 +252,7 @@ export default function CheckoutPage() {
       if (i.category === '產品') return inclProduct
       return false
     })
-    .reduce((s, i) => s + (Number(i.price) || 0) * i.qty, 0)
+    .reduce((s, i) => s + (Number(i.price) || 0) * i.qty - calcDiscountAmt(i), 0)
 
   const level = selectedClient?.level as MembershipLevel
   const ptRate    = LEVEL_POINTS[level] ?? 0             // 每千元獲得金米點數
@@ -262,7 +274,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           client_id: selectedClient?.id ?? null,
           date, note,
-          items: items.map(i => ({ category: i.category, label: i.label, price: Number(i.price), qty: i.qty, pkg_id: i.pkg_id })),
+          items: items.map(i => ({ category: i.category, label: i.label, price: Number(i.price), qty: i.qty, pkg_id: i.pkg_id, discount: calcDiscountAmt(i) })),
           payments: pays.map(p => ({ method: p.method, amount: Number(p.amount) })),
           incl_course: inclCourse, incl_product: inclProduct,
           incl_yodomo: inclYodomo, incl_points: inclPoints,
@@ -277,7 +289,7 @@ export default function CheckoutPage() {
 
   function reset() {
     setResult(null); setSelectedClient(null); setClientSearch(''); setClientPkgs([])
-    setItems([{ id: uid(), category: '服務', label: '', price: '', qty: 1 }])
+    setItems([{ id: uid(), category: '服務', label: '', price: '', qty: 1, discount: '', discountMode: '元' }])
     setPays([{ id: uid(), method: '現金', amount: '' }])
     setNote(''); setDate(today())
     setInclCourse(true); setInclProduct(false); setInclYodomo(false); setInclPoints(false)
@@ -571,16 +583,39 @@ export default function CheckoutPage() {
               )}
 
               {/* Price */}
-              <input value={item.price}
-                onChange={e => setItem(item.id, 'price', e.target.value)}
-                onBlur={() => {
-                  if (item.label && Number(item.price) > 0 && !item.pkg_id) {
-                    upsertSavedItem(item.category, item.label, Number(item.price))
-                    refreshSaved()
-                  }
-                }}
-                type="number" placeholder="金額"
-                style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px', width: '80px' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <input value={item.price}
+                  onChange={e => setItem(item.id, 'price', e.target.value)}
+                  onBlur={() => {
+                    if (item.label && Number(item.price) > 0 && !item.pkg_id) {
+                      upsertSavedItem(item.category, item.label, Number(item.price))
+                      refreshSaved()
+                    }
+                  }}
+                  type="number" placeholder="金額"
+                  style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px', width: '80px' }} />
+                {/* 折扣輸入（非商品券才顯示） */}
+                {item.category !== '商品券' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    <button type="button"
+                      onClick={() => setItems(p => p.map(i => i.id === item.id ? { ...i, discountMode: i.discountMode === '元' ? '折' : '元', discount: '' } : i))}
+                      style={{ fontSize: '0.62rem', padding: '1px 5px', border: '1px solid #c4a8d8', borderRadius: '3px', background: item.discount ? '#f0ebf8' : '#faf8f5', color: '#7a4a9a', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      -{item.discountMode}
+                    </button>
+                    <input
+                      value={item.discount}
+                      onChange={e => setItem(item.id, 'discount', e.target.value)}
+                      type="number" min="0"
+                      placeholder={item.discountMode === '折' ? '88' : '0'}
+                      style={{ ...iStyle, fontSize: '0.72rem', padding: '2px 5px', width: '52px', color: item.discount ? '#7a4a9a' : '#b4aa9e' }} />
+                    {item.discount && Number(item.discount) > 0 && (
+                      <span style={{ fontSize: '0.62rem', color: '#9a4a4a', whiteSpace: 'nowrap' }}>
+                        -{calcDiscountAmt(item).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Qty */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -896,7 +931,7 @@ export default function CheckoutPage() {
                               )}
                             </div>
                           ))}
-                          <button type="button" onClick={() => setEditItems(p => [...p, { id: uid(), category: '服務', label: '', price: '', qty: 1 }])}
+                          <button type="button" onClick={() => setEditItems(p => [...p, { id: uid(), category: '服務', label: '', price: '', qty: 1, discount: '', discountMode: '元' as const }])}
                             style={{ color: '#9a8f84', background: 'none', border: '1px dashed #d9d0c5', borderRadius: '4px', fontSize: '0.75rem', padding: '4px 10px', cursor: 'pointer', width: '100%' }}>
                             ＋ 新增品項
                           </button>

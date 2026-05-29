@@ -16,6 +16,7 @@ interface Financials {
   checkoutTotal: number
   byPayMethod: { method: string; total: number }[]
   pkgDiscount: number           // 套組讓利（依本期核銷計算）
+  itemDiscount: number          // 品項折扣讓利（結帳時每品項自訂折扣）
   expensesTotal: number; expensesByCategory: { category: string; total: number }[]
 }
 interface ReportData {
@@ -351,13 +352,15 @@ export default function ReportsPage() {
             // ── 銷售折讓（隱沒成本）──────────────────────────────────────────
             // 套組讓利：本期核銷時，原定單價 vs 記帳單價的差（每堂計算）
             const pkgDiscount    = fin.pkgDiscount
+            // 品項折扣：結帳時每品項輸入的折扣（元或折數換算）
+            const itemDiscount   = fin.itemDiscount ?? 0
             // 優惠折扣：結帳時選「優惠折扣」付款方式（我方讓利，未收現金）
             const cashDiscount   = fin.discountUsed
             // 金米折抵：客戶用積分抵扣，未收現金
             const pointsDisc     = fin.pointsUsed
             // 購物金折抵：客戶用購物金抵扣（我方讓利）
             const scDiscount     = fin.shoppingCreditUsed ?? 0
-            const totalAllowance = pkgDiscount + cashDiscount + pointsDisc + scDiscount
+            const totalAllowance = pkgDiscount + itemDiscount + cashDiscount + pointsDisc + scDiscount
 
             // ── 毛利 = 收入 - 折讓 ───────────────────────────────────────────
             const grossProfit  = grossRevenue - totalAllowance
@@ -390,9 +393,17 @@ export default function ReportsPage() {
                     {pkgDiscount > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                         <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>套組讓利
-                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>原定價 vs 記帳價差額</span>
+                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>原定價 vs 記帳價差額（含贈品）</span>
                         </span>
                         <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(pkgDiscount)}</span>
+                      </div>
+                    )}
+                    {itemDiscount > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <span style={{ color: '#6b5f54', fontSize: '0.78rem' }}>品項折扣
+                          <span style={{ color: '#b4aa9e', fontSize: '0.68rem', marginLeft: '5px' }}>結帳時品項優惠</span>
+                        </span>
+                        <span style={{ color: '#9a4a4a', fontSize: '0.8rem', fontWeight: 500 }}>- {fmtAmt(itemDiscount)}</span>
                       </div>
                     )}
                     {cashDiscount > 0 && (

@@ -38,8 +38,8 @@ export async function POST(
     `).run(
       pkg.client_id,
       pkg.completion_bonus_service,
-      pkg.completion_bonus_price ?? 0,
-      pkg.completion_bonus_price ?? 0,
+      0,                               // unit_price = 0（贈品不收費，讓利 = orig - 0）
+      pkg.completion_bonus_price ?? 0, // unit_price_orig 保留市價，報表 pkgDiscount 自動算入讓利
       `完成鼓勵：${pkg.service_name}`,
       today,
     )
