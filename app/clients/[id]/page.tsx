@@ -443,9 +443,19 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
           <form onSubmit={adjustPoints} style={{ marginTop: '8px', background: '#f5f2ee', borderRadius: '6px', padding: '10px' }} className="space-y-2">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
               <div>
-                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>增減金額（負數為扣除）</label>
-                <input value={ptDelta} onChange={e => setPtDelta(e.target.value)}
-                  type="number" style={miniInput} />
+                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>
+                  增減點數
+                  <span style={{ color: '#b4aa9e', marginLeft: '4px' }}>（負數 = 扣除，例如 -50）</span>
+                </label>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button type="button"
+                    onClick={() => setPtDelta(v => v.startsWith('-') ? v.slice(1) : v ? '-' + v : '-')}
+                    style={{ flexShrink: 0, background: Number(ptDelta) < 0 ? '#9a4a4a' : '#e0d9d0', color: Number(ptDelta) < 0 ? '#fff' : '#6b5f54', border: 'none', borderRadius: '4px', fontSize: '0.8rem', padding: '0 10px', cursor: 'pointer' }}>
+                    {Number(ptDelta) < 0 ? '－' : '＋'}
+                  </button>
+                  <input value={ptDelta} onChange={e => setPtDelta(e.target.value)}
+                    type="number" style={{ ...miniInput, flex: 1 }} placeholder="例：50" />
+                </div>
               </div>
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>日期</label>

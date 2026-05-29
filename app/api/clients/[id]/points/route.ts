@@ -38,10 +38,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       VALUES (@client_id, @delta, @note, @date)
     `).run({ client_id: Number(id), delta, note: note || null, date: entryDate })
 
-    const newPoints = Math.max(0, (db.prepare(
-      'SELECT COALESCE(SUM(delta), 0) as total FROM points_ledger WHERE client_id = ?'
-    ).get(id) as { total: number }).total)
-
+    // 直接加減，不重新算 ledger 加總（相容舊有直接修改的餘額）
+    const cur = (db.prepare('SELECT points FROM clients WHERE id = ?').get(id) as { points: number }).points
+    const newPoints = Math.max(0, cur + delta)
     db.prepare(`UPDATE clients SET points = ?, updated_at = datetime('now') WHERE id = ?`)
       .run(newPoints, id)
 

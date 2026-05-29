@@ -3,11 +3,10 @@ import { getDb } from '@/lib/db'
 
 export const runtime = 'nodejs'
 
-function recalcPoints(db: ReturnType<typeof import('@/lib/db').getDb>, clientId: number) {
-  const result = db.prepare(
-    'SELECT COALESCE(SUM(delta), 0) as total FROM points_ledger WHERE client_id = ?'
-  ).get(clientId) as { total: number }
-  const newPoints = Math.max(0, result.total)
+// 以加減方式更新點數（不重算 ledger 加總，相容舊有直接修改的餘額）
+function applyPointsDelta(db: ReturnType<typeof import('@/lib/db').getDb>, clientId: number, delta: number) {
+  const cur = (db.prepare('SELECT points FROM clients WHERE id = ?').get(clientId) as { points: number }).points
+  const newPoints = Math.max(0, cur + delta)
   db.prepare(`UPDATE clients SET points = ?, updated_at = datetime('now') WHERE id = ?`)
     .run(newPoints, clientId)
   return newPoints
@@ -28,16 +27,20 @@ export async function PATCH(
   const body = await req.json()
   const { delta, note, date } = body
 
+  const newDelta = typeof delta === 'number' ? delta : entry.delta
+
   const update = db.transaction(() => {
     db.prepare(`
       UPDATE points_ledger SET delta = @delta, note = @note, date = @date WHERE id = @id
     `).run({
       id: Number(id),
-      delta: typeof delta === 'number' ? delta : entry.delta,
+      delta: newDelta,
       note: note !== undefined ? (note || null) : entry.note,
       date: date || entry.date,
     })
-    return recalcPoints(db, entry.client_id)
+    // 先還原舊 delta，再套用新 delta
+    const diff = newDelta - entry.delta
+    return applyPointsDelta(db, entry.client_id, diff)
   })
 
   const newPoints = update()
@@ -58,7 +61,8 @@ export async function DELETE(
 
   const del = db.transaction(() => {
     db.prepare('DELETE FROM points_ledger WHERE id = ?').run(id)
-    return recalcPoints(db, entry.client_id)
+    // 還原這筆 ledger 的 delta
+    return applyPointsDelta(db, entry.client_id, -entry.delta)
   })
 
   const newPoints = del()
