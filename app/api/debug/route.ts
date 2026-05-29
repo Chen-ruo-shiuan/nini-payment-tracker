@@ -25,6 +25,17 @@ export async function GET() {
       }
     }
 
+    // Check packages table columns
+    const pkgCols = (db.prepare(`PRAGMA table_info(packages)`).all() as { name: string }[]).map(c => c.name)
+
+    // Grab latest 3 packages with completion bonus fields
+    const pkgSample = db.prepare(`
+      SELECT id, client_id, service_name, used_sessions, total_sessions,
+        completion_bonus_service, completion_bonus_price, completion_weeks,
+        completion_bonus_desc, completion_claimed, opened_date
+      FROM packages ORDER BY id DESC LIMIT 3
+    `).all()
+
     return NextResponse.json({
       tables: tableNames,
       has_tags: tableNames.includes('tags'),
@@ -32,6 +43,10 @@ export async function GET() {
       has_service_logs: tableNames.includes('service_logs'),
       tags_count: tagsCount,
       tags_error: tagsError,
+      packages_columns: pkgCols,
+      has_completion_bonus_service: pkgCols.includes('completion_bonus_service'),
+      has_completion_claimed: pkgCols.includes('completion_claimed'),
+      packages_sample: pkgSample,
     })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
