@@ -1298,69 +1298,70 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                     </div>
                   )}
 
-                  {/* 完成鼓勵 */}
-                  {hasCompletionBonus && (
-                    <div style={{ marginTop: '8px',
-                      background: pkg.completion_claimed ? '#f0ede8' : completionAchieved ? (completionOnTime ? '#edf3eb' : '#fdf5e8') : '#faf5fe',
-                      border: `1px solid ${pkg.completion_claimed ? '#d9d0c5' : completionAchieved ? (completionOnTime ? '#9ab89e' : '#e8c878') : '#d4b0e8'}`,
-                      borderRadius: '6px', padding: '8px 10px' }}>
-                      {completionAchieved ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '0.78rem', fontWeight: 600,
-                              color: pkg.completion_claimed ? '#9a8f84' : completionOnTime ? '#3a7a4a' : '#9a6a2a' }}>
-                              {pkg.completion_claimed ? '✓ 完成鼓勵已領取' : completionOnTime ? '🎉 完成鼓勵達標！' : '✅ 全部完成（逾期）'}
-                            </span>
-                            <span style={{ fontSize: '0.72rem', color: pkg.completion_claimed ? '#b4aa9e' : completionOnTime ? '#4a6b52' : '#7a5a2a' }}>
-                              {pkg.completion_bonus_service || pkg.completion_bonus_desc}
-                            </span>
-                            {!pkg.completion_claimed && completionDays !== null && (
-                              <span style={{ fontSize: '0.68rem', color: completionOnTime ? '#6b8a6e' : '#9a6a2a' }}>
-                                （{completionDays} 天完成 / 限{pkg.completion_weeks! * 7}天）
-                              </span>
-                            )}
-                          </div>
-                          {!pkg.completion_claimed && (
-                            <button
-                              onClick={async () => {
-                                if (!confirm(`確定要為此客人領取「${pkg.completion_bonus_service}」附加課程嗎？`)) return
-                                const res = await fetch(`/api/packages/${pkg.id}/claim-completion`, { method: 'POST' })
-                                if (res.ok) { refresh() }
-                                else { const d = await res.json(); alert(d.error || '領取失敗') }
-                              }}
-                              style={{ background: completionOnTime ? '#3a7a4a' : '#9a6a2a', color: '#fff', border: 'none', borderRadius: '5px', fontSize: '0.72rem', padding: '4px 12px', cursor: 'pointer', flexShrink: 0 }}>
-                              一鍵領取
-                            </button>
-                          )}
+                </div>
+              )}
+
+              {/* 完成鼓勵 — 不受 isDone 限制，套組完成後才能領取 */}
+              {hasCompletionBonus && (
+                <div style={{ marginTop: '8px',
+                  background: pkg.completion_claimed ? '#f0ede8' : completionAchieved ? (completionOnTime ? '#edf3eb' : '#fdf5e8') : '#faf5fe',
+                  border: `1px solid ${pkg.completion_claimed ? '#d9d0c5' : completionAchieved ? (completionOnTime ? '#9ab89e' : '#e8c878') : '#d4b0e8'}`,
+                  borderRadius: '6px', padding: '8px 10px' }}>
+                  {completionAchieved ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 600,
+                          color: pkg.completion_claimed ? '#9a8f84' : completionOnTime ? '#3a7a4a' : '#9a6a2a' }}>
+                          {pkg.completion_claimed ? '✓ 完成鼓勵已領取' : completionOnTime ? '🎉 完成鼓勵達標！' : '✅ 全部完成（逾期）'}
+                        </span>
+                        <span style={{ fontSize: '0.72rem', color: pkg.completion_claimed ? '#b4aa9e' : completionOnTime ? '#4a6b52' : '#7a5a2a' }}>
+                          {pkg.completion_bonus_service || pkg.completion_bonus_desc}
+                        </span>
+                        {!pkg.completion_claimed && completionDays !== null && (
+                          <span style={{ fontSize: '0.68rem', color: completionOnTime ? '#6b8a6e' : '#9a6a2a' }}>
+                            （{completionDays} 天完成 / 限{pkg.completion_weeks! * 7}天）
+                          </span>
+                        )}
+                      </div>
+                      {!pkg.completion_claimed && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`確定要為此客人領取「${pkg.completion_bonus_service}」附加課程嗎？`)) return
+                            const res = await fetch(`/api/packages/${pkg.id}/claim-completion`, { method: 'POST' })
+                            if (res.ok) { refresh() }
+                            else { const d = await res.json(); alert(d.error || '領取失敗') }
+                          }}
+                          style={{ background: completionOnTime ? '#3a7a4a' : '#9a6a2a', color: '#fff', border: 'none', borderRadius: '5px', fontSize: '0.72rem', padding: '4px 12px', cursor: 'pointer', flexShrink: 0 }}>
+                          一鍵領取
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#7a4a9a', fontWeight: 500 }}>🎯 完成鼓勵</span>
+                        <span style={{ fontSize: '0.72rem', color: '#6b5f54' }}>{pkg.completion_bonus_service || pkg.completion_bonus_desc}</span>
+                      </div>
+                      {pkg.opened_date && completionDeadlineDays !== null && (
+                        <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '0.68rem', color: '#9a8f84' }}>
+                            {pkg.completion_weeks} 週內完成全部 {pkg.total_sessions} 堂
+                          </span>
+                          <span style={{
+                            fontSize: '0.68rem', fontWeight: 600,
+                            color: completionDeadlineDays < 0 ? '#9a4a4a' : completionDeadlineDays <= 14 ? '#9a6a2a' : '#7a4a9a',
+                            background: completionDeadlineDays < 0 ? '#fdf0f0' : completionDeadlineDays <= 14 ? '#fdf5e8' : '#f0ebf8',
+                            border: `1px solid ${completionDeadlineDays < 0 ? '#e8a8a8' : completionDeadlineDays <= 14 ? '#e8c878' : '#c4a8d8'}`,
+                            borderRadius: '4px', padding: '1px 7px',
+                          }}>
+                            {completionDeadlineDays < 0
+                              ? `已逾期 ${Math.abs(completionDeadlineDays)} 天`
+                              : `還有 ${completionDeadlineDays} 天截止`}
+                          </span>
                         </div>
-                      ) : (
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '0.72rem', color: '#7a4a9a', fontWeight: 500 }}>🎯 完成鼓勵</span>
-                            <span style={{ fontSize: '0.72rem', color: '#6b5f54' }}>{pkg.completion_bonus_service || pkg.completion_bonus_desc}</span>
-                          </div>
-                          {pkg.opened_date && completionDeadlineDays !== null && (
-                            <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontSize: '0.68rem', color: '#9a8f84' }}>
-                                {pkg.completion_weeks} 週內完成全部 {pkg.total_sessions} 堂
-                              </span>
-                              <span style={{
-                                fontSize: '0.68rem', fontWeight: 600,
-                                color: completionDeadlineDays < 0 ? '#9a4a4a' : completionDeadlineDays <= 14 ? '#9a6a2a' : '#7a4a9a',
-                                background: completionDeadlineDays < 0 ? '#fdf0f0' : completionDeadlineDays <= 14 ? '#fdf5e8' : '#f0ebf8',
-                                border: `1px solid ${completionDeadlineDays < 0 ? '#e8a8a8' : completionDeadlineDays <= 14 ? '#e8c878' : '#c4a8d8'}`,
-                                borderRadius: '4px', padding: '1px 7px',
-                              }}>
-                                {completionDeadlineDays < 0
-                                  ? `已逾期 ${Math.abs(completionDeadlineDays)} 天`
-                                  : `還有 ${completionDeadlineDays} 天截止`}
-                              </span>
-                            </div>
-                          )}
-                          {!pkg.opened_date && (
-                            <div style={{ marginTop: '2px', fontSize: '0.65rem', color: '#b4aa9e' }}>開封後開始計算</div>
-                          )}
-                        </div>
+                      )}
+                      {!pkg.opened_date && (
+                        <div style={{ marginTop: '2px', fontSize: '0.65rem', color: '#b4aa9e' }}>開封後開始計算</div>
                       )}
                     </div>
                   )}
