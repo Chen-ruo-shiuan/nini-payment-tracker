@@ -28,12 +28,14 @@ export async function GET() {
     // Check packages table columns
     const pkgCols = (db.prepare(`PRAGMA table_info(packages)`).all() as { name: string }[]).map(c => c.name)
 
-    // Grab latest 3 packages with completion bonus fields
+    // Grab packages that have completion_bonus_service set (any value)
     const pkgSample = db.prepare(`
       SELECT id, client_id, service_name, used_sessions, total_sessions,
         completion_bonus_service, completion_bonus_price, completion_weeks,
         completion_bonus_desc, completion_claimed, opened_date
-      FROM packages ORDER BY id DESC LIMIT 3
+      FROM packages
+      WHERE completion_bonus_service IS NOT NULL OR completion_weeks IS NOT NULL
+      ORDER BY id DESC LIMIT 10
     `).all()
 
     return NextResponse.json({
