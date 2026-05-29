@@ -58,6 +58,45 @@ function NewPackageForm() {
   const [completionBonusPrice, setCompletionBonusPrice]     = useState('')
   const [completionWeeks, setCompletionWeeks]               = useState('')
   const [showCompletion, setShowCompletion]                 = useState(false)
+  const [cbTemplateLoaded, setCbTemplateLoaded]             = useState(false)  // 是否已套用範本
+
+  // localStorage 範本：依服務名稱儲存完成鼓勵設定
+  const CB_KEY = (svcName: string) => `nini_cb_${svcName}`
+
+  function saveCbTemplate(svcName: string) {
+    if (!svcName || (!completionBonusService && !completionWeeks)) return
+    try {
+      localStorage.setItem(CB_KEY(svcName), JSON.stringify({
+        service: completionBonusService,
+        price:   completionBonusPrice,
+        weeks:   completionWeeks,
+        desc:    completionBonusDesc,
+      }))
+    } catch { /* ignore */ }
+  }
+
+  function loadCbTemplate(svcName: string): boolean {
+    try {
+      const raw = localStorage.getItem(CB_KEY(svcName))
+      if (!raw) return false
+      const t = JSON.parse(raw)
+      setCompletionBonusService(t.service || '')
+      setCompletionBonusPrice(t.price || '')
+      setCompletionWeeks(t.weeks || '')
+      setCompletionBonusDesc(t.desc || '')
+      return true
+    } catch { return false }
+  }
+
+  // 展開完成鼓勵 + 服務名稱已定時，自動套用上次同服務的設定
+  useEffect(() => {
+    if (!showCompletion || !finalServiceName) return
+    // 只在欄位全空時才自動套用（避免覆蓋手動輸入）
+    if (completionBonusService || completionBonusPrice || completionWeeks) return
+    const loaded = loadCbTemplate(finalServiceName)
+    setCbTemplateLoaded(loaded)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCompletion, finalServiceName])
 
   // 鼓勵任務
   const [bonusDesc, setBonusDesc]           = useState('')        // 贈品說明
@@ -224,6 +263,11 @@ function NewPackageForm() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || '發生錯誤'); return }
+
+      // 若有填寫完成鼓勵，儲存為此服務名稱的範本
+      if (showCompletion && finalServiceName && (completionBonusService || completionWeeks)) {
+        saveCbTemplate(finalServiceName)
+      }
 
       // 2. 若付款方式為分期
       if (paymentMethod === '分期') {
@@ -667,20 +711,56 @@ function NewPackageForm() {
               <p style={{ color: '#9a8f84', fontSize: '0.72rem', margin: 0 }}>
                 在期限內完成全部堂數，即獲得附加課程（從開封日起算）
               </p>
+
+              {/* 範本提示列 */}
+              {cbTemplateLoaded && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f0ebf8', border: '1px solid #c4a0d8', borderRadius: '6px', padding: '7px 12px' }}>
+                  <span style={{ color: '#7a4a9a', fontSize: '0.72rem' }}>✓ 已自動套用「{finalServiceName}」的上次設定</span>
+                  <button type="button"
+                    onClick={() => {
+                      setCompletionBonusService('')
+                      setCompletionBonusPrice('')
+                      setCompletionWeeks('')
+                      setCompletionBonusDesc('')
+                      setCbTemplateLoaded(false)
+                    }}
+                    style={{ color: '#9a4a4a', background: 'none', border: 'none', fontSize: '0.7rem', cursor: 'pointer', padding: '0' }}>
+                    清除重填
+                  </button>
+                </div>
+              )}
+
+              {/* 無範本時，若服務名稱已選可手動查找 */}
+              {!cbTemplateLoaded && finalServiceName && (() => {
+                try {
+                  const raw = localStorage.getItem(CB_KEY(finalServiceName))
+                  if (!raw) return null
+                  // 有範本但欄位已有輸入（未觸發自動套用），顯示「套用上次」按鈕
+                  const t = JSON.parse(raw)
+                  return (
+                    <button type="button"
+                      onClick={() => { loadCbTemplate(finalServiceName); setCbTemplateLoaded(true) }}
+                      style={{ alignSelf: 'flex-start', color: '#7a4a9a', background: '#f5eaf8', border: '1px solid #c4a0d8', borderRadius: '5px', fontSize: '0.72rem', padding: '4px 10px', cursor: 'pointer' }}>
+                      📋 套用上次「{t.service || finalServiceName}」設定
+                    </button>
+                  )
+                } catch { return null }
+              })()}
+
               <Field label="附加課程名稱（商品券名稱）">
-                <input value={completionBonusService} onChange={e => setCompletionBonusService(e.target.value)}
+                <input value={completionBonusService} onChange={e => { setCompletionBonusService(e.target.value); setCbTemplateLoaded(false) }}
                   placeholder="例：泡光氧彗（梅）" style={iStyle} />
               </Field>
               <Field label="附加課程單價">
-                <input value={completionBonusPrice} onChange={e => setCompletionBonusPrice(e.target.value)}
+                <input value={completionBonusPrice} onChange={e => { setCompletionBonusPrice(e.target.value); setCbTemplateLoaded(false) }}
                   type="number" min="0" placeholder="例：2880" style={iStyle} />
               </Field>
               <Field label="附加說明（顯示用）">
-                <input value={completionBonusDesc} onChange={e => setCompletionBonusDesc(e.target.value)}
+                <input value={completionBonusDesc} onChange={e => { setCompletionBonusDesc(e.target.value); setCbTemplateLoaded(false) }}
                   placeholder="例：附加泡光氧彗（梅）$2,880" style={iStyle} />
               </Field>
               <Field label="完成期限（週）">
-                <input value={completionWeeks} onChange={e => setCompletionWeeks(e.target.value)}
+                <input value={completionWeeks} onChange={e => { setCompletionWeeks(e.target.value); setCbTemplateLoaded(false) }}
                   type="number" min="1" max="52" placeholder="例：8（= 約 2 個月）" style={iStyle} />
               </Field>
               {completionBonusService && completionWeeks && (
