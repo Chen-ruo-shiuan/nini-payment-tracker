@@ -1137,11 +1137,14 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       : null
 
     // 完成鼓勵計算
-    // 達標條件：已完成全部堂數 + 開封日到最後施作日在 completion_weeks 週內
+    // 達標條件：已完成全部堂數（逾期仍可手動領取，老闆決定）
     const hasCompletionBonus = (!!pkg.completion_bonus_service || !!pkg.completion_bonus_desc) && !!pkg.completion_weeks
-    const completionAchieved = hasCompletionBonus && isDone && !!pkg.opened_date && !!pkg.last_session_date
-      && Math.round((new Date(pkg.last_session_date).getTime() - new Date(pkg.opened_date).getTime()) / 86400000)
-        <= (pkg.completion_weeks! * 7)
+    const completionDays = (hasCompletionBonus && isDone && !!pkg.opened_date && !!pkg.last_session_date)
+      ? Math.round((new Date(pkg.last_session_date).getTime() - new Date(pkg.opened_date).getTime()) / 86400000)
+      : null
+    const completionOnTime = completionDays !== null && completionDays <= (pkg.completion_weeks! * 7)
+    // 只要 isDone + 有設定完成鼓勵，就算「達標」（可領取），逾期只用顏色區分
+    const completionAchieved = hasCompletionBonus && isDone
     // 進行中：尚未完成但有開封日，計算剩餘期限
     const completionDeadlineDays = hasCompletionBonus && !isDone && pkg.opened_date
       ? Math.round((new Date(pkg.opened_date).getTime() + pkg.completion_weeks! * 7 * 86400000 - Date.now()) / 86400000)
@@ -1297,16 +1300,25 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
 
                   {/* 完成鼓勵 */}
                   {hasCompletionBonus && (
-                    <div style={{ marginTop: '8px', background: completionAchieved ? (pkg.completion_claimed ? '#f0ede8' : '#edf3eb') : '#faf5fe', border: `1px solid ${completionAchieved ? (pkg.completion_claimed ? '#d9d0c5' : '#9ab89e') : '#d4b0e8'}`, borderRadius: '6px', padding: '8px 10px' }}>
+                    <div style={{ marginTop: '8px',
+                      background: pkg.completion_claimed ? '#f0ede8' : completionAchieved ? (completionOnTime ? '#edf3eb' : '#fdf5e8') : '#faf5fe',
+                      border: `1px solid ${pkg.completion_claimed ? '#d9d0c5' : completionAchieved ? (completionOnTime ? '#9ab89e' : '#e8c878') : '#d4b0e8'}`,
+                      borderRadius: '6px', padding: '8px 10px' }}>
                       {completionAchieved ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '0.78rem', color: pkg.completion_claimed ? '#9a8f84' : '#3a7a4a', fontWeight: 600 }}>
-                              {pkg.completion_claimed ? '✓ 完成鼓勵已領取' : '🎉 完成鼓勵達標！'}
+                            <span style={{ fontSize: '0.78rem', fontWeight: 600,
+                              color: pkg.completion_claimed ? '#9a8f84' : completionOnTime ? '#3a7a4a' : '#9a6a2a' }}>
+                              {pkg.completion_claimed ? '✓ 完成鼓勵已領取' : completionOnTime ? '🎉 完成鼓勵達標！' : '✅ 全部完成（逾期）'}
                             </span>
-                            <span style={{ fontSize: '0.72rem', color: pkg.completion_claimed ? '#b4aa9e' : '#4a6b52' }}>
+                            <span style={{ fontSize: '0.72rem', color: pkg.completion_claimed ? '#b4aa9e' : completionOnTime ? '#4a6b52' : '#7a5a2a' }}>
                               {pkg.completion_bonus_service || pkg.completion_bonus_desc}
                             </span>
+                            {!pkg.completion_claimed && completionDays !== null && (
+                              <span style={{ fontSize: '0.68rem', color: completionOnTime ? '#6b8a6e' : '#9a6a2a' }}>
+                                （{completionDays} 天完成 / 限{pkg.completion_weeks! * 7}天）
+                              </span>
+                            )}
                           </div>
                           {!pkg.completion_claimed && (
                             <button
@@ -1316,7 +1328,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                                 if (res.ok) { refresh() }
                                 else { const d = await res.json(); alert(d.error || '領取失敗') }
                               }}
-                              style={{ background: '#3a7a4a', color: '#fff', border: 'none', borderRadius: '5px', fontSize: '0.72rem', padding: '4px 12px', cursor: 'pointer', flexShrink: 0 }}>
+                              style={{ background: completionOnTime ? '#3a7a4a' : '#9a6a2a', color: '#fff', border: 'none', borderRadius: '5px', fontSize: '0.72rem', padding: '4px 12px', cursor: 'pointer', flexShrink: 0 }}>
                               一鍵領取
                             </button>
                           )}
