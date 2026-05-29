@@ -104,6 +104,39 @@ function NewPackageForm() {
   const [timingMaxWeeks, setTimingMaxWeeks] = useState('')        // 最長週數（計算用）
   const [expiryDate, setExpiryDate]         = useState('')        // 建議使用期限
   const [showTask, setShowTask]             = useState(false)     // 展開/收起
+  const [taskTemplateLoaded, setTaskTemplateLoaded] = useState(false)
+
+  const TASK_KEY = (svcName: string) => `nini_task_${svcName}`
+
+  function saveTaskTemplate(svcName: string) {
+    if (!svcName || (!bonusDesc && !timingNote && !timingMaxWeeks)) return
+    try {
+      localStorage.setItem(TASK_KEY(svcName), JSON.stringify({
+        bonusDesc, timingNote, timingMaxWeeks,
+      }))
+    } catch { /* ignore */ }
+  }
+
+  function loadTaskTemplate(svcName: string): boolean {
+    try {
+      const raw = localStorage.getItem(TASK_KEY(svcName))
+      if (!raw) return false
+      const t = JSON.parse(raw)
+      setBonusDesc(t.bonusDesc || '')
+      setTimingNote(t.timingNote || '')
+      setTimingMaxWeeks(t.timingMaxWeeks || '')
+      return true
+    } catch { return false }
+  }
+
+  // 展開鼓勵任務 + 服務名稱已定時，自動套用同服務上次設定
+  useEffect(() => {
+    if (!showTask || !finalServiceName) return
+    if (bonusDesc || timingNote || timingMaxWeeks) return
+    const loaded = loadTaskTemplate(finalServiceName)
+    setTaskTemplateLoaded(loaded)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTask, finalServiceName])
 
   // 購買日改變時，自動更新期限預設（6個月後）
   function autoExpiry(d: string) {
@@ -267,6 +300,10 @@ function NewPackageForm() {
       // 若有填寫完成鼓勵，儲存為此服務名稱的範本
       if (showCompletion && finalServiceName && (completionBonusService || completionWeeks)) {
         saveCbTemplate(finalServiceName)
+      }
+      // 若有填寫鼓勵任務，儲存為此服務名稱的範本
+      if (showTask && finalServiceName && (bonusDesc || timingNote || timingMaxWeeks)) {
+        saveTaskTemplate(finalServiceName)
       }
 
       // 2. 若付款方式為分期
@@ -662,18 +699,51 @@ function NewPackageForm() {
                 若客人確認可達標，建立時即啟動任務（首次施作起開始計算回訪倒數）
               </p>
 
+              {/* 範本提示列 */}
+              {taskTemplateLoaded && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f5eaf8', border: '1px solid #c4a0d8', borderRadius: '6px', padding: '7px 12px' }}>
+                  <span style={{ color: '#7a3d8a', fontSize: '0.72rem' }}>✓ 已自動套用「{finalServiceName}」的上次設定</span>
+                  <button type="button"
+                    onClick={() => {
+                      setBonusDesc('')
+                      setTimingNote('')
+                      setTimingMaxWeeks('')
+                      setTaskTemplateLoaded(false)
+                    }}
+                    style={{ color: '#9a4a4a', background: 'none', border: 'none', fontSize: '0.7rem', cursor: 'pointer', padding: '0' }}>
+                    清除重填
+                  </button>
+                </div>
+              )}
+
+              {/* 無範本但有儲存記錄時，顯示手動套用按鈕 */}
+              {!taskTemplateLoaded && finalServiceName && (() => {
+                try {
+                  const raw = localStorage.getItem(TASK_KEY(finalServiceName))
+                  if (!raw) return null
+                  const t = JSON.parse(raw)
+                  return (
+                    <button type="button"
+                      onClick={() => { loadTaskTemplate(finalServiceName); setTaskTemplateLoaded(true) }}
+                      style={{ alignSelf: 'flex-start', color: '#7a3d8a', background: '#f5eaf8', border: '1px solid #c4a0d8', borderRadius: '5px', fontSize: '0.72rem', padding: '4px 10px', cursor: 'pointer' }}>
+                      📋 套用上次「{t.bonusDesc || finalServiceName}」設定
+                    </button>
+                  )
+                } catch { return null }
+              })()}
+
               <Field label="贈品說明">
-                <input value={bonusDesc} onChange={e => setBonusDesc(e.target.value)}
+                <input value={bonusDesc} onChange={e => { setBonusDesc(e.target.value); setTaskTemplateLoaded(false) }}
                   placeholder="例：B5熱導＋頸部" style={iStyle} />
               </Field>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <Field label="回訪週期（顯示用）">
-                  <input value={timingNote} onChange={e => setTimingNote(e.target.value)}
+                  <input value={timingNote} onChange={e => { setTimingNote(e.target.value); setTaskTemplateLoaded(false) }}
                     placeholder="例：3-4週" style={iStyle} />
                 </Field>
                 <Field label="最長週數（計算用）">
-                  <input value={timingMaxWeeks} onChange={e => setTimingMaxWeeks(e.target.value)}
+                  <input value={timingMaxWeeks} onChange={e => { setTimingMaxWeeks(e.target.value); setTaskTemplateLoaded(false) }}
                     type="number" min="1" placeholder="例：4" style={iStyle} />
                 </Field>
               </div>
@@ -682,7 +752,7 @@ function NewPackageForm() {
                 <input value={expiryDate} onChange={e => setExpiryDate(e.target.value)}
                   type="date" style={iStyle} />
                 <p style={{ color: '#b4aa9e', fontSize: '0.7rem', marginTop: '4px', margin: '4px 0 0' }}>
-                  預設購買日起 6 個月
+                  預設購買日起 6 個月（每次自動更新，不記憶）
                 </p>
               </Field>
 
