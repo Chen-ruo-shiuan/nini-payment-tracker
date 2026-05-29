@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
   const run = db.transaction(() => {
     // ── 1. Insert checkout ───────────────────────────────────────────────────
     const coRes = db.prepare(`
-      INSERT INTO checkouts (client_id, date, note, total_amount, incl_course, incl_product, incl_yodomo, incl_points)
-      VALUES (@client_id, @date, @note, @total_amount, @incl_course, @incl_product, @incl_yodomo, @incl_points)
+      INSERT INTO checkouts (client_id, date, note, total_amount, incl_course, incl_product, incl_yodomo, incl_points, points_earned, yodomo_earned)
+      VALUES (@client_id, @date, @note, @total_amount, @incl_course, @incl_product, @incl_yodomo, @incl_points, 0, 0)
     `).run({
       client_id: client_id ?? null,
       date: date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }),
@@ -158,6 +158,12 @@ export async function POST(req: NextRequest) {
             db.prepare(`UPDATE clients SET yodomo_card_points = yodomo_card_points + ?, updated_at = datetime('now') WHERE id = ?`)
               .run(yodomoEarned, client_id)
           }
+        }
+
+        // 回寫到 checkouts，方便刪除時正確扣回
+        if (pointsEarned > 0 || yodomoEarned > 0) {
+          db.prepare(`UPDATE checkouts SET points_earned = ?, yodomo_earned = ? WHERE id = ?`)
+            .run(pointsEarned, yodomoEarned, coId)
         }
       }
     }

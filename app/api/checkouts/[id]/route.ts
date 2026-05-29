@@ -13,7 +13,8 @@ export async function PATCH(
   const db = getDb()
 
   const checkout = db.prepare('SELECT * FROM checkouts WHERE id = ?').get(id) as {
-    id: number; client_id: number | null; date: string
+    id: number; client_id: number | null; date: string;
+    points_earned: number; yodomo_earned: number;
   } | undefined
   if (!checkout) return NextResponse.json({ error: '找不到結帳記錄' }, { status: 404 })
 
@@ -114,7 +115,8 @@ export async function DELETE(
   const db = getDb()
 
   const checkout = db.prepare('SELECT * FROM checkouts WHERE id = ?').get(id) as {
-    id: number; client_id: number | null; date: string
+    id: number; client_id: number | null; date: string;
+    points_earned: number; yodomo_earned: number;
   } | undefined
 
   if (!checkout) return NextResponse.json({ error: '找不到結帳記錄' }, { status: 404 })
@@ -128,6 +130,7 @@ export async function DELETE(
   }[]
 
   const run = db.transaction(() => {
+    // ── 還原商品券堂數 ────────────────────────────────────────────────────────
     for (const item of items) {
       if (item.category === '商品券' && item.pkg_id) {
         db.prepare('UPDATE packages SET used_sessions = MAX(0, used_sessions - ?) WHERE id = ?')
@@ -136,11 +139,26 @@ export async function DELETE(
     }
 
     if (checkout.client_id) {
+      // ── 還原儲值金 sv_ledger ─────────────────────────────────────────────
       for (const pay of payments) {
         if (pay.method === '儲值金') {
           db.prepare(`DELETE FROM sv_ledger WHERE client_id = ? AND note = ? AND date = ? AND amount = ?`)
             .run(checkout.client_id, `結帳 #${id} 儲值金消費`, checkout.date, -pay.amount)
         }
+      }
+
+      // ── 還原金米點數 ─────────────────────────────────────────────────────
+      const pointsBack = checkout.points_earned ?? 0
+      if (pointsBack > 0) {
+        db.prepare(`UPDATE clients SET points = MAX(0, points - ?), updated_at = datetime('now') WHERE id = ?`)
+          .run(pointsBack, checkout.client_id)
+      }
+
+      // ── 還原悠多摩點數 ───────────────────────────────────────────────────
+      const yodomoBack = checkout.yodomo_earned ?? 0
+      if (yodomoBack > 0) {
+        db.prepare(`UPDATE clients SET yodomo_card_points = MAX(0, yodomo_card_points - ?), updated_at = datetime('now') WHERE id = ?`)
+          .run(yodomoBack, checkout.client_id)
       }
     }
 

@@ -28,6 +28,7 @@ export function getDb(): Database.Database {
     migratePackageIncentive(db)
     migrateClientNextAppointment(db)
     migrateCheckoutItemsDiscount(db)
+    migrateCheckoutEarned(db)
   }
   return db
 }
@@ -561,5 +562,15 @@ function migrateCheckoutItemsDiscount(db: Database.Database) {
   const cols = (db.prepare('PRAGMA table_info(checkout_items)').all() as { name: string }[]).map(c => c.name)
   if (!cols.includes('discount')) {
     db.exec(`ALTER TABLE checkout_items ADD COLUMN discount INTEGER NOT NULL DEFAULT 0`)
+  }
+}
+
+function migrateCheckoutEarned(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(checkouts)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('points_earned')) {
+    db.exec(`ALTER TABLE checkouts ADD COLUMN points_earned INTEGER NOT NULL DEFAULT 0`)
+  }
+  if (!cols.includes('yodomo_earned')) {
+    db.exec(`ALTER TABLE checkouts ADD COLUMN yodomo_earned INTEGER NOT NULL DEFAULT 0`)
   }
 }
