@@ -1138,7 +1138,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
 
     // 完成鼓勵計算
     // 達標條件：已完成全部堂數 + 開封日到最後施作日在 completion_weeks 週內
-    const hasCompletionBonus = !!pkg.completion_bonus_desc && !!pkg.completion_weeks
+    const hasCompletionBonus = (!!pkg.completion_bonus_service || !!pkg.completion_bonus_desc) && !!pkg.completion_weeks
     const completionAchieved = hasCompletionBonus && isDone && !!pkg.opened_date && !!pkg.last_session_date
       && Math.round((new Date(pkg.last_session_date).getTime() - new Date(pkg.opened_date).getTime()) / 86400000)
         <= (pkg.completion_weeks! * 7)
@@ -1325,7 +1325,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '0.72rem', color: '#7a4a9a', fontWeight: 500 }}>🎯 完成鼓勵</span>
-                            <span style={{ fontSize: '0.72rem', color: '#6b5f54' }}>{pkg.completion_bonus_desc}</span>
+                            <span style={{ fontSize: '0.72rem', color: '#6b5f54' }}>{pkg.completion_bonus_service || pkg.completion_bonus_desc}</span>
                           </div>
                           {pkg.opened_date && completionDeadlineDays !== null && (
                             <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
