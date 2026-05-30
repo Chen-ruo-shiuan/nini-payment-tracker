@@ -56,7 +56,7 @@ export async function DELETE(
   const db = getDb()
 
   const entry = db.prepare('SELECT * FROM points_ledger WHERE id = ?').get(id) as
-    { id: number; client_id: number } | undefined
+    { id: number; client_id: number; delta: number } | undefined
   if (!entry) return NextResponse.json({ error: '找不到記錄' }, { status: 404 })
 
   const del = db.transaction(() => {
