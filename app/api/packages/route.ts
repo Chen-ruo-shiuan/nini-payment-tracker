@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   let pkgId: bigint | number = 0
 
-  db.transaction(() => {
+  try { db.transaction(() => {
     const res = db.prepare(`
       INSERT INTO packages
         (client_id, service_name, total_sessions, used_sessions,
@@ -77,8 +77,10 @@ export async function POST(req: NextRequest) {
       timing_max_weeks: timing_max_weeks ? Number(timing_max_weeks) : null,
       bonus_active:          bonus_desc ? 1 : 0,
       expiry_date:           expiry_date           || null,
-      completion_bonus_desc: completion_bonus_desc || null,
-      completion_weeks:      completion_weeks ? Number(completion_weeks) : null,
+      completion_bonus_desc:    completion_bonus_desc    || null,
+      completion_weeks:         completion_weeks ? Number(completion_weeks) : null,
+      completion_bonus_service: completion_bonus_service || null,
+      completion_bonus_price:   completion_bonus_price ? Number(completion_bonus_price) : null,
     })
     pkgId = res.lastInsertRowid
 
@@ -94,7 +96,10 @@ export async function POST(req: NextRequest) {
         finalDate,
       )
     }
-  })()
+  })() } catch (err) {
+    console.error('[Package POST Error]', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 
   return NextResponse.json({ id: pkgId }, { status: 201 })
 }
