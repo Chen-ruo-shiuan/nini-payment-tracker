@@ -30,6 +30,7 @@ export function getDb(): Database.Database {
     migrateCheckoutItemsDiscount(db)
     migrateCheckoutEarned(db)
     migrateAppointmentTime(db)
+    migrateClosedDays(db)
   }
   return db
 }
@@ -564,6 +565,16 @@ function migrateCheckoutItemsDiscount(db: Database.Database) {
   if (!cols.includes('discount')) {
     db.exec(`ALTER TABLE checkout_items ADD COLUMN discount INTEGER NOT NULL DEFAULT 0`)
   }
+}
+
+function migrateClosedDays(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS closed_days (
+      date TEXT PRIMARY KEY,
+      type TEXT NOT NULL DEFAULT '公休',
+      note TEXT
+    )
+  `)
 }
 
 function migrateAppointmentTime(db: Database.Database) {
