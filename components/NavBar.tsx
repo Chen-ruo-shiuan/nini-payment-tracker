@@ -36,6 +36,10 @@ export default function NavBar() {
             NINI の 療癒所　管理系統
           </span>
           <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+            <Link href="/appointments"
+              style={{ color: pathname.startsWith('/appointments') ? '#2c2825' : '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
+              📅 預約
+            </Link>
             <Link href="/tags"
               style={{ color: '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
               標籤

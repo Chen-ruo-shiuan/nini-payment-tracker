@@ -29,6 +29,7 @@ export function getDb(): Database.Database {
     migrateClientNextAppointment(db)
     migrateCheckoutItemsDiscount(db)
     migrateCheckoutEarned(db)
+    migrateAppointmentTime(db)
   }
   return db
 }
@@ -562,6 +563,13 @@ function migrateCheckoutItemsDiscount(db: Database.Database) {
   const cols = (db.prepare('PRAGMA table_info(checkout_items)').all() as { name: string }[]).map(c => c.name)
   if (!cols.includes('discount')) {
     db.exec(`ALTER TABLE checkout_items ADD COLUMN discount INTEGER NOT NULL DEFAULT 0`)
+  }
+}
+
+function migrateAppointmentTime(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(appointment_logs)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('time')) {
+    db.exec(`ALTER TABLE appointment_logs ADD COLUMN time TEXT`)
   }
 }
 

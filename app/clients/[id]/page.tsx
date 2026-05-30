@@ -2271,12 +2271,13 @@ function TimelineTab({ client }: { client: ClientDetail }) {
 }
 
 // ─── Appointment Section ──────────────────────────────────────────────────────
-interface ApptLog { id: number; client_id: number; date: string; note: string | null; created_at: string }
+interface ApptLog { id: number; client_id: number; date: string; time: string | null; note: string | null; created_at: string }
 
 function AppointmentSection({ clientId }: { clientId: string }) {
   const [appts, setAppts] = useState<ApptLog[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [newDate, setNewDate] = useState('')
+  const [newTime, setNewTime] = useState('')
   const [newNote, setNewNote] = useState('')
   const [showPast, setShowPast] = useState(false)
 
@@ -2293,9 +2294,9 @@ function AppointmentSection({ clientId }: { clientId: string }) {
     if (!newDate) return
     await fetch(`/api/clients/${clientId}/appointments`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: newDate, note: newNote }),
+      body: JSON.stringify({ date: newDate, time: newTime || null, note: newNote }),
     })
-    setNewDate(''); setNewNote(''); setShowAdd(false)
+    setNewDate(''); setNewTime(''); setNewNote(''); setShowAdd(false)
     load()
   }
 
@@ -2321,19 +2322,29 @@ function AppointmentSection({ clientId }: { clientId: string }) {
       </div>
 
       {showAdd && (
-        <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px', marginBottom: '8px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
-              style={{ border: '1px solid #d9d0c5', borderRadius: '5px', padding: '5px 8px', fontSize: '0.82rem', background: '#fff', color: '#2c2825', outline: 'none' }} />
-            <input value={newNote} onChange={e => setNewNote(e.target.value)}
-              placeholder="備註（選填）"
-              style={{ flex: 1, minWidth: '100px', border: '1px solid #d9d0c5', borderRadius: '5px', padding: '5px 8px', fontSize: '0.82rem', background: '#fff', color: '#2c2825', outline: 'none' }} />
+        <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px', marginBottom: '8px' }} className="space-y-2">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+            <div>
+              <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>日期 *</label>
+              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+                style={{ width: '100%', border: '1px solid #d9d0c5', borderRadius: '5px', padding: '5px 8px', fontSize: '0.82rem', background: '#fff', color: '#2c2825', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>時段</label>
+              <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)}
+                style={{ width: '100%', border: '1px solid #d9d0c5', borderRadius: '5px', padding: '5px 8px', fontSize: '0.82rem', background: '#fff', color: '#2c2825', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+          <input value={newNote} onChange={e => setNewNote(e.target.value)}
+            placeholder="備註（選填）"
+            style={{ width: '100%', border: '1px solid #d9d0c5', borderRadius: '5px', padding: '5px 8px', fontSize: '0.82rem', background: '#fff', color: '#2c2825', outline: 'none', boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', gap: '6px' }}>
             <button onClick={addAppt} disabled={!newDate}
-              style={{ background: newDate ? '#2c2825' : '#c4b8aa', color: '#f7f4ef', border: 'none', borderRadius: '5px', fontSize: '0.78rem', padding: '5px 14px', cursor: 'pointer' }}>
-              確認
+              style={{ flex: 1, background: newDate ? '#2c2825' : '#c4b8aa', color: '#f7f4ef', border: 'none', borderRadius: '5px', fontSize: '0.78rem', padding: '6px', cursor: 'pointer' }}>
+              確認新增
             </button>
-            <button onClick={() => { setShowAdd(false); setNewDate(''); setNewNote('') }}
-              style={{ background: 'none', border: '1px solid #e0d9d0', borderRadius: '5px', fontSize: '0.78rem', padding: '5px 10px', cursor: 'pointer', color: '#9a8f84' }}>
+            <button onClick={() => { setShowAdd(false); setNewDate(''); setNewTime(''); setNewNote('') }}
+              style={{ background: 'none', border: '1px solid #e0d9d0', borderRadius: '5px', fontSize: '0.78rem', padding: '6px 12px', cursor: 'pointer', color: '#9a8f84' }}>
               取消
             </button>
           </div>
@@ -2355,6 +2366,7 @@ function AppointmentSection({ clientId }: { clientId: string }) {
             }}>
               {fmtAppt(a.date)}
             </span>
+            {a.time && <span style={{ fontSize: '0.72rem', color: '#6b5f54', fontVariantNumeric: 'tabular-nums' }}>{a.time}</span>}
             <span style={{
               fontSize: '0.65rem', background: d < 0 ? '#f5f2ee' : d === 0 ? '#fff3ed' : d <= 3 ? '#fdf0f0' : '#edf3eb',
               color: d === 0 ? '#c4622d' : d <= 3 ? '#9a4a4a' : '#4a6b52',
