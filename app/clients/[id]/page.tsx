@@ -441,21 +441,32 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
         </div>
         {showPtForm && (
           <form onSubmit={adjustPoints} style={{ marginTop: '8px', background: '#f5f2ee', borderRadius: '6px', padding: '10px' }} className="space-y-2">
+            {/* 增加 / 扣除 模式切換 */}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {([['add', '➕ 增加點數'] , ['sub', '➖ 扣除點數']] as const).map(([mode, label]) => {
+                const isAdd = mode === 'add'
+                const active = isAdd ? Number(ptDelta) >= 0 : Number(ptDelta) < 0
+                return (
+                  <button key={mode} type="button"
+                    onClick={() => {
+                      const abs = Math.abs(Number(ptDelta)) || 0
+                      setPtDelta(isAdd ? String(abs || '') : abs ? '-' + abs : '-1')
+                    }}
+                    style={{
+                      flex: 1, padding: '7px 0', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: active ? 600 : 400,
+                      background: active ? (isAdd ? '#7a5a00' : '#9a4a4a') : '#e0d9d0',
+                      color: active ? '#fff' : '#6b5f54',
+                    }}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
               <div>
-                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>
-                  增減點數
-                  <span style={{ color: '#b4aa9e', marginLeft: '4px' }}>（負數 = 扣除，例如 -50）</span>
-                </label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <button type="button"
-                    onClick={() => setPtDelta(v => v.startsWith('-') ? v.slice(1) : v ? '-' + v : '-')}
-                    style={{ flexShrink: 0, background: Number(ptDelta) < 0 ? '#9a4a4a' : '#e0d9d0', color: Number(ptDelta) < 0 ? '#fff' : '#6b5f54', border: 'none', borderRadius: '4px', fontSize: '0.8rem', padding: '0 10px', cursor: 'pointer' }}>
-                    {Number(ptDelta) < 0 ? '－' : '＋'}
-                  </button>
-                  <input value={ptDelta} onChange={e => setPtDelta(e.target.value)}
-                    type="number" style={{ ...miniInput, flex: 1 }} placeholder="例：50" />
-                </div>
+                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>點數</label>
+                <input value={ptDelta} onChange={e => setPtDelta(e.target.value)}
+                  type="number" style={miniInput} placeholder="例：50" />
               </div>
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '3px' }}>日期</label>
@@ -469,11 +480,11 @@ function BenefitsTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                 placeholder="選填" style={miniInput} />
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button type="submit" disabled={ptLoading || !ptDelta} style={{
-                background: ptLoading || !ptDelta ? '#c4b8aa' : '#7a5a00', color: '#f7f4ef',
-                border: 'none', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 16px', cursor: 'pointer', flex: 1,
-              }}>{ptLoading ? '儲存中…' : '新增'}</button>
-              <button type="button" onClick={() => setShowPtForm(false)} style={{
+              <button type="submit" disabled={ptLoading || !ptDelta || ptDelta === '-'} style={{
+                background: ptLoading || !ptDelta || ptDelta === '-' ? '#c4b8aa' : Number(ptDelta) < 0 ? '#9a4a4a' : '#7a5a00',
+                color: '#f7f4ef', border: 'none', borderRadius: '4px', fontSize: '0.78rem', padding: '6px 16px', cursor: 'pointer', flex: 1,
+              }}>{ptLoading ? '儲存中…' : Number(ptDelta) < 0 ? `扣除 ${Math.abs(Number(ptDelta))} 點` : `新增 ${Number(ptDelta) || 0} 點`}</button>
+              <button type="button" onClick={() => { setShowPtForm(false); setPtDelta('') }} style={{
                 background: 'none', color: '#9a8f84', border: '1px solid #e0d9d0',
                 borderRadius: '4px', fontSize: '0.78rem', padding: '6px 14px', cursor: 'pointer',
               }}>取消</button>
