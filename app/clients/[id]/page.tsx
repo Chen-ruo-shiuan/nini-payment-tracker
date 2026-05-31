@@ -2455,8 +2455,8 @@ function AppointmentSection({ clientId }: { clientId: string }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = '時間軸' | '服務日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄' | '同意書' | '用品紀錄'
-const TABS: Tab[] = ['時間軸', '服務日誌', '分期', '福利', '套組', '儲值', '消費紀錄', '同意書', '用品紀錄']
+type Tab = '時間軸' | '服務日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄' | '同意書' | '用品紀錄' | '追蹤紀錄'
+const TABS: Tab[] = ['時間軸', '服務日誌', '分期', '福利', '套組', '儲值', '消費紀錄', '同意書', '用品紀錄', '追蹤紀錄']
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -2728,6 +2728,7 @@ export default function ClientDetailPage() {
       {tab === '消費紀錄' && <ConsumptionTab client={client} refresh={load} />}
       {tab === '同意書' && <DocumentsTab clientId={client.id} />}
       {tab === '用品紀錄' && <ProductUsageTab clientId={client.id} />}
+      {tab === '追蹤紀錄' && <FollowUpTab clientId={client.id} clientName={client.name} />}
 
       {/* Delete */}
       <div style={{ borderTop: '1px solid #f0ebe4', paddingTop: '16px', marginTop: '8px' }}>
@@ -3227,6 +3228,272 @@ function ProductUsageTab({ clientId }: { clientId: number }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Follow-Up Tab ────────────────────────────────────────────────────────────
+interface FollowUp {
+  id: number; client_id: number; checkout_id: number | null; due_date: string
+  contacted: number; client_feedback: string | null; skin_status: string | null
+  follow_up_action: string | null; note: string | null; completed_at: string | null; created_at: string
+}
+
+const FOLLOW_UP_DAYS = [1, 2, 3, 5, 7, 14]
+
+function FollowUpTab({ clientId, clientName }: { clientId: number; clientName: string }) {
+  const [tasks, setTasks] = useState<FollowUp[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editingId, setEditingId] = useState<number | null>(null)
+
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  const defaultDue = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 3)
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  })()
+
+  const emptyForm = { due_date: defaultDue, note: '' }
+  const [form, setForm] = useState(emptyForm)
+  const [saving, setSaving] = useState(false)
+
+  const emptyEdit = { due_date: '', contacted: false, client_feedback: '', skin_status: '', follow_up_action: '', note: '', complete: false }
+  const [editForm, setEditForm] = useState(emptyEdit)
+
+  async function load() {
+    setLoading(true)
+    const res = await fetch(`/api/clients/${clientId}/follow-ups`)
+    const data = await res.json()
+    setTasks(Array.isArray(data) ? data : [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [clientId])
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    await fetch('/api/follow-ups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, due_date: form.due_date, note: form.note || null }),
+    })
+    setForm(emptyForm)
+    await load()
+    setSaving(false)
+  }
+
+  async function handleSaveEdit(id: number) {
+    await fetch(`/api/follow-ups/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        due_date: editForm.due_date,
+        contacted: editForm.contacted,
+        client_feedback: editForm.client_feedback || null,
+        skin_status: editForm.skin_status || null,
+        follow_up_action: editForm.follow_up_action || null,
+        note: editForm.note || null,
+        complete: editForm.complete,
+      }),
+    })
+    setEditingId(null)
+    await load()
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('確定刪除此追蹤任務？')) return
+    await fetch(`/api/follow-ups/${id}`, { method: 'DELETE' })
+    setTasks(prev => prev.filter(t => t.id !== id))
+  }
+
+  function startEdit(t: FollowUp) {
+    setEditForm({
+      due_date: t.due_date,
+      contacted: !!t.contacted,
+      client_feedback: t.client_feedback || '',
+      skin_status: t.skin_status || '',
+      follow_up_action: t.follow_up_action || '',
+      note: t.note || '',
+      complete: !!t.completed_at,
+    })
+    setEditingId(t.id)
+  }
+
+  const sInput: React.CSSProperties = {
+    background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '5px',
+    color: '#2c2825', fontSize: '0.82rem', outline: 'none', padding: '6px 10px',
+  }
+
+  const pending = tasks.filter(t => !t.completed_at)
+  const done = tasks.filter(t => !!t.completed_at)
+
+  return (
+    <div className="space-y-5">
+      {/* Add form */}
+      <form onSubmit={handleAdd} style={{ background: '#eef2f9', border: '1px solid #9ab0e8', borderRadius: '8px', padding: '14px' }}>
+        <p style={{ color: '#2d4f9a', fontSize: '0.82rem', fontWeight: 500, marginBottom: '12px' }}>新增課後追蹤任務</p>
+        <div className="space-y-3">
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '4px' }}>追蹤日期</label>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
+              {FOLLOW_UP_DAYS.map(n => {
+                const d = new Date(); d.setDate(d.getDate() + n)
+                const ds = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+                return (
+                  <button key={n} type="button"
+                    onClick={() => setForm(p => ({ ...p, due_date: ds }))}
+                    style={{
+                      padding: '3px 10px', borderRadius: '10px', fontSize: '0.72rem', border: 'none', cursor: 'pointer',
+                      background: form.due_date === ds ? '#4a7ac8' : '#d8e4f4',
+                      color: form.due_date === ds ? '#fff' : '#2d4f9a',
+                    }}>
+                    +{n}天
+                  </button>
+                )
+              })}
+            </div>
+            <input type="date" value={form.due_date} onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))}
+              style={{ ...sInput, width: '100%' }} />
+          </div>
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '4px' }}>備註（提醒事項）</label>
+            <textarea value={form.note} rows={2} onChange={e => setForm(p => ({ ...p, note: e.target.value }))}
+              placeholder={`EX：追蹤 ${clientName} 皮膚修復狀況`}
+              style={{ ...sInput, width: '100%', resize: 'none' }} />
+          </div>
+        </div>
+        <button type="submit" disabled={saving}
+          style={{ marginTop: '10px', width: '100%', background: saving ? '#c4b8aa' : '#2d4f9a', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '0.88rem', padding: '9px', cursor: saving ? 'not-allowed' : 'pointer' }}>
+          {saving ? '新增中…' : '新增追蹤'}
+        </button>
+      </form>
+
+      {/* Pending */}
+      {loading ? (
+        <p style={{ color: '#9a8f84', textAlign: 'center', padding: '20px 0' }}>載入中…</p>
+      ) : pending.length === 0 && done.length === 0 ? (
+        <p style={{ color: '#b4aa9e', textAlign: 'center', padding: '20px 0', fontSize: '0.85rem' }}>尚無追蹤紀錄</p>
+      ) : (
+        <div className="space-y-5">
+          {pending.length > 0 && (
+            <div>
+              <p style={{ color: '#2d4f9a', fontSize: '0.72rem', letterSpacing: '0.06em', marginBottom: '8px' }}>待追蹤 ({pending.length})</p>
+              <div className="space-y-2">
+                {pending.map(t => {
+                  const daysLeft = Math.round((new Date(t.due_date).getTime() - new Date(today).getTime()) / 86400000)
+                  const isOverdue = daysLeft < 0; const isDueToday = daysLeft === 0
+                  return (
+                    <div key={t.id}>
+                      {editingId === t.id ? (
+                        <div style={{ background: '#fff', border: '1px solid #9ab0e8', borderRadius: '6px', padding: '12px' }}>
+                          <div className="space-y-2">
+                            <div>
+                              <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>追蹤日期</label>
+                              <input type="date" value={editForm.due_date} onChange={e => setEditForm(p => ({ ...p, due_date: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.78rem' }} />
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={editForm.contacted} onChange={e => setEditForm(p => ({ ...p, contacted: e.target.checked }))} />
+                              <span style={{ color: '#2c2825', fontSize: '0.82rem' }}>已聯繫客人</span>
+                            </label>
+                            {[
+                              { key: 'client_feedback', label: '客人反饋', ph: '滿意度、意見、問題…' },
+                              { key: 'skin_status',     label: '皮膚狀況', ph: '皮膚恢復、反應…' },
+                              { key: 'follow_up_action',label: '後續行動', ph: '下次預約、推薦產品…' },
+                              { key: 'note',            label: '備註',     ph: '' },
+                            ].map(({ key, label, ph }) => (
+                              <div key={key}>
+                                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>{label}</label>
+                                <textarea rows={2} value={editForm[key as keyof typeof editForm] as string}
+                                  onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
+                                  placeholder={ph} style={{ ...sInput, width: '100%', resize: 'none', fontSize: '0.78rem' }} />
+                              </div>
+                            ))}
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={editForm.complete} onChange={e => setEditForm(p => ({ ...p, complete: e.target.checked }))} />
+                              <span style={{ color: '#3a7a42', fontSize: '0.82rem', fontWeight: 500 }}>✓ 標示為已完成</span>
+                            </label>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+                            <button onClick={() => handleSaveEdit(t.id)}
+                              style={{ flex: 1, background: '#2d4f9a', color: '#fff', border: 'none', borderRadius: '5px', fontSize: '0.8rem', padding: '7px', cursor: 'pointer' }}>
+                              儲存
+                            </button>
+                            <button onClick={() => setEditingId(null)}
+                              style={{ flex: 1, background: '#e0d9d0', color: '#6b5f54', border: 'none', borderRadius: '5px', fontSize: '0.8rem', padding: '7px', cursor: 'pointer' }}>
+                              取消
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{
+                          background: isOverdue ? '#fdf0f0' : isDueToday ? '#fdf8ee' : '#eef2f9',
+                          border: `1px solid ${isOverdue ? '#e89898' : isDueToday ? '#e8c96a' : '#9ab0e8'}`,
+                          borderRadius: '6px', padding: '10px 12px',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                        }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ color: isOverdue ? '#9a3a3a' : isDueToday ? '#9a6a00' : '#2d4f9a', fontSize: '0.82rem', fontWeight: 600 }}>
+                                {fmtDate(t.due_date)}
+                              </span>
+                              <span style={{
+                                background: isOverdue ? '#fdf0f0' : isDueToday ? '#fdf5e0' : '#e8f0fc',
+                                color: isOverdue ? '#9a3a3a' : isDueToday ? '#9a6a00' : '#2d4f9a',
+                                border: `1px solid ${isOverdue ? '#e89898' : isDueToday ? '#d4a84a' : '#9ab0e8'}`,
+                                borderRadius: '4px', padding: '1px 7px', fontSize: '0.68rem', fontWeight: 600,
+                              }}>
+                                {isOverdue ? `逾期 ${-daysLeft}天` : isDueToday ? '今天' : `${daysLeft}天後`}
+                              </span>
+                            </div>
+                            {t.note && <p style={{ color: '#6b5f54', fontSize: '0.78rem', marginTop: '3px' }}>{t.note}</p>}
+                          </div>
+                          <div style={{ display: 'flex', gap: '5px', marginLeft: '8px', flexShrink: 0 }}>
+                            <button onClick={() => startEdit(t)}
+                              style={{ background: '#2d4f9a', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '0.72rem', padding: '4px 10px', cursor: 'pointer' }}>
+                              填寫追蹤
+                            </button>
+                            <button onClick={() => handleDelete(t.id)}
+                              style={{ background: 'none', border: '1px solid #e8a8a8', borderRadius: '4px', color: '#9a6060', fontSize: '0.72rem', padding: '4px 8px', cursor: 'pointer' }}>
+                              刪除
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {done.length > 0 && (
+            <div>
+              <p style={{ color: '#9a8f84', fontSize: '0.72rem', letterSpacing: '0.06em', marginBottom: '8px' }}>已完成 ({done.length})</p>
+              <div className="space-y-2">
+                {done.map(t => (
+                  <div key={t.id} style={{ background: '#f7f7f5', border: '1px solid #e0ddd8', borderRadius: '6px', padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: '#9a8f84', fontSize: '0.82rem', textDecoration: 'line-through' }}>{fmtDate(t.due_date)}</span>
+                          {t.contacted ? <span style={{ color: '#3a7a42', fontSize: '0.68rem' }}>✓ 已聯繫</span> : null}
+                        </div>
+                        {t.client_feedback && <p style={{ color: '#6b5f54', fontSize: '0.75rem', marginTop: '3px' }}>反饋：{t.client_feedback}</p>}
+                        {t.skin_status && <p style={{ color: '#6b5f54', fontSize: '0.75rem' }}>皮膚：{t.skin_status}</p>}
+                        {t.follow_up_action && <p style={{ color: '#6b5f54', fontSize: '0.75rem' }}>後續：{t.follow_up_action}</p>}
+                      </div>
+                      <button onClick={() => handleDelete(t.id)}
+                        style={{ background: 'none', border: 'none', color: '#c4b8aa', fontSize: '0.68rem', cursor: 'pointer', marginLeft: '8px', flexShrink: 0 }}>
+                        刪除
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -542,6 +542,13 @@ interface DormantClient {
   active_pkg_count: number; last_visit_date: string | null
 }
 
+// ─── Follow-Up Types ─────────────────────────────────────────────────────────
+interface FollowUpTask {
+  id: number; client_id: number; client_name: string; client_level: string
+  due_date: string; contacted: number; is_overdue: boolean; is_due_today: boolean
+  note: string | null; completed_at: string | null
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function OverviewPage() {
   const [data, setData] = useState<OverviewData | null>(null)
@@ -552,6 +559,8 @@ export default function OverviewPage() {
   const [dormantOpen, setDormantOpen] = useState(false)
   const [dormantDays, setDormantDays] = useState(60)
   const [lowStockCount, setLowStockCount] = useState(0)
+  const [pendingFollowUps, setPendingFollowUps] = useState<FollowUpTask[]>([])
+  const [followUpsOpen, setFollowUpsOpen] = useState(false)
 
   function toggleCard(card: typeof expandedCard) {
     setExpandedCard(prev => prev === card ? null : card)
@@ -578,6 +587,13 @@ export default function OverviewPage() {
         if (!Array.isArray(data)) return
         setLowStockCount(data.filter(i => i.current_qty <= i.low_stock_threshold).length)
       })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/follow-ups?status=pending')
+      .then(r => r.json())
+      .then((data: FollowUpTask[]) => { if (Array.isArray(data)) setPendingFollowUps(data) })
       .catch(() => {})
   }, [])
 
@@ -697,6 +713,61 @@ export default function OverviewPage() {
                       }}>
                         {daysSince === null ? '從未' : `${daysSince} 天前`}
                       </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 課後追蹤待辦 ── */}
+      {pendingFollowUps.length > 0 && (
+        <div style={{
+          background: followUpsOpen ? '#f0f4fb' : '#eef2f9',
+          border: '1px solid #9ab0e8', borderLeft: '4px solid #4a7ac8',
+          borderRadius: '6px', overflow: 'hidden',
+        }}>
+          <button onClick={() => setFollowUpsOpen(v => !v)}
+            style={{ width: '100%', background: 'none', border: 'none', padding: '10px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: '#2d4f9a', fontSize: '0.85rem', fontWeight: 600 }}>
+                📋 課後追蹤待辦
+              </span>
+              <span style={{
+                background: pendingFollowUps.some(f => f.is_overdue) ? '#9a4a4a' : '#4a7ac8',
+                color: '#fff', fontSize: '0.68rem', fontWeight: 700,
+                borderRadius: '10px', padding: '1px 7px',
+              }}>{pendingFollowUps.length}</span>
+            </div>
+            <span style={{ color: '#9ab0e8', fontSize: '0.75rem' }}>{followUpsOpen ? '▲' : '▼'}</span>
+          </button>
+          {followUpsOpen && (
+            <div style={{ borderTop: '1px solid #c0d0e8', padding: '0 8px 8px' }}>
+              {pendingFollowUps.map(f => {
+                const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+                const daysLeft = Math.round((new Date(f.due_date).getTime() - new Date(today).getTime()) / 86400000)
+                return (
+                  <Link key={f.id} href={`/clients/${f.client_id}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '8px 8px', borderBottom: '1px solid #dde8f5', textDecoration: 'none',
+                    }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ color: '#2c2825', fontSize: '0.85rem' }}>{f.client_name}</span>
+                        <MembershipBadge tier={f.client_level as MembershipLevel} />
+                      </div>
+                      {f.note && <div style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '2px' }}>{f.note}</div>}
+                    </div>
+                    <div style={{
+                      background: f.is_overdue ? '#fdf0f0' : f.is_due_today ? '#fdf5e0' : '#e8f0fc',
+                      color: f.is_overdue ? '#9a3a3a' : f.is_due_today ? '#9a6a00' : '#2d4f9a',
+                      border: `1px solid ${f.is_overdue ? '#e89898' : f.is_due_today ? '#d4a84a' : '#9ab0e8'}`,
+                      borderRadius: '4px', padding: '3px 8px', fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap',
+                    }}>
+                      {f.is_overdue ? `逾期 ${-daysLeft}天` : f.is_due_today ? '今天' : `${daysLeft}天後`}
                     </div>
                   </Link>
                 )

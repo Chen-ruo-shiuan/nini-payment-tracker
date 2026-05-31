@@ -38,6 +38,7 @@ export function getDb(): Database.Database {
     migrateClientReferral(db)
     migrateProductUsageLogs(db)
     migrateInventory(db)
+    migrateFollowUps(db)
   }
   return db
 }
@@ -639,6 +640,24 @@ function migrateProductUsageLogs(db: Database.Database) {
       batch_note   TEXT,
       note         TEXT,
       created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+}
+
+function migrateFollowUps(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS follow_up_tasks (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      checkout_id     INTEGER REFERENCES checkouts(id) ON DELETE SET NULL,
+      due_date        TEXT    NOT NULL,
+      contacted       INTEGER NOT NULL DEFAULT 0,
+      client_feedback TEXT,
+      skin_status     TEXT,
+      follow_up_action TEXT,
+      note            TEXT,
+      completed_at    TEXT,
+      created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
     )
   `)
 }
