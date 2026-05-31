@@ -597,11 +597,17 @@ function migrateClientDocuments(db: Database.Database) {
       doc_type     TEXT    NOT NULL DEFAULT '其他',
       note         TEXT,
       file_size    INTEGER,
+      signed_date  TEXT,
       upload_date  TEXT    NOT NULL,
       created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
     )
   `)
   mkdirSync(DOCS_DIR, { recursive: true })
+  // 若表已存在（舊資料），補上 signed_date 欄位
+  const cols = (db.prepare('PRAGMA table_info(client_documents)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('signed_date')) {
+    db.exec(`ALTER TABLE client_documents ADD COLUMN signed_date TEXT`)
+  }
 }
 
 function migrateCheckoutEarned(db: Database.Database) {

@@ -2654,7 +2654,7 @@ export default function ClientDetailPage() {
 // ─── Documents Tab ────────────────────────────────────────────────────────────
 interface DocRow {
   id: number; client_id: number; original_name: string; doc_type: string
-  note: string | null; file_size: number | null; upload_date: string
+  note: string | null; file_size: number | null; signed_date: string | null; upload_date: string
 }
 
 const DOC_TYPES = [
@@ -2686,8 +2686,8 @@ function DocumentsTab({ clientId }: { clientId: number }) {
   const [deleting, setDeleting] = useState<number | null>(null)
   const [docType, setDocType] = useState(DOC_TYPES[0])
   const [note, setNote] = useState('')
+  const [signedDate, setSignedDate] = useState('')
   const [fileErr, setFileErr] = useState('')
-  const fileRef = useState<HTMLInputElement | null>(null)
   const inputRef = { current: null as HTMLInputElement | null }
 
   function loadDocs() {
@@ -2706,12 +2706,14 @@ function DocumentsTab({ clientId }: { clientId: number }) {
     const form = new FormData()
     form.append('file', file)
     form.append('doc_type', docType)
+    if (signedDate) form.append('signed_date', signedDate)
     if (note.trim()) form.append('note', note.trim())
     setUploading(true)
     const res = await fetch(`/api/clients/${clientId}/documents`, { method: 'POST', body: form })
     setUploading(false)
     if (res.ok) {
       setNote('')
+      setSignedDate('')
       if (inputRef.current) inputRef.current.value = ''
       loadDocs()
     } else {
@@ -2741,17 +2743,21 @@ function DocumentsTab({ clientId }: { clientId: number }) {
         className="space-y-3">
         <p style={{ color: '#6b5f54', fontSize: '0.82rem', fontWeight: 500 }}>上傳同意書 / 文件</p>
 
+        <div>
+          <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '3px' }}>文件類型</label>
+          <select value={docType} onChange={e => setDocType(e.target.value)} style={iStyle}>
+            {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
+          </select>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <div>
-            <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '3px' }}>文件類型</label>
-            <select value={docType} onChange={e => setDocType(e.target.value)} style={iStyle}>
-              {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
-            </select>
+            <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '3px' }}>簽署日期（選填）</label>
+            <input type="date" value={signedDate} onChange={e => setSignedDate(e.target.value)} style={iStyle} />
           </div>
           <div>
             <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '3px' }}>備註（選填）</label>
             <input value={note} onChange={e => setNote(e.target.value)}
-              placeholder="例：2025年簽" style={iStyle} />
+              placeholder="例：本人簽、家長代簽…" style={iStyle} />
           </div>
         </div>
 
@@ -2791,8 +2797,12 @@ function DocumentsTab({ clientId }: { clientId: number }) {
                   </div>
                   <div style={{ color: '#9a8f84', fontSize: '0.7rem', marginTop: '3px' }}>
                     {doc.doc_type}
+                    {doc.signed_date && (
+                      <span style={{ marginLeft: '6px', color: '#6b5f54' }}>
+                        簽署 {new Date(doc.signed_date + 'T00:00:00').toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                      </span>
+                    )}
                     {doc.file_size ? `　${fmtSize(doc.file_size)}` : ''}
-                    　{doc.upload_date}
                     {doc.note && `　${doc.note}`}
                   </div>
                 </div>

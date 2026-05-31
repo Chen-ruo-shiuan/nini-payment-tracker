@@ -17,7 +17,7 @@ export async function GET(
   const { id } = await params
   const db = getDb()
   const docs = db.prepare(
-    `SELECT id, client_id, original_name, doc_type, note, file_size, upload_date, created_at
+    `SELECT id, client_id, original_name, doc_type, note, file_size, signed_date, upload_date, created_at
      FROM client_documents WHERE client_id = ? ORDER BY upload_date DESC, created_at DESC`
   ).all(Number(id))
   return NextResponse.json(docs)
@@ -49,8 +49,9 @@ export async function POST(
     return NextResponse.json({ error: '檔案不能超過 20MB' }, { status: 400 })
   }
 
-  const docType   = (formData.get('doc_type')  as string) || '其他'
-  const note      = (formData.get('note')       as string) || null
+  const docType    = (formData.get('doc_type')   as string) || '其他'
+  const note       = (formData.get('note')        as string) || null
+  const signedDate = (formData.get('signed_date') as string) || null
   const uploadDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
 
   // Determine extension
@@ -70,9 +71,9 @@ export async function POST(
   }
 
   const res = db.prepare(`
-    INSERT INTO client_documents (client_id, filename, original_name, doc_type, note, file_size, upload_date)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(clientId, filename, file.name, docType, note, file.size, uploadDate)
+    INSERT INTO client_documents (client_id, filename, original_name, doc_type, note, file_size, signed_date, upload_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(clientId, filename, file.name, docType, note, file.size, signedDate, uploadDate)
 
   return NextResponse.json({ id: res.lastInsertRowid }, { status: 201 })
 }
