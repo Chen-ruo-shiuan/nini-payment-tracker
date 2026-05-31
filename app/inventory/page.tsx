@@ -2,11 +2,11 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-const CATEGORIES = ['精華/原液', '消耗品', '銷售產品', '其他'] as const
+const CATEGORIES = ['原液', '純露', '面膜', '寄賣商品', '儀器耗材', '自訂義', '其他'] as const
 type Category = typeof CATEGORIES[number]
 
-const UNITS = ['瓶', '支', '格', 'ml', '包', '盒', '組', '個', '條', '片']
-const REASONS_IN  = ['補貨', '期初庫存', '退貨入庫', '手動調整']
+const UNITS = ['瓶', '支', 'ml', '包', '盒', '組', '個', '條', '片', '格']
+const REASONS_IN  = ['補貨', '退貨入庫', '手動調整']
 const REASONS_OUT = ['日常消耗', '客人使用', '損耗', '手動調整']
 
 interface InventoryItem {
@@ -20,10 +20,23 @@ interface InventoryItem {
   created_at: string
 }
 
+interface LedgerEntry {
+  id: number
+  item_id: number
+  delta: number
+  reason: string
+  date: string
+  note: string | null
+  checkout_id: number | null
+}
+
 const CAT_COLOR: Record<Category, { bg: string; color: string; border: string }> = {
-  '精華/原液': { bg: '#eef4fb', color: '#2d4f9a', border: '#9ab0e8' },
-  '消耗品':   { bg: '#f7f4ef', color: '#6b5f54', border: '#c8c4be' },
-  '銷售產品': { bg: '#edf3eb', color: '#3a7a42', border: '#7ab884' },
+  '原液':     { bg: '#eef4fb', color: '#2d4f9a', border: '#9ab0e8' },
+  '純露':     { bg: '#f5eef8', color: '#6a3a8a', border: '#c0a0d8' },
+  '面膜':     { bg: '#edf3eb', color: '#3a7a42', border: '#7ab884' },
+  '寄賣商品': { bg: '#fdf5e0', color: '#7a5a00', border: '#e0c055' },
+  '儀器耗材': { bg: '#f7f4ef', color: '#6b5f54', border: '#c8c4be' },
+  '自訂義':   { bg: '#eef8f6', color: '#2a7a6a', border: '#7ac8b8' },
   '其他':     { bg: '#faf8f5', color: '#9a8f84', border: '#e0d9d0' },
 }
 
@@ -40,17 +53,30 @@ export default function InventoryPage() {
 
   // Add form
   const [showAdd, setShowAdd] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', category: '精華/原液' as Category, unit: '瓶', initial_qty: '', low_stock_threshold: '2', note: '' })
+  const [addForm, setAddForm] = useState({
+    name: '', category: '原液' as Category, unit: '瓶',
+    low_stock_threshold: '2', note: '',
+  })
   const [addSaving, setAddSaving] = useState(false)
 
   // Edit
   const [editId, setEditId] = useState<number | null>(null)
-  const [editForm, setEditForm] = useState({ name: '', category: '精華/原液' as Category, unit: '瓶', low_stock_threshold: '2', note: '' })
+  const [editForm, setEditForm] = useState({
+    name: '', category: '原液' as Category, unit: '瓶',
+    low_stock_threshold: '2', note: '',
+  })
 
   // Adjust
   const [adjustId, setAdjustId] = useState<number | null>(null)
-  const [adjustForm, setAdjustForm] = useState({ direction: 'in' as 'in' | 'out', qty: '', reason: '補貨', date: '', note: '' })
+  const [adjustForm, setAdjustForm] = useState({
+    direction: 'in' as 'in' | 'out', qty: '', reason: '補貨', date: '', note: '',
+  })
   const [adjusting, setAdjusting] = useState(false)
+
+  // History
+  const [historyId, setHistoryId] = useState<number | null>(null)
+  const [ledger, setLedger] = useState<LedgerEntry[]>([])
+  const [ledgerLoading, setLedgerLoading] = useState(false)
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
 
@@ -70,10 +96,10 @@ export default function InventoryPage() {
     const res = await fetch('/api/inventory', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...addForm, initial_qty: Number(addForm.initial_qty) || 0 }),
+      body: JSON.stringify({ ...addForm, initial_qty: 0 }),
     })
     if (res.ok) {
-      setAddForm({ name: '', category: '精華/原液', unit: '瓶', initial_qty: '', low_stock_threshold: '2', note: '' })
+      setAddForm({ name: '', category: '原液', unit: '瓶', low_stock_threshold: '2', note: '' })
       setShowAdd(false)
       await load()
     }
@@ -94,12 +120,15 @@ export default function InventoryPage() {
     if (!confirm(`確定要刪除「${name}」？相關庫存紀錄也會一併刪除。`)) return
     await fetch(`/api/inventory/${id}`, { method: 'DELETE' })
     setItems(prev => prev.filter(i => i.id !== id))
+    if (historyId === id) setHistoryId(null)
   }
 
   async function handleAdjust(id: number) {
     if (!adjustForm.qty || isNaN(Number(adjustForm.qty))) return
     setAdjusting(true)
-    const delta = adjustForm.direction === 'in' ? Math.abs(Number(adjustForm.qty)) : -Math.abs(Number(adjustForm.qty))
+    const delta = adjustForm.direction === 'in'
+      ? Math.abs(Number(adjustForm.qty))
+      : -Math.abs(Number(adjustForm.qty))
     const res = await fetch(`/api/inventory/${id}/adjust`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -114,21 +143,51 @@ export default function InventoryPage() {
       const data = await res.json()
       setItems(prev => prev.map(i => i.id === id ? { ...i, current_qty: data.current_qty } : i))
       setAdjustId(null)
+      // Refresh history if open
+      if (historyId === id) await loadHistory(id)
     }
     setAdjusting(false)
   }
 
+  async function loadHistory(id: number) {
+    setLedgerLoading(true)
+    const res = await fetch(`/api/inventory/${id}`)
+    const data = await res.json()
+    setLedger(Array.isArray(data.ledger) ? data.ledger : [])
+    setLedgerLoading(false)
+  }
+
+  async function toggleHistory(id: number) {
+    if (historyId === id) {
+      setHistoryId(null)
+      setLedger([])
+      return
+    }
+    setHistoryId(id)
+    setEditId(null)
+    setAdjustId(null)
+    await loadHistory(id)
+  }
+
   function startEdit(item: InventoryItem) {
-    setEditForm({ name: item.name, category: item.category, unit: item.unit, low_stock_threshold: String(item.low_stock_threshold), note: item.note || '' })
+    setEditForm({
+      name: item.name, category: item.category, unit: item.unit,
+      low_stock_threshold: String(item.low_stock_threshold), note: item.note || '',
+    })
     setEditId(item.id)
     setAdjustId(null)
+    setHistoryId(null)
   }
 
   function startAdjust(item: InventoryItem) {
     setAdjustForm({ direction: 'in', qty: '', reason: '補貨', date: today, note: '' })
     setAdjustId(item.id)
     setEditId(null)
+    setHistoryId(null)
   }
+
+  const fmtDate = (d: string) =>
+    new Date(d + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
 
   // Filter
   const displayed = items.filter(i => {
@@ -143,7 +202,7 @@ export default function InventoryPage() {
     const list = displayed.filter(i => i.category === cat)
     if (list.length > 0) acc[cat] = list
     return acc
-  }, {} as Record<Category, InventoryItem[]>)
+  }, {} as Partial<Record<Category, InventoryItem[]>>)
 
   return (
     <div className="space-y-5">
@@ -153,7 +212,7 @@ export default function InventoryPage() {
           <Link href="/" style={{ color: '#9a8f84', fontSize: '0.85rem' }}>← 首頁</Link>
           <h1 style={{ color: '#2c2825', fontSize: '1.1rem', fontWeight: 500 }}>庫存管理</h1>
         </div>
-        <button onClick={() => { setShowAdd(s => !s); setEditId(null); setAdjustId(null) }}
+        <button onClick={() => { setShowAdd(s => !s); setEditId(null); setAdjustId(null); setHistoryId(null) }}
           style={{ background: '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '6px', fontSize: '0.82rem', padding: '7px 14px', cursor: 'pointer' }}>
           + 新增品項
         </button>
@@ -174,44 +233,50 @@ export default function InventoryPage() {
       {showAdd && (
         <form onSubmit={handleAdd} style={{ background: '#f7f4ef', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }}>
           <p style={{ color: '#6b5f54', fontSize: '0.82rem', fontWeight: 500, marginBottom: '12px' }}>新增庫存品項</p>
+          <p style={{ color: '#9a8f84', fontSize: '0.72rem', marginBottom: '10px' }}>
+            💡 品項名稱請與結帳時的產品名稱一致，系統就能在開單時自動扣庫存
+          </p>
           <div className="space-y-3">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>品項名稱 *</label>
-                <input type="text" value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="EX：玻尿酸原液" style={{ ...sInput, width: '100%' }} required />
+                <input type="text" value={addForm.name}
+                  onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder="如：神經醯胺、EGF…" style={{ ...sInput, width: '100%' }} required />
               </div>
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>類別</label>
-                <select value={addForm.category} onChange={e => setAddForm(p => ({ ...p, category: e.target.value as Category }))} style={{ ...sInput, width: '100%' }}>
+                <select value={addForm.category}
+                  onChange={e => setAddForm(p => ({ ...p, category: e.target.value as Category }))}
+                  style={{ ...sInput, width: '100%' }}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>單位</label>
-                <select value={addForm.unit} onChange={e => setAddForm(p => ({ ...p, unit: e.target.value }))} style={{ ...sInput, width: '100%' }}>
+                <select value={addForm.unit}
+                  onChange={e => setAddForm(p => ({ ...p, unit: e.target.value }))}
+                  style={{ ...sInput, width: '100%' }}>
                   {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>初始庫存</label>
-                <input type="number" value={addForm.initial_qty} min="0" step="0.5"
-                  onChange={e => setAddForm(p => ({ ...p, initial_qty: e.target.value }))}
-                  placeholder="0" style={{ ...sInput, width: '100%' }} />
-              </div>
-              <div>
-                <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>安全庫存量</label>
+                <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
+                  安全庫存量
+                  <span style={{ color: '#b4aa9e', marginLeft: '4px', fontWeight: 400 }}>（低於此數量會提醒）</span>
+                </label>
                 <input type="number" value={addForm.low_stock_threshold} min="0" step="0.5"
                   onChange={e => setAddForm(p => ({ ...p, low_stock_threshold: e.target.value }))}
                   placeholder="2" style={{ ...sInput, width: '100%' }} />
               </div>
             </div>
             <div>
-              <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>備註</label>
-              <input type="text" value={addForm.note} onChange={e => setAddForm(p => ({ ...p, note: e.target.value }))}
-                placeholder="品牌、規格…" style={{ ...sInput, width: '100%' }} />
+              <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>備註（品牌、規格…）</label>
+              <input type="text" value={addForm.note}
+                onChange={e => setAddForm(p => ({ ...p, note: e.target.value }))}
+                placeholder="選填" style={{ ...sInput, width: '100%' }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
@@ -236,7 +301,9 @@ export default function InventoryPage() {
               background: filterCat === cat ? '#2c2825' : '#f0ece6',
               color: filterCat === cat ? '#f7f4ef' : '#6b5f54',
             }}>
-            {cat === 'all' ? `全部（${items.length}）` : `${cat}（${items.filter(i => i.category === cat).length}）`}
+            {cat === 'all'
+              ? `全部（${items.length}）`
+              : `${cat}（${items.filter(i => i.category === cat).length}）`}
           </button>
         ))}
       </div>
@@ -252,35 +319,58 @@ export default function InventoryPage() {
         <div className="space-y-6">
           {(Object.keys(grouped) as Category[]).map(cat => (
             <div key={cat}>
-              <p style={{ color: CAT_COLOR[cat].color, fontSize: '0.72rem', letterSpacing: '0.08em', fontWeight: 600, marginBottom: '8px', paddingLeft: '4px' }}>
+              <p style={{
+                color: CAT_COLOR[cat].color, fontSize: '0.72rem',
+                letterSpacing: '0.08em', fontWeight: 600, marginBottom: '8px', paddingLeft: '4px',
+              }}>
                 {cat}
               </p>
               <div className="space-y-3">
-                {grouped[cat].map(item => {
+                {grouped[cat]!.map(item => {
                   const isLow = item.current_qty <= item.low_stock_threshold
                   const cc = CAT_COLOR[item.category]
+                  const isHistoryOpen = historyId === item.id
                   return (
-                    <div key={item.id} style={{ border: `1px solid ${isLow ? '#e8c96a' : cc.border}`, borderRadius: '8px', background: isLow ? '#fdf8ee' : cc.bg, overflow: 'hidden' }}>
+                    <div key={item.id} style={{
+                      border: `1px solid ${isLow ? '#e8c96a' : cc.border}`,
+                      borderRadius: '8px',
+                      background: isLow ? '#fdf8ee' : cc.bg,
+                      overflow: 'hidden',
+                    }}>
                       {/* Item header */}
                       <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span style={{ color: '#2c2825', fontSize: '0.92rem', fontWeight: 500 }}>{item.name}</span>
-                            {isLow && <span style={{ background: '#f0c040', color: '#7a5a00', fontSize: '0.68rem', padding: '1px 7px', borderRadius: '10px', fontWeight: 600 }}>⚠ 不足</span>}
+                            {isLow && (
+                              <span style={{ background: '#f0c040', color: '#7a5a00', fontSize: '0.68rem', padding: '1px 7px', borderRadius: '10px', fontWeight: 600 }}>
+                                ⚠ 不足
+                              </span>
+                            )}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
-                            <span style={{ color: isLow ? '#9a6a00' : cc.color, fontSize: '1rem', fontWeight: 600 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px', flexWrap: 'wrap' }}>
+                            <span style={{ color: isLow ? '#9a6a00' : cc.color, fontSize: '1.1rem', fontWeight: 700 }}>
                               {item.current_qty}
                               <span style={{ fontSize: '0.75rem', marginLeft: '3px', fontWeight: 400, color: '#9a8f84' }}>{item.unit}</span>
                             </span>
-                            <span style={{ color: '#b4aa9e', fontSize: '0.72rem' }}>安全庫存 {item.low_stock_threshold}{item.unit}</span>
+                            <span style={{ color: '#b4aa9e', fontSize: '0.7rem' }}>
+                              安全庫存 {item.low_stock_threshold} {item.unit}
+                            </span>
                           </div>
-                          {item.note && <p style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '2px' }}>{item.note}</p>}
+                          {item.note && <p style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '3px' }}>{item.note}</p>}
                         </div>
-                        <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', gap: '5px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                           <button onClick={() => startAdjust(item)}
                             style={{ background: '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '5px', fontSize: '0.75rem', padding: '5px 10px', cursor: 'pointer' }}>
-                            調整
+                            進/出貨
+                          </button>
+                          <button onClick={() => toggleHistory(item.id)}
+                            style={{
+                              background: isHistoryOpen ? '#6b5f54' : 'none',
+                              color: isHistoryOpen ? '#f7f4ef' : '#9a8f84',
+                              border: '1px solid #e0d9d0', borderRadius: '5px', fontSize: '0.75rem', padding: '5px 8px', cursor: 'pointer',
+                            }}>
+                            紀錄
                           </button>
                           <button onClick={() => startEdit(item)}
                             style={{ background: 'none', border: '1px solid #e0d9d0', borderRadius: '5px', color: '#9a8f84', fontSize: '0.75rem', padding: '5px 8px', cursor: 'pointer' }}>
@@ -293,6 +383,64 @@ export default function InventoryPage() {
                         </div>
                       </div>
 
+                      {/* History panel */}
+                      {isHistoryOpen && (
+                        <div style={{ borderTop: '1px solid #e0d9d0', background: '#faf8f5' }}>
+                          <div style={{ padding: '10px 14px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#6b5f54', fontSize: '0.78rem', fontWeight: 600 }}>進出貨歷史紀錄</span>
+                            <span style={{ color: '#b4aa9e', fontSize: '0.7rem' }}>最近 100 筆</span>
+                          </div>
+                          {ledgerLoading ? (
+                            <p style={{ color: '#b4aa9e', textAlign: 'center', padding: '12px', fontSize: '0.8rem' }}>載入中…</p>
+                          ) : ledger.length === 0 ? (
+                            <p style={{ color: '#b4aa9e', textAlign: 'center', padding: '12px', fontSize: '0.8rem' }}>尚無進出貨紀錄</p>
+                          ) : (
+                            <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                              {ledger.map((entry, idx) => {
+                                const isIn = entry.delta > 0
+                                // running total from bottom up
+                                const runningTotal = ledger.slice(idx).reduce((s, e) => s + e.delta, 0)
+                                return (
+                                  <div key={entry.id} style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '7px 14px',
+                                    borderBottom: '1px solid #f0ebe4',
+                                    background: idx % 2 === 0 ? '#faf8f5' : '#fff',
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                      <span style={{
+                                        color: isIn ? '#3a7a42' : '#9a4a4a',
+                                        fontSize: '0.8rem', fontWeight: 700, minWidth: '36px',
+                                      }}>
+                                        {isIn ? `+${entry.delta}` : `${entry.delta}`}
+                                      </span>
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <span style={{
+                                            background: isIn ? '#edf3eb' : '#fdf0f0',
+                                            color: isIn ? '#3a7a42' : '#9a4a4a',
+                                            fontSize: '0.68rem', padding: '1px 6px', borderRadius: '3px',
+                                          }}>
+                                            {entry.reason}
+                                          </span>
+                                          <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>{fmtDate(entry.date)}</span>
+                                        </div>
+                                        {entry.note && (
+                                          <div style={{ color: '#b4aa9e', fontSize: '0.68rem', marginTop: '1px' }}>{entry.note}</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <span style={{ color: '#9a8f84', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                                      庫存 {runningTotal}{item.unit}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Edit form */}
                       {editId === item.id && (
                         <div style={{ borderTop: '1px solid #e0d9d0', padding: '12px 14px', background: '#fff' }}>
@@ -300,11 +448,15 @@ export default function InventoryPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                               <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>品名</label>
-                                <input type="text" value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
+                                <input type="text" value={editForm.name}
+                                  onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+                                  style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
                               </div>
                               <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>類別</label>
-                                <select value={editForm.category} onChange={e => setEditForm(p => ({ ...p, category: e.target.value as Category }))} style={{ ...sInput, width: '100%', fontSize: '0.8rem' }}>
+                                <select value={editForm.category}
+                                  onChange={e => setEditForm(p => ({ ...p, category: e.target.value as Category }))}
+                                  style={{ ...sInput, width: '100%', fontSize: '0.8rem' }}>
                                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                               </div>
@@ -312,18 +464,24 @@ export default function InventoryPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                               <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>單位</label>
-                                <select value={editForm.unit} onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.8rem' }}>
+                                <select value={editForm.unit}
+                                  onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
+                                  style={{ ...sInput, width: '100%', fontSize: '0.8rem' }}>
                                   {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                 </select>
                               </div>
                               <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>安全庫存量</label>
-                                <input type="number" value={editForm.low_stock_threshold} min="0" step="0.5" onChange={e => setEditForm(p => ({ ...p, low_stock_threshold: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
+                                <input type="number" value={editForm.low_stock_threshold} min="0" step="0.5"
+                                  onChange={e => setEditForm(p => ({ ...p, low_stock_threshold: e.target.value }))}
+                                  style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
                               </div>
                             </div>
                             <div>
                               <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>備註</label>
-                              <input type="text" value={editForm.note} onChange={e => setEditForm(p => ({ ...p, note: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
+                              <input type="text" value={editForm.note}
+                                onChange={e => setEditForm(p => ({ ...p, note: e.target.value }))}
+                                style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
@@ -347,13 +505,18 @@ export default function InventoryPage() {
                             <div style={{ display: 'flex', gap: '6px' }}>
                               {(['in', 'out'] as const).map(dir => (
                                 <button key={dir} type="button"
-                                  onClick={() => setAdjustForm(p => ({ ...p, direction: dir, reason: dir === 'in' ? '補貨' : '日常消耗' }))}
+                                  onClick={() => setAdjustForm(p => ({
+                                    ...p, direction: dir,
+                                    reason: dir === 'in' ? '補貨' : '日常消耗',
+                                  }))}
                                   style={{
                                     flex: 1, border: 'none', borderRadius: '5px', fontSize: '0.82rem', padding: '7px', cursor: 'pointer',
-                                    background: adjustForm.direction === dir ? (dir === 'in' ? '#3a7a42' : '#9a4a4a') : '#f0ece6',
+                                    background: adjustForm.direction === dir
+                                      ? (dir === 'in' ? '#3a7a42' : '#9a4a4a')
+                                      : '#f0ece6',
                                     color: adjustForm.direction === dir ? '#fff' : '#6b5f54',
                                   }}>
-                                  {dir === 'in' ? '＋ 補貨 / 入庫' : '－ 消耗 / 出庫'}
+                                  {dir === 'in' ? '＋ 進貨 / 入庫' : '－ 消耗 / 出庫'}
                                 </button>
                               ))}
                             </div>
@@ -375,27 +538,30 @@ export default function InventoryPage() {
                                 </select>
                               </div>
                             </div>
-                            <div>
-                              <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>日期</label>
-                              <input type="date" value={adjustForm.date}
-                                onChange={e => setAdjustForm(p => ({ ...p, date: e.target.value }))}
-                                style={{ ...sInput, width: '100%', fontSize: '0.82rem' }} />
-                            </div>
-                            <div>
-                              <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>備註</label>
-                              <input type="text" value={adjustForm.note}
-                                onChange={e => setAdjustForm(p => ({ ...p, note: e.target.value }))}
-                                placeholder="選填" style={{ ...sInput, width: '100%', fontSize: '0.82rem' }} />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>日期</label>
+                                <input type="date" value={adjustForm.date}
+                                  onChange={e => setAdjustForm(p => ({ ...p, date: e.target.value }))}
+                                  style={{ ...sInput, width: '100%', fontSize: '0.82rem' }} />
+                              </div>
+                              <div>
+                                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>備註</label>
+                                <input type="text" value={adjustForm.note}
+                                  onChange={e => setAdjustForm(p => ({ ...p, note: e.target.value }))}
+                                  placeholder="選填" style={{ ...sInput, width: '100%', fontSize: '0.82rem' }} />
+                              </div>
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
                             <button onClick={() => handleAdjust(item.id)} disabled={adjusting}
                               style={{
-                                flex: 1, border: 'none', borderRadius: '5px', fontSize: '0.82rem', padding: '8px', cursor: adjusting ? 'not-allowed' : 'pointer',
+                                flex: 1, border: 'none', borderRadius: '5px', fontSize: '0.82rem', padding: '8px',
+                                cursor: adjusting ? 'not-allowed' : 'pointer',
                                 background: adjusting ? '#c4b8aa' : (adjustForm.direction === 'in' ? '#3a7a42' : '#9a4a4a'),
                                 color: '#fff',
                               }}>
-                              {adjusting ? '儲存中…' : '確認'}
+                              {adjusting ? '儲存中…' : (adjustForm.direction === 'in' ? '確認入庫' : '確認出庫')}
                             </button>
                             <button onClick={() => setAdjustId(null)}
                               style={{ flex: 1, background: '#e0d9d0', color: '#6b5f54', border: 'none', borderRadius: '5px', fontSize: '0.82rem', padding: '8px', cursor: 'pointer' }}>

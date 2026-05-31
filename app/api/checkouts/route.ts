@@ -198,6 +198,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── 7. 自動扣庫存（產品名稱與 inventory_items.name 完全比對）──────────
+    {
+      const coDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+      for (const item of items as { category: string; label: string; price: number; qty: number }[]) {
+        if (item.category !== '產品') continue
+        const invItem = db.prepare(
+          `SELECT id FROM inventory_items WHERE TRIM(LOWER(name)) = TRIM(LOWER(?))`
+        ).get(item.label.trim()) as { id: number } | undefined
+        if (!invItem) continue
+
+        // 插入出庫紀錄
+        db.prepare(`
+          INSERT INTO inventory_ledger (item_id, delta, reason, date, note)
+          VALUES (?, ?, '結帳銷售', ?, ?)
+        `).run(invItem.id, -item.qty, coDate, `結帳 #${coId}`)
+
+        // 更新現有庫存數量
+        db.prepare(`
+          UPDATE inventory_items
+          SET current_qty = (SELECT COALESCE(SUM(delta), 0) FROM inventory_ledger WHERE item_id = @id),
+              updated_at = datetime('now')
+          WHERE id = @id
+        `).run({ id: invItem.id })
+      }
+    }
+
     return { id: coId, pointsEarned, yodomoEarned, totalAmount }
   })
 
