@@ -1,9 +1,11 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { MEMBERSHIP_LEVELS } from '@/types'
 import ClientTagsSection from '@/components/ClientTagsSection'
+
+const REFERRAL_SOURCES = ['朋友介紹', 'IG / Facebook', '路過門市', 'Google 搜尋', '其他']
 
 export default function EditClientPage() {
   const router = useRouter()
@@ -16,7 +18,14 @@ export default function EditClientPage() {
   const [form, setForm] = useState({
     name: '', phone: '', note: '', level: '癒米', level_since: '', birthday: '',
     allergy_note: '', medical_note: '', skin_note: '',
+    referral_source: '', referred_by_id: '' as string,
   })
+  // Referrer picker state
+  const [refSearch, setRefSearch] = useState('')
+  const [refName, setRefName] = useState('')       // display name of selected referrer
+  const [refResults, setRefResults] = useState<{ id: number; name: string; phone: string | null }[]>([])
+  const [showRefList, setShowRefList] = useState(false)
+  const refTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     fetch(`/api/clients/${id}`)
@@ -32,12 +41,47 @@ export default function EditClientPage() {
           allergy_note: data.allergy_note || '',
           medical_note: data.medical_note || '',
           skin_note: data.skin_note || '',
+          referral_source: data.referral_source || '',
+          referred_by_id: data.referred_by_id ? String(data.referred_by_id) : '',
         })
+        if (data.referred_by_name) setRefName(data.referred_by_name)
+        if (data.referred_by_id)   setRefSearch(data.referred_by_name || '')
         setLoading(false)
       })
   }, [id])
 
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }))
+
+  // Referrer search with debounce
+  function handleRefSearch(val: string) {
+    setRefSearch(val)
+    setRefName('')
+    set('referred_by_id', '')
+    if (refTimer.current) clearTimeout(refTimer.current)
+    if (!val.trim()) { setRefResults([]); setShowRefList(false); return }
+    refTimer.current = setTimeout(async () => {
+      const res = await fetch(`/api/clients?q=${encodeURIComponent(val)}`)
+      const data = await res.json()
+      // Exclude self
+      setRefResults((Array.isArray(data) ? data : []).filter((c: { id: number }) => String(c.id) !== id))
+      setShowRefList(true)
+    }, 300)
+  }
+
+  function selectReferrer(c: { id: number; name: string }) {
+    set('referred_by_id', String(c.id))
+    setRefName(c.name)
+    setRefSearch(c.name)
+    setShowRefList(false)
+  }
+
+  function clearReferrer() {
+    set('referred_by_id', '')
+    setRefName('')
+    setRefSearch('')
+    setRefResults([])
+    setShowRefList(false)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -103,6 +147,69 @@ export default function EditClientPage() {
             placeholder="備註（選填）" rows={2}
             style={{ ...inputStyle, resize: 'none' }} />
         </Field>
+
+        {/* ── 推薦人來源 ── */}
+        <div style={{ borderTop: '1px solid #e0d9d0', paddingTop: '16px' }}>
+          <p style={{ color: '#5a7a9a', fontSize: '0.75rem', letterSpacing: '0.06em', marginBottom: '12px' }}>
+            🔗 介紹來源
+          </p>
+          <div className="space-y-4">
+            <Field label="介紹來源">
+              <select value={form.referral_source} onChange={e => set('referral_source', e.target.value)} {...inputProps}>
+                <option value="">（未填）</option>
+                {REFERRAL_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+            <Field label="介紹人（搜尋客人姓名）">
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input
+                    value={refSearch}
+                    onChange={e => handleRefSearch(e.target.value)}
+                    onFocus={() => refResults.length > 0 && setShowRefList(true)}
+                    placeholder="輸入姓名搜尋…"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  {refName && (
+                    <button type="button" onClick={clearReferrer}
+                      style={{ background: '#e0d9d0', border: 'none', borderRadius: '6px', padding: '0 10px', cursor: 'pointer', color: '#6b5f54', fontSize: '0.8rem' }}>
+                      清除
+                    </button>
+                  )}
+                </div>
+                {refName && (
+                  <p style={{ fontSize: '0.78rem', color: '#3a7a42', marginTop: '4px' }}>
+                    ✓ 已選：{refName}
+                  </p>
+                )}
+                {showRefList && refResults.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                    background: '#fff', border: '1px solid #e0d9d0', borderRadius: '6px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)', maxHeight: '200px', overflowY: 'auto',
+                  }}>
+                    {refResults.map(c => (
+                      <button key={c.id} type="button"
+                        onClick={() => selectReferrer(c)}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '10px 14px', background: 'none', border: 'none',
+                          borderBottom: '1px solid #f0ece6', cursor: 'pointer',
+                          color: '#2c2825', fontSize: '0.9rem',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#f7f4ef')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                      >
+                        {c.name}
+                        {c.phone && <span style={{ color: '#9a8f84', fontSize: '0.78rem', marginLeft: '8px' }}>{c.phone}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Field>
+          </div>
+        </div>
 
         {/* ── 健康注意事項 ── */}
         <div style={{ borderTop: '1px solid #e0d9d0', paddingTop: '16px' }}>

@@ -61,6 +61,8 @@ export interface Client {
   allergy_note: string | null      // 過敏成分/物質
   medical_note: string | null      // 特殊健康狀況（懷孕、疾病、藥物）
   skin_note: string | null         // 皮膚注意事項
+  referred_by_id: number | null    // 介紹人 client_id
+  referral_source: string | null   // 介紹來源（朋友介紹/IG/路過…）
   legacy_id: string | null
   created_at: string
   updated_at: string

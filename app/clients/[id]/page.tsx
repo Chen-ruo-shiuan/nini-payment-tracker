@@ -31,6 +31,9 @@ interface PointsLedgerEntry {
 interface ShoppingCreditEntry {
   id: number; client_id: number; delta: number; note: string | null; date: string; created_at: string
 }
+interface ReferredClient {
+  id: number; name: string; phone: string | null; level: string; created_at: string
+}
 interface ClientDetail extends Client {
   stored_value: number
   active_contracts: number
@@ -43,6 +46,8 @@ interface ClientDetail extends Client {
   points_ledger: PointsLedgerEntry[]
   shopping_credit_ledger: ShoppingCreditEntry[]
   checkouts: Checkout[]
+  referred_by_name: string | null
+  referred_clients: ReferredClient[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2576,6 +2581,53 @@ export default function ClientDetailPage() {
                 <div>
                   <span style={{ color: '#9a6a00', fontSize: '0.68rem', fontWeight: 600 }}>皮膚　</span>
                   <span style={{ color: '#6b5030', fontSize: '0.8rem' }}>{client.skin_note}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── 推薦人資訊 ── */}
+        {(client.referral_source || client.referred_by_id || client.referred_clients?.length > 0) && (
+          <div style={{
+            background: '#eef4fb', border: '1px solid #9ab0e8',
+            borderLeft: '4px solid #4a7ac8',
+            borderRadius: '6px', padding: '10px 14px', marginTop: '10px',
+          }}>
+            <p style={{ color: '#2d4f9a', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.06em', marginBottom: '8px' }}>
+              🔗 介紹來源
+            </p>
+            <div className="space-y-1">
+              {client.referral_source && (
+                <div>
+                  <span style={{ color: '#3a5a9a', fontSize: '0.72rem', fontWeight: 600 }}>來源　</span>
+                  <span style={{ color: '#2c4070', fontSize: '0.82rem' }}>{client.referral_source}</span>
+                </div>
+              )}
+              {client.referred_by_id && client.referred_by_name && (
+                <div>
+                  <span style={{ color: '#3a5a9a', fontSize: '0.72rem', fontWeight: 600 }}>介紹人　</span>
+                  <Link href={`/clients/${client.referred_by_id}`}
+                    style={{ color: '#2d4f9a', fontSize: '0.82rem', textDecoration: 'underline' }}>
+                    {client.referred_by_name}
+                  </Link>
+                </div>
+              )}
+              {client.referred_clients?.length > 0 && (
+                <div>
+                  <span style={{ color: '#3a5a9a', fontSize: '0.72rem', fontWeight: 600 }}>
+                    已介紹　{client.referred_clients.length} 人：
+                  </span>
+                  <span style={{ color: '#2c4070', fontSize: '0.82rem' }}>
+                    {client.referred_clients.map((rc, i) => (
+                      <span key={rc.id}>
+                        {i > 0 && '、'}
+                        <Link href={`/clients/${rc.id}`} style={{ color: '#2d4f9a', textDecoration: 'underline' }}>
+                          {rc.name}
+                        </Link>
+                      </span>
+                    ))}
+                  </span>
                 </div>
               )}
             </div>

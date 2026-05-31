@@ -35,6 +35,7 @@ export function getDb(): Database.Database {
     migrateClosedDays(db)
     migrateClientDocuments(db)
     migrateClientHealthNotes(db)
+    migrateClientReferral(db)
   }
   return db
 }
@@ -621,6 +622,16 @@ function migrateClientHealthNotes(db: Database.Database) {
   }
   if (!cols.includes('skin_note')) {
     db.exec(`ALTER TABLE clients ADD COLUMN skin_note TEXT`)
+  }
+}
+
+function migrateClientReferral(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(clients)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('referred_by_id')) {
+    db.exec(`ALTER TABLE clients ADD COLUMN referred_by_id INTEGER REFERENCES clients(id) ON DELETE SET NULL`)
+  }
+  if (!cols.includes('referral_source')) {
+    db.exec(`ALTER TABLE clients ADD COLUMN referral_source TEXT`)
   }
 }
 

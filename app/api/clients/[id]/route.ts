@@ -16,7 +16,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         JOIN installment_contracts ic ON ic.id = i.contract_id
         WHERE ic.client_id = c.id AND i.paid_at IS NULL) as next_due_date,
       (SELECT COUNT(*) FROM packages p
-        WHERE p.client_id = c.id AND p.used_sessions < p.total_sessions) as active_packages
+        WHERE p.client_id = c.id AND p.used_sessions < p.total_sessions) as active_packages,
+      (SELECT name FROM clients WHERE id = c.referred_by_id) as referred_by_name
     FROM clients c WHERE c.id = ?
   `).get(id)
 
@@ -70,7 +71,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     co.payments = db.prepare('SELECT * FROM checkout_payments WHERE checkout_id = ?').all(co.id)
   }
 
-  return NextResponse.json({ ...client as object, contracts, packages, sv_ledger, points_ledger, shopping_credit_ledger, checkouts })
+  // Fetch clients referred by this client
+  const referred_clients = db.prepare(`
+    SELECT id, name, phone, level, created_at FROM clients
+    WHERE referred_by_id = ? ORDER BY created_at DESC
+  `).all(id)
+
+  return NextResponse.json({ ...client as object, contracts, packages, sv_ledger, points_ledger, shopping_credit_ledger, checkouts, referred_clients })
 }
 
 // PUT /api/clients/[id]
@@ -79,12 +86,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const db = getDb()
   const body = await req.json()
   const { name, phone, note, level, level_since, birthday, next_appointment,
-          allergy_note, medical_note, skin_note } = body
+          allergy_note, medical_note, skin_note,
+          referred_by_id, referral_source } = body
 
   if (!name) return NextResponse.json({ error: '請輸入姓名' }, { status: 400 })
 
   const existing = db.prepare('SELECT id FROM clients WHERE id = ?').get(id)
   if (!existing) return NextResponse.json({ error: '找不到客人' }, { status: 404 })
+
+  // Prevent self-referral
+  const refById = referred_by_id ? Number(referred_by_id) : null
+  if (refById === Number(id)) return NextResponse.json({ error: '不能把自己設為介紹人' }, { status: 400 })
 
   db.prepare(`
     UPDATE clients SET
@@ -98,6 +110,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       allergy_note = @allergy_note,
       medical_note = @medical_note,
       skin_note = @skin_note,
+      referred_by_id = @referred_by_id,
+      referral_source = @referral_source,
       updated_at = datetime('now')
     WHERE id = @id
   `).run({
@@ -107,6 +121,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     allergy_note: allergy_note || null,
     medical_note: medical_note || null,
     skin_note:    skin_note    || null,
+    referred_by_id: refById,
+    referral_source: referral_source || null,
   })
 
   return NextResponse.json({ success: true })
