@@ -142,18 +142,34 @@ function getFinancials(db: ReturnType<typeof import('@/lib/db').getDb>, dateFilt
     GROUP BY category ORDER BY total DESC
   `).all(dateFilter) as { category: string; total: number }[]
 
+  // 產品毛利（本期）
+  const productProfitRow = (db.prepare(`
+    SELECT
+      COALESCE(SUM(ci.price * ci.qty), 0)                               AS product_revenue,
+      COALESCE(SUM(ci.qty * COALESCE(inv.cost_price, 0)), 0)            AS product_cogs
+    FROM checkout_items ci
+    JOIN checkouts co ON co.id = ci.checkout_id
+    LEFT JOIN inventory_items inv
+      ON TRIM(LOWER(inv.name)) = TRIM(LOWER(ci.label))
+    WHERE co.date LIKE ? AND ci.category = '產品'
+  `).get(dateFilter) as { product_revenue: number; product_cogs: number })
+  const productRevenue = productProfitRow.product_revenue
+  const productCogs    = productProfitRow.product_cogs
+  const productProfit  = productRevenue - productCogs
+
   return {
     prepaid, outstanding,
     pkgRealized, svUsed, pointsUsed, discountUsed, shoppingCreditUsed,
     svDeposited:      svAll.sv_deposited,
     svBalance:        svAll.sv_balance,
-    svAllowanceAll:   svAll.sv_allowance_all,   // 全期儲值讓利（給預收區塊顯示）
-    svAllowancePeriod,                           // 本期儲值讓利（預收區塊參考用，不計入P&L折讓）
+    svAllowanceAll:   svAll.sv_allowance_all,
+    svAllowancePeriod,
     installmentReceived, installmentReceivedDetails, installmentOutstanding,
     checkoutTotal, byPayMethod,
     pkgDiscount,
     itemDiscount,
     expensesTotal, expensesByCategory,
+    productRevenue, productCogs, productProfit,
   }
 }
 
@@ -242,9 +258,16 @@ export async function GET(req: NextRequest) {
     `).all(`${target}%`)
 
     const topProducts = db.prepare(`
-      SELECT ci.label, SUM(ci.price * ci.qty) AS total, SUM(ci.qty) AS qty
+      SELECT ci.label,
+        SUM(ci.price * ci.qty) AS total,
+        SUM(ci.qty)            AS qty,
+        COALESCE(MAX(inv.cost_price), 0)                       AS cost_price,
+        SUM(ci.qty) * COALESCE(MAX(inv.cost_price), 0)         AS cogs,
+        SUM(ci.price * ci.qty) - SUM(ci.qty) * COALESCE(MAX(inv.cost_price), 0) AS profit
       FROM checkout_items ci
       JOIN checkouts co ON co.id = ci.checkout_id
+      LEFT JOIN inventory_items inv
+        ON TRIM(LOWER(inv.name)) = TRIM(LOWER(ci.label))
       WHERE co.date LIKE ? AND ci.category = '產品'
       GROUP BY ci.label ORDER BY qty DESC LIMIT 10
     `).all(`${target}%`)
@@ -294,9 +317,16 @@ export async function GET(req: NextRequest) {
     `).all(`${year}%`)
 
     const topProducts = db.prepare(`
-      SELECT ci.label, SUM(ci.price * ci.qty) AS total, SUM(ci.qty) AS qty
+      SELECT ci.label,
+        SUM(ci.price * ci.qty) AS total,
+        SUM(ci.qty)            AS qty,
+        COALESCE(MAX(inv.cost_price), 0)                       AS cost_price,
+        SUM(ci.qty) * COALESCE(MAX(inv.cost_price), 0)         AS cogs,
+        SUM(ci.price * ci.qty) - SUM(ci.qty) * COALESCE(MAX(inv.cost_price), 0) AS profit
       FROM checkout_items ci
       JOIN checkouts co ON co.id = ci.checkout_id
+      LEFT JOIN inventory_items inv
+        ON TRIM(LOWER(inv.name)) = TRIM(LOWER(ci.label))
       WHERE co.date LIKE ? AND ci.category = '產品'
       GROUP BY ci.label ORDER BY qty DESC LIMIT 10
     `).all(`${year}%`)

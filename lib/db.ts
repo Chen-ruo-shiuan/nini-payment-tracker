@@ -705,6 +705,9 @@ function migrateInventory(db: Database.Database) {
   if (!invCols.includes('spec')) {
     db.exec(`ALTER TABLE inventory_items ADD COLUMN spec TEXT`)
   }
+  if (!invCols.includes('cost_price')) {
+    db.exec(`ALTER TABLE inventory_items ADD COLUMN cost_price REAL NOT NULL DEFAULT 0`)
+  }
 
   // rename old categories to new ones (one-time migration)
   db.prepare(`UPDATE inventory_items SET category = '原液' WHERE category = '精華/原液'`).run()

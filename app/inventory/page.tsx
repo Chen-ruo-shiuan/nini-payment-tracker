@@ -15,6 +15,7 @@ interface InventoryItem {
   category: Category
   unit: string
   spec: string | null
+  cost_price: number
   current_qty: number
   low_stock_threshold: number
   note: string | null
@@ -56,7 +57,7 @@ export default function InventoryPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState({
     name: '', category: '原液' as Category, unit: '瓶', spec: '',
-    low_stock_threshold: '2', note: '',
+    cost_price: '', low_stock_threshold: '2', note: '',
   })
   const [addSaving, setAddSaving] = useState(false)
 
@@ -64,7 +65,7 @@ export default function InventoryPage() {
   const [editId, setEditId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState({
     name: '', category: '原液' as Category, unit: '瓶', spec: '',
-    low_stock_threshold: '2', note: '',
+    cost_price: '', low_stock_threshold: '2', note: '',
   })
 
   // Adjust
@@ -100,7 +101,7 @@ export default function InventoryPage() {
       body: JSON.stringify({ ...addForm, initial_qty: 0 }),
     })
     if (res.ok) {
-      setAddForm({ name: '', category: '原液', unit: '瓶', spec: '', low_stock_threshold: '2', note: '' })
+      setAddForm({ name: '', category: '原液', unit: '瓶', spec: '', cost_price: '', low_stock_threshold: '2', note: '' })
       setShowAdd(false)
       await load()
     }
@@ -174,6 +175,7 @@ export default function InventoryPage() {
     setEditForm({
       name: item.name, category: item.category, unit: item.unit,
       spec: item.spec || '',
+      cost_price: item.cost_price > 0 ? String(item.cost_price) : '',
       low_stock_threshold: String(item.low_stock_threshold), note: item.note || '',
     })
     setEditId(item.id)
@@ -260,7 +262,7 @@ export default function InventoryPage() {
                 </select>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>單位</label>
                 <select value={addForm.unit}
@@ -277,6 +279,17 @@ export default function InventoryPage() {
                 <input type="text" value={addForm.spec}
                   onChange={e => setAddForm(p => ({ ...p, spec: e.target.value }))}
                   placeholder="如：30ml、100ml" style={{ ...sInput, width: '100%' }} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div>
+                <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
+                  進貨成本（每{addForm.unit || '單位'}）
+                  <span style={{ color: '#b4aa9e', marginLeft: '4px', fontWeight: 400 }}>填了才能算毛利</span>
+                </label>
+                <input type="number" value={addForm.cost_price} min="0" step="1"
+                  onChange={e => setAddForm(p => ({ ...p, cost_price: e.target.value }))}
+                  placeholder="如：500" style={{ ...sInput, width: '100%' }} />
               </div>
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
@@ -375,6 +388,14 @@ export default function InventoryPage() {
                                 fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px',
                               }}>
                                 每{item.unit} {item.spec}
+                              </span>
+                            )}
+                            {item.cost_price > 0 && (
+                              <span style={{
+                                background: '#edf3eb', color: '#3a7a42',
+                                fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px',
+                              }}>
+                                成本 ${item.cost_price.toLocaleString()}/{item.unit}
                               </span>
                             )}
                             <span style={{ color: '#b4aa9e', fontSize: '0.7rem' }}>
@@ -485,7 +506,7 @@ export default function InventoryPage() {
                                 </select>
                               </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                               <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>單位</label>
                                 <select value={editForm.unit}
@@ -499,6 +520,14 @@ export default function InventoryPage() {
                                 <input type="text" value={editForm.spec}
                                   onChange={e => setEditForm(p => ({ ...p, spec: e.target.value }))}
                                   placeholder="如：30ml" style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
+                              </div>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>進貨成本（每{editForm.unit}）</label>
+                                <input type="number" value={editForm.cost_price} min="0" step="1"
+                                  onChange={e => setEditForm(p => ({ ...p, cost_price: e.target.value }))}
+                                  placeholder="0" style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
                               </div>
                               <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>安全庫存量</label>

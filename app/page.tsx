@@ -38,17 +38,25 @@ interface DailyReport {
   checkouts: { id: number; date: string; total_amount: number; note: string | null; client_name: string | null; client_level: string | null; items: { category: string; label: string; price: number; qty: number }[] }[]
   payBreakdown: { method: string; total: number }[]
 }
+interface ProductItem {
+  label: string; total: number; qty: number
+  cost_price: number; cogs: number; profit: number
+}
 interface MonthlyReport {
   type: 'monthly'; month: string; monthTotal: number; monthCount: number
   byDay: { date: string; count: number; total: number }[]
   byMethod: { method: string; total: number; count: number }[]
   byCategory: { category: string; total: number; qty: number }[]
   topServices: { label: string; category: string; total: number; qty: number }[]
+  topProducts?: ProductItem[]
+  financials?: { productRevenue: number; productCogs: number; productProfit: number }
 }
 interface YearlyReport {
   type: 'yearly'; year: string; yearTotal: number
   byMonth: { month: string; count: number; total: number }[]
   pkgStats: { prepaid: number; realized: number }
+  topProducts?: ProductItem[]
+  financials?: { productRevenue: number; productCogs: number; productProfit: number }
 }
 type ReportData = DailyReport | MonthlyReport | YearlyReport | null
 
@@ -392,6 +400,79 @@ function MonthlyReportView({ data }: { data: MonthlyReport }) {
         </div>
       )}
 
+      {/* 產品毛利分析 */}
+      {data.topProducts && data.topProducts.length > 0 && (() => {
+        const hasCost = data.topProducts!.some(p => p.cost_price > 0)
+        const fin = data.financials
+        return (
+          <div>
+            <SectionLabel>產品毛利分析</SectionLabel>
+            {fin && hasCost && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginTop: '6px', marginBottom: '8px' }}>
+                <div style={{ background: '#e8f0fc', border: '1px solid #9ab0e8', borderRadius: '6px', padding: '10px 10px' }}>
+                  <div style={{ color: '#9a8f84', fontSize: '0.65rem' }}>產品銷售額</div>
+                  <div style={{ color: '#2d4f9a', fontSize: '0.95rem', fontWeight: 600, marginTop: '2px' }}>{fmtAmt(fin.productRevenue)}</div>
+                </div>
+                <div style={{ background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '6px', padding: '10px 10px' }}>
+                  <div style={{ color: '#9a8f84', fontSize: '0.65rem' }}>進貨成本</div>
+                  <div style={{ color: '#9a4a4a', fontSize: '0.95rem', fontWeight: 600, marginTop: '2px' }}>{fmtAmt(fin.productCogs)}</div>
+                </div>
+                <div style={{ background: '#edf3eb', border: '1px solid #7ab884', borderRadius: '6px', padding: '10px 10px' }}>
+                  <div style={{ color: '#9a8f84', fontSize: '0.65rem' }}>產品毛利</div>
+                  <div style={{ color: '#3a7a42', fontSize: '0.95rem', fontWeight: 600, marginTop: '2px' }}>{fmtAmt(fin.productProfit)}</div>
+                  {fin.productRevenue > 0 && (
+                    <div style={{ color: '#7ab884', fontSize: '0.65rem', marginTop: '1px' }}>
+                      毛利率 {Math.round((fin.productProfit / fin.productRevenue) * 100)}%
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', overflow: 'hidden', marginTop: '6px' }}>
+              {/* header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 70px 70px 60px', gap: '4px', padding: '6px 12px', background: '#f0ebe4' }}>
+                {['品名', '售價', '成本', '毛利', '利率'].map(h => (
+                  <span key={h} style={{ color: '#9a8f84', fontSize: '0.65rem', textAlign: h === '品名' ? 'left' : 'right' }}>{h}</span>
+                ))}
+              </div>
+              {data.topProducts!.map((p, i) => {
+                const margin = p.total > 0 ? Math.round((p.profit / p.total) * 100) : null
+                return (
+                  <div key={i} style={{
+                    display: 'grid', gridTemplateColumns: '1fr 60px 70px 70px 60px',
+                    gap: '4px', padding: '8px 12px',
+                    borderTop: '1px solid #f0ebe4',
+                    background: i % 2 === 0 ? '#faf8f5' : '#fff',
+                  }}>
+                    <div>
+                      <div style={{ color: '#2c2825', fontSize: '0.78rem' }}>{p.label}</div>
+                      <div style={{ color: '#b4aa9e', fontSize: '0.65rem' }}>× {p.qty}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', color: '#2d4f9a', fontSize: '0.78rem', alignSelf: 'center' }}>
+                      ${p.total.toLocaleString()}
+                    </div>
+                    <div style={{ textAlign: 'right', color: p.cost_price > 0 ? '#9a4a4a' : '#c4b8aa', fontSize: '0.78rem', alignSelf: 'center' }}>
+                      {p.cost_price > 0 ? `$${p.cogs.toLocaleString()}` : '—'}
+                    </div>
+                    <div style={{ textAlign: 'right', color: p.cost_price > 0 ? '#3a7a42' : '#c4b8aa', fontSize: '0.78rem', fontWeight: p.cost_price > 0 ? 600 : 400, alignSelf: 'center' }}>
+                      {p.cost_price > 0 ? `$${p.profit.toLocaleString()}` : '—'}
+                    </div>
+                    <div style={{ textAlign: 'right', color: margin !== null ? (margin >= 50 ? '#3a7a42' : margin >= 30 ? '#8a6a00' : '#9a4a4a') : '#c4b8aa', fontSize: '0.75rem', fontWeight: 600, alignSelf: 'center' }}>
+                      {margin !== null ? `${margin}%` : '—'}
+                    </div>
+                  </div>
+                )
+              })}
+              {!hasCost && (
+                <p style={{ color: '#b4aa9e', fontSize: '0.72rem', textAlign: 'center', padding: '10px', borderTop: '1px solid #f0ebe4' }}>
+                  💡 至庫存管理填入進貨成本，即可顯示毛利率
+                </p>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* By day */}
       {data.byDay.length > 0 && (
         <div>
@@ -453,6 +534,32 @@ function YearlyReportView({ data }: { data: YearlyReport }) {
         </div>
       ) : (
         <p style={{ color: '#c4b8aa', textAlign: 'center', fontSize: '0.85rem', padding: '20px 0' }}>本年無結帳記錄</p>
+      )}
+
+      {/* 年度產品毛利摘要 */}
+      {data.financials && data.financials.productRevenue > 0 && (
+        <div>
+          <SectionLabel>年度產品毛利</SectionLabel>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginTop: '6px' }}>
+            <div style={{ background: '#e8f0fc', border: '1px solid #9ab0e8', borderRadius: '6px', padding: '10px' }}>
+              <div style={{ color: '#9a8f84', fontSize: '0.65rem' }}>產品銷售額</div>
+              <div style={{ color: '#2d4f9a', fontSize: '0.9rem', fontWeight: 600, marginTop: '2px' }}>{fmtAmt(data.financials.productRevenue)}</div>
+            </div>
+            <div style={{ background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '6px', padding: '10px' }}>
+              <div style={{ color: '#9a8f84', fontSize: '0.65rem' }}>進貨成本</div>
+              <div style={{ color: '#9a4a4a', fontSize: '0.9rem', fontWeight: 600, marginTop: '2px' }}>{fmtAmt(data.financials.productCogs)}</div>
+            </div>
+            <div style={{ background: '#edf3eb', border: '1px solid #7ab884', borderRadius: '6px', padding: '10px' }}>
+              <div style={{ color: '#9a8f84', fontSize: '0.65rem' }}>產品毛利</div>
+              <div style={{ color: '#3a7a42', fontSize: '0.9rem', fontWeight: 600, marginTop: '2px' }}>{fmtAmt(data.financials.productProfit)}</div>
+              {data.financials.productRevenue > 0 && (
+                <div style={{ color: '#7ab884', fontSize: '0.65rem', marginTop: '1px' }}>
+                  毛利率 {Math.round((data.financials.productProfit / data.financials.productRevenue) * 100)}%
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
