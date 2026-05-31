@@ -13,7 +13,7 @@ interface DueItem {
 interface ActivePackage {
   id: number; client_id: number; client_name: string; client_level: string
   service_name: string; total_sessions: number; used_sessions: number
-  prepaid_amount: number; unit_price: number; date: string
+  prepaid_amount: number; unit_price: number; date: string; expiry_date: string | null
 }
 interface RecentCheckout {
   id: number; date: string; total_amount: number; note: string | null; client_name: string | null
@@ -155,8 +155,25 @@ function DueSection({ label, items, urgent }: { label: string; items: DueItem[];
 }
 
 // ─── Package Health ───────────────────────────────────────────────────────────
-function pkgHealth(total: number, used: number): 'green' | 'yellow' | 'red' | null {
+function pkgHealth(
+  total: number, used: number,
+  purchaseDate?: string, expiryDate?: string | null,
+): 'green' | 'yellow' | 'red' | null {
   if (total <= 0 || used >= total) return null
+  if (expiryDate && purchaseDate) {
+    const now   = Date.now()
+    const start = new Date(purchaseDate + 'T00:00:00').getTime()
+    const end   = new Date(expiryDate   + 'T00:00:00').getTime()
+    const totalMs = end - start
+    if (totalMs <= 0) return 'red'
+    if (now >= end) return 'red'
+    const timeLeft    = (end - now) / totalMs
+    const sessionLeft = (total - used) / total
+    const gap = sessionLeft - timeLeft
+    if (gap <= 0)    return 'green'
+    if (gap <= 0.20) return 'yellow'
+    return 'red'
+  }
   const ratio = (total - used) / total
   if (ratio <= 1 / 3) return 'green'
   if (ratio <= 2 / 3) return 'yellow'
@@ -174,7 +191,7 @@ function PackageRow({ pkg }: { pkg: ActivePackage }) {
   const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
   const realized = pkg.used_sessions * pkg.unit_price
   const pending = pkg.prepaid_amount - realized
-  const health = pkgHealth(pkg.total_sessions, pkg.used_sessions)
+  const health = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.date, pkg.expiry_date)
 
   return (
     <Link href={`/clients/${pkg.client_id}`}>
@@ -585,7 +602,7 @@ export default function OverviewPage() {
               ) : (
                 data.activePackages.slice(0, 5).map(pkg => {
                   const pending = pkg.prepaid_amount - pkg.used_sessions * pkg.unit_price
-                  const h = pkgHealth(pkg.total_sessions, pkg.used_sessions)
+                  const h = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.date, pkg.expiry_date)
                   const remaining = pkg.total_sessions - pkg.used_sessions
                   return (
                     <Link key={pkg.id} href={`/clients/${pkg.client_id}`}>
@@ -702,11 +719,11 @@ export default function OverviewPage() {
               </p>
             ) : (() => {
               const needAttention = data.activePackages.filter(p => {
-                const h = pkgHealth(p.total_sessions, p.used_sessions)
+                const h = pkgHealth(p.total_sessions, p.used_sessions, p.date, p.expiry_date)
                 return h === 'red' || h === 'yellow'
               })
               const healthy = data.activePackages.filter(p =>
-                pkgHealth(p.total_sessions, p.used_sessions) === 'green'
+                pkgHealth(p.total_sessions, p.used_sessions, p.date, p.expiry_date) === 'green'
               )
               return (
                 <>

@@ -1136,8 +1136,25 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     refresh()
   }
 
-  function pkgHealth(total: number, used: number): 'green' | 'yellow' | 'red' | null {
+  function pkgHealth(
+    total: number, used: number,
+    purchaseDate?: string, expiryDate?: string | null,
+  ): 'green' | 'yellow' | 'red' | null {
     if (total <= 0 || used >= total) return null
+    if (expiryDate && purchaseDate) {
+      const now   = Date.now()
+      const start = new Date(purchaseDate + 'T00:00:00').getTime()
+      const end   = new Date(expiryDate   + 'T00:00:00').getTime()
+      const totalMs = end - start
+      if (totalMs <= 0) return 'red'
+      if (now >= end) return 'red'
+      const timeLeft    = (end - now) / totalMs
+      const sessionLeft = (total - used) / total
+      const gap = sessionLeft - timeLeft
+      if (gap <= 0)    return 'green'
+      if (gap <= 0.20) return 'yellow'
+      return 'red'
+    }
     const ratio = (total - used) / total
     if (ratio <= 1 / 3) return 'green'
     if (ratio <= 2 / 3) return 'yellow'
@@ -1153,7 +1170,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     const remaining = pkg.total_sessions - pkg.used_sessions
     const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
     const isDone    = remaining <= 0
-    const health = pkgHealth(pkg.total_sessions, pkg.used_sessions)
+    const health = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.date, pkg.expiry_date)
     const isEditing = editingId === pkg.id
 
     // 任務倒數計算（含展延）— 從最後一次施作日開始算，尚未施作時不顯示截止

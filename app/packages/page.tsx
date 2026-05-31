@@ -8,14 +8,14 @@ interface PkgRow {
   id: number; client_id: number; client_name: string; client_level: string
   service_name: string; total_sessions: number; used_sessions: number
   unit_price: number; unit_price_orig: number; prepaid_amount: number; payment_method: string
-  date: string; note: string | null
+  date: string; note: string | null; expiry_date: string | null
   include_in_accumulation: number; include_in_points: number
 }
 
 interface EditForm {
   service_name: string; total_sessions: string; used_sessions: string
   unit_price: string; unit_price_orig: string; prepaid_amount: string; payment_method: string
-  date: string; note: string
+  date: string; note: string; expiry_date: string
   include_in_accumulation: boolean; include_in_points: boolean
 }
 
@@ -32,8 +32,26 @@ function addMonths(dateStr: string, n: number) {
 }
 
 // ─── Package Health ───────────────────────────────────────────────────────────
-function pkgHealth(total: number, used: number): 'green' | 'yellow' | 'red' | null {
+function pkgHealth(
+  total: number, used: number,
+  purchaseDate?: string, expiryDate?: string | null,
+): 'green' | 'yellow' | 'red' | null {
   if (total <= 0 || used >= total) return null
+  if (expiryDate && purchaseDate) {
+    const now   = Date.now()
+    const start = new Date(purchaseDate + 'T00:00:00').getTime()
+    const end   = new Date(expiryDate   + 'T00:00:00').getTime()
+    const totalMs = end - start
+    if (totalMs <= 0) return 'red'
+    if (now >= end) return 'red'                                  // 已逾期還有剩 → 🔴
+    const timeLeft    = (end - now) / totalMs                     // 時間還剩比例
+    const sessionLeft = (total - used) / total                    // 堂數還剩比例
+    const gap = sessionLeft - timeLeft                            // 正值 = 落後進度
+    if (gap <= 0)    return 'green'
+    if (gap <= 0.20) return 'yellow'
+    return 'red'
+  }
+  // 沒有到期日 → 純比例
   const ratio = (total - used) / total
   if (ratio <= 1 / 3) return 'green'
   if (ratio <= 2 / 3) return 'yellow'
@@ -114,6 +132,7 @@ export default function PackagesPage() {
       payment_method:  pkg.payment_method,
       date:            pkg.date,
       note:            pkg.note ?? '',
+      expiry_date:     pkg.expiry_date ?? '',
       include_in_accumulation: pkg.include_in_accumulation === 1,
       include_in_points:       pkg.include_in_points === 1,
     })
@@ -151,6 +170,7 @@ export default function PackagesPage() {
         unit_price:      Number(editForm.unit_price),
         unit_price_orig: Number(editForm.unit_price_orig),
         prepaid_amount:  Number(editForm.prepaid_amount),
+        expiry_date:     editForm.expiry_date || null,
       }),
     })
     if (editForm.payment_method === '分期' && editInstPeriods.length > 0) {
@@ -274,7 +294,11 @@ export default function PackagesPage() {
             const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
             const pending = pkg.prepaid_amount - pkg.used_sessions * pkg.unit_price
             const isEditing = editingId === pkg.id
-            const health = pkgHealth(pkg.total_sessions, pkg.used_sessions)
+            const health = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.date, pkg.expiry_date)
+            const expiryMs = pkg.expiry_date
+              ? new Date(pkg.expiry_date + 'T00:00:00').getTime() - Date.now()
+              : null
+            const expiryDays = expiryMs !== null ? Math.round(expiryMs / 86400000) : null
 
             return (
               <div key={pkg.id}
@@ -311,6 +335,23 @@ export default function PackagesPage() {
                         {fmtShort(pkg.date)}　{pkg.payment_method}　{fmtAmt(pkg.prepaid_amount)}
                         {pkg.note && `　${pkg.note}`}
                       </div>
+                      {pkg.expiry_date && (
+                        <div style={{
+                          fontSize: '0.68rem', marginTop: '2px',
+                          color: expiryDays !== null && expiryDays < 0 ? '#9a4a4a'
+                            : expiryDays !== null && expiryDays <= 30 ? '#9a6a2a'
+                            : '#9a8f84',
+                        }}>
+                          建議完成 {fmtShort(pkg.expiry_date)}
+                          {expiryDays !== null && (
+                            <span style={{ marginLeft: '4px' }}>
+                              {expiryDays < 0
+                                ? `（已逾期 ${Math.abs(expiryDays)} 天）`
+                                : `（剩 ${expiryDays} 天）`}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {/* Progress bar */}
                       <div style={{ marginTop: '8px' }}>
                         <div style={{ background: '#f0ebe4', borderRadius: '4px', height: '5px' }}>
@@ -530,18 +571,23 @@ export default function PackagesPage() {
                       </div>
                     )}
 
-                    {/* Date + note */}
+                    {/* Date + expiry + note */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                       <div>
-                        <FLabel>日期</FLabel>
+                        <FLabel>購買日期</FLabel>
                         <input value={editForm.date} onChange={e => ef('date', e.target.value)}
                           type="date" style={iStyle} />
                       </div>
                       <div>
-                        <FLabel>備註</FLabel>
-                        <input value={editForm.note} onChange={e => ef('note', e.target.value)}
-                          placeholder="選填" style={iStyle} />
+                        <FLabel>建議完成日 ⭐</FLabel>
+                        <input value={editForm.expiry_date} onChange={e => ef('expiry_date', e.target.value)}
+                          type="date" style={iStyle} />
                       </div>
+                    </div>
+                    <div>
+                      <FLabel>備註</FLabel>
+                      <input value={editForm.note} onChange={e => ef('note', e.target.value)}
+                        placeholder="選填" style={iStyle} />
                     </div>
 
                     {/* Accumulation toggles */}
