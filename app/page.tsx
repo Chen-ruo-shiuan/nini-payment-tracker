@@ -13,7 +13,8 @@ interface DueItem {
 interface ActivePackage {
   id: number; client_id: number; client_name: string; client_level: string
   service_name: string; total_sessions: number; used_sessions: number
-  prepaid_amount: number; unit_price: number; date: string; expiry_date: string | null
+  prepaid_amount: number; unit_price: number; date: string
+  expiry_date: string | null; opened_date: string | null
 }
 interface RecentCheckout {
   id: number; date: string; total_amount: number; note: string | null; client_name: string | null
@@ -157,9 +158,11 @@ function DueSection({ label, items, urgent }: { label: string; items: DueItem[];
 // ─── Package Health ───────────────────────────────────────────────────────────
 function pkgHealth(
   total: number, used: number,
+  openedDate: string | null,
   purchaseDate?: string, expiryDate?: string | null,
-): 'green' | 'yellow' | 'red' | null {
+): 'blue' | 'green' | 'yellow' | 'red' | null {
   if (total <= 0 || used >= total) return null
+  if (!openedDate) return 'blue'
   if (expiryDate && purchaseDate) {
     const now   = Date.now()
     const start = new Date(purchaseDate + 'T00:00:00').getTime()
@@ -180,6 +183,7 @@ function pkgHealth(
   return 'red'
 }
 const HEALTH = {
+  blue:   { emoji: '🔵', color: '#2d5f9a', bg: '#e8f0fc', border: '#90b0e0', label: '未開封' },
   green:  { emoji: '🟢', color: '#3a7a42', bg: '#edf3eb', border: '#7ab884', label: '健康' },
   yellow: { emoji: '🟡', color: '#8a6a00', bg: '#fdf8e0', border: '#c8a832', label: '偏慢' },
   red:    { emoji: '🔴', color: '#9a3a3a', bg: '#fdf0f0', border: '#e89898', label: '需關注' },
@@ -191,7 +195,7 @@ function PackageRow({ pkg }: { pkg: ActivePackage }) {
   const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
   const realized = pkg.used_sessions * pkg.unit_price
   const pending = pkg.prepaid_amount - realized
-  const health = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.date, pkg.expiry_date)
+  const health = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.opened_date, pkg.date, pkg.expiry_date)
 
   return (
     <Link href={`/clients/${pkg.client_id}`}>
@@ -602,7 +606,7 @@ export default function OverviewPage() {
               ) : (
                 data.activePackages.slice(0, 5).map(pkg => {
                   const pending = pkg.prepaid_amount - pkg.used_sessions * pkg.unit_price
-                  const h = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.date, pkg.expiry_date)
+                  const h = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.opened_date, pkg.date, pkg.expiry_date)
                   const remaining = pkg.total_sessions - pkg.used_sessions
                   return (
                     <Link key={pkg.id} href={`/clients/${pkg.client_id}`}>
@@ -719,12 +723,13 @@ export default function OverviewPage() {
               </p>
             ) : (() => {
               const needAttention = data.activePackages.filter(p => {
-                const h = pkgHealth(p.total_sessions, p.used_sessions, p.date, p.expiry_date)
+                const h = pkgHealth(p.total_sessions, p.used_sessions, p.opened_date, p.date, p.expiry_date)
                 return h === 'red' || h === 'yellow'
               })
-              const healthy = data.activePackages.filter(p =>
-                pkgHealth(p.total_sessions, p.used_sessions, p.date, p.expiry_date) === 'green'
-              )
+              const healthy = data.activePackages.filter(p => {
+                const h = pkgHealth(p.total_sessions, p.used_sessions, p.opened_date, p.date, p.expiry_date)
+                return h === 'green' || h === 'blue'
+              })
               return (
                 <>
                   {needAttention.length > 0 && (

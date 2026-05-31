@@ -1138,9 +1138,11 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
 
   function pkgHealth(
     total: number, used: number,
+    openedDate: string | null,
     purchaseDate?: string, expiryDate?: string | null,
-  ): 'green' | 'yellow' | 'red' | null {
+  ): 'blue' | 'green' | 'yellow' | 'red' | null {
     if (total <= 0 || used >= total) return null
+    if (!openedDate) return 'blue'
     if (expiryDate && purchaseDate) {
       const now   = Date.now()
       const start = new Date(purchaseDate + 'T00:00:00').getTime()
@@ -1161,6 +1163,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     return 'red'
   }
   const PKG_HEALTH_STYLE = {
+    blue:   { emoji: '🔵', color: '#2d5f9a', bg: '#e8f0fc', border: '#90b0e0' },
     green:  { emoji: '🟢', color: '#3a7a42', bg: '#edf3eb', border: '#7ab884' },
     yellow: { emoji: '🟡', color: '#8a6a00', bg: '#fdf8e0', border: '#c8a832' },
     red:    { emoji: '🔴', color: '#9a3a3a', bg: '#fdf0f0', border: '#e89898' },
@@ -1170,7 +1173,7 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     const remaining = pkg.total_sessions - pkg.used_sessions
     const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
     const isDone    = remaining <= 0
-    const health = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.date, pkg.expiry_date)
+    const health = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.opened_date, pkg.date, pkg.expiry_date)
     const isEditing = editingId === pkg.id
 
     // 任務倒數計算（含展延）— 從最後一次施作日開始算，尚未施作時不顯示截止

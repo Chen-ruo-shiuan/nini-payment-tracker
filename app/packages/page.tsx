@@ -8,7 +8,7 @@ interface PkgRow {
   id: number; client_id: number; client_name: string; client_level: string
   service_name: string; total_sessions: number; used_sessions: number
   unit_price: number; unit_price_orig: number; prepaid_amount: number; payment_method: string
-  date: string; note: string | null; expiry_date: string | null
+  date: string; note: string | null; expiry_date: string | null; opened_date: string | null
   include_in_accumulation: number; include_in_points: number
 }
 
@@ -34,9 +34,11 @@ function addMonths(dateStr: string, n: number) {
 // ─── Package Health ───────────────────────────────────────────────────────────
 function pkgHealth(
   total: number, used: number,
+  openedDate: string | null,
   purchaseDate?: string, expiryDate?: string | null,
-): 'green' | 'yellow' | 'red' | null {
+): 'blue' | 'green' | 'yellow' | 'red' | null {
   if (total <= 0 || used >= total) return null
+  if (!openedDate) return 'blue'                                  // 未開封 → 🔵
   if (expiryDate && purchaseDate) {
     const now   = Date.now()
     const start = new Date(purchaseDate + 'T00:00:00').getTime()
@@ -58,6 +60,7 @@ function pkgHealth(
   return 'red'
 }
 const HEALTH = {
+  blue:   { emoji: '🔵', color: '#2d5f9a', bg: '#e8f0fc', border: '#90b0e0', label: '未開封' },
   green:  { emoji: '🟢', color: '#3a7a42', bg: '#edf3eb', border: '#7ab884', label: '健康' },
   yellow: { emoji: '🟡', color: '#8a6a00', bg: '#fdf8e0', border: '#c8a832', label: '偏慢' },
   red:    { emoji: '🔴', color: '#9a3a3a', bg: '#fdf0f0', border: '#e89898', label: '需關注' },
@@ -80,7 +83,7 @@ export default function PackagesPage() {
   const [editInstPayMethod, setEditInstPayMethod] = useState('現金')
   const [editInstContractId, setEditInstContractId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
-  const [healthFilter, setHealthFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all')
+  const [healthFilter, setHealthFilter] = useState<'all' | 'blue' | 'green' | 'yellow' | 'red'>('all')
 
   function load() {
     setLoading(true)
@@ -96,7 +99,7 @@ export default function PackagesPage() {
       if (!p.client_name.toLowerCase().includes(q) && !p.service_name.toLowerCase().includes(q)) return false
     }
     if (healthFilter !== 'all' && filter === 'active') {
-      return pkgHealth(p.total_sessions, p.used_sessions) === healthFilter
+      return pkgHealth(p.total_sessions, p.used_sessions, p.opened_date, p.date, p.expiry_date) === healthFilter
     }
     return true
   })
@@ -250,7 +253,7 @@ export default function PackagesPage() {
         </div>
         {filter === 'active' && (
           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-            {(['all', 'green', 'yellow', 'red'] as const).map(h => {
+            {(['all', 'blue', 'green', 'yellow', 'red'] as const).map(h => {
               const isActive = healthFilter === h
               return (
                 <button key={h} onClick={() => setHealthFilter(h)}
@@ -294,7 +297,7 @@ export default function PackagesPage() {
             const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
             const pending = pkg.prepaid_amount - pkg.used_sessions * pkg.unit_price
             const isEditing = editingId === pkg.id
-            const health = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.date, pkg.expiry_date)
+            const health = pkgHealth(pkg.total_sessions, pkg.used_sessions, pkg.opened_date, pkg.date, pkg.expiry_date)
             const expiryMs = pkg.expiry_date
               ? new Date(pkg.expiry_date + 'T00:00:00').getTime() - Date.now()
               : null
