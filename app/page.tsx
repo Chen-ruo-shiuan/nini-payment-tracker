@@ -501,12 +501,21 @@ function ReportsTab() {
   )
 }
 
+// ─── Dormant Client Types ─────────────────────────────────────────────────────
+interface DormantClient {
+  id: number; name: string; phone: string | null; level: string
+  active_pkg_count: number; last_visit_date: string | null
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function OverviewPage() {
   const [data, setData] = useState<OverviewData | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'套組' | '分期' | '本月' | '報表'>('套組')
   const [expandedCard, setExpandedCard] = useState<'prepaid' | 'realized' | 'pending' | 'month' | null>(null)
+  const [dormant, setDormant] = useState<DormantClient[]>([])
+  const [dormantOpen, setDormantOpen] = useState(false)
+  const [dormantDays, setDormantDays] = useState(60)
 
   function toggleCard(card: typeof expandedCard) {
     setExpandedCard(prev => prev === card ? null : card)
@@ -518,6 +527,13 @@ export default function OverviewPage() {
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    fetch(`/api/dormant-clients?days=${dormantDays}`)
+      .then(r => r.json())
+      .then(setDormant)
+      .catch(() => {})
+  }, [dormantDays])
 
   if (loading) {
     return (
@@ -552,6 +568,97 @@ export default function OverviewPage() {
         </div>
         <PushSubscribeButton />
       </div>
+
+      {/* ── 流失客預警 ── */}
+      {dormant.length > 0 && (
+        <div style={{
+          background: dormantOpen ? '#fdf8f5' : '#fdf5ef',
+          border: '1px solid #e8b88a',
+          borderLeft: '4px solid #c47030',
+          borderRadius: '6px', overflow: 'hidden',
+        }}>
+          {/* Header row */}
+          <button
+            onClick={() => setDormantOpen(v => !v)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: '#9a5a20', fontSize: '0.82rem', fontWeight: 600 }}>
+                ⚠ 流失客預警
+              </span>
+              <span style={{
+                background: '#e8b050', color: '#fff',
+                fontSize: '0.68rem', fontWeight: 700,
+                borderRadius: '10px', padding: '1px 7px',
+              }}>{dormant.length}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Days selector */}
+              <div style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
+                {[30, 60, 90].map(d => (
+                  <button key={d} onClick={() => setDormantDays(d)}
+                    style={{
+                      background: dormantDays === d ? '#c47030' : '#f5ede4',
+                      color: dormantDays === d ? '#fff' : '#9a6a40',
+                      border: 'none', borderRadius: '10px',
+                      fontSize: '0.65rem', padding: '2px 8px', cursor: 'pointer',
+                    }}>
+                    {d}天
+                  </button>
+                ))}
+              </div>
+              <span style={{ color: '#c4a080', fontSize: '0.8rem' }}>{dormantOpen ? '▲' : '▼'}</span>
+            </div>
+          </button>
+
+          {/* Expanded list */}
+          {dormantOpen && (
+            <div style={{ borderTop: '1px solid #f0ddd0', padding: '8px 14px 12px' }}
+              className="space-y-2">
+              {dormant.map(c => {
+                const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+                const daysSince = c.last_visit_date
+                  ? Math.round((new Date(today).getTime() - new Date(c.last_visit_date + 'T00:00:00').getTime()) / 86400000)
+                  : null
+                return (
+                  <Link key={c.id} href={`/clients/${c.id}`}>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      background: '#fff', border: '1px solid #f0ddd0', borderRadius: '5px',
+                      padding: '8px 10px',
+                    }}
+                      className="hover:opacity-80 transition-opacity">
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: '#2c2825', fontSize: '0.85rem' }}>{c.name}</span>
+                          {c.level && <MembershipBadge tier={c.level as MembershipLevel} />}
+                        </div>
+                        <div style={{ color: '#9a8f84', fontSize: '0.7rem', marginTop: '2px' }}>
+                          {c.last_visit_date
+                            ? `上次到訪 ${fmtShort(c.last_visit_date)}`
+                            : '從未到訪'}
+                          　進行中套組 {c.active_pkg_count} 件
+                        </div>
+                      </div>
+                      <div style={{
+                        background: daysSince === null || daysSince >= 90 ? '#fdf0f0' : '#fdf5e8',
+                        color: daysSince === null || daysSince >= 90 ? '#9a3a3a' : '#9a6a2a',
+                        border: `1px solid ${daysSince === null || daysSince >= 90 ? '#e89898' : '#d4a84a'}`,
+                        borderRadius: '4px', padding: '3px 8px',
+                        fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap',
+                      }}>
+                        {daysSince === null ? '從未' : `${daysSince} 天前`}
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── 預收 vs 實收 stat cards ── */}
       <div className="space-y-2">
