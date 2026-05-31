@@ -2657,7 +2657,20 @@ interface DocRow {
   note: string | null; file_size: number | null; upload_date: string
 }
 
-const DOC_TYPES = ['服務施作同意書', '影像拍攝同意書', '購課同意書', '其他']
+const DOC_TYPES = [
+  '服務影像拍攝暨使用知情同意書',
+  '精細光彩肌膚保養服務同意書',
+  '原液調理肌膚保養服務同意書',
+  '輕盈光彩肌膚保養服務同意書',
+  '泡光氧彗肌膚保養服務同意書',
+  '小顏骨氣、森林癒撥筋服務同意書',
+  '雨林強健頭療服務同意書',
+  '皮膚提案/靈魂療癒提案 服務說明暨退款同意書',
+  '孕婦之風險告知暨同意書',
+  '會員制度暨預付型服務契約書',
+  '課程分期付款同意書',
+  '其他',
+]
 
 function fmtSize(bytes: number | null): string {
   if (!bytes) return ''
