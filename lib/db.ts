@@ -680,6 +680,7 @@ function migrateInventory(db: Database.Database) {
       name                TEXT    NOT NULL,
       category            TEXT    NOT NULL DEFAULT '其他',
       unit                TEXT    NOT NULL DEFAULT '瓶',
+      spec                TEXT,
       current_qty         REAL    NOT NULL DEFAULT 0,
       low_stock_threshold REAL    NOT NULL DEFAULT 2,
       note                TEXT,
@@ -698,6 +699,12 @@ function migrateInventory(db: Database.Database) {
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     )
   `)
+
+  // additive migrations for existing deployments
+  const invCols = (db.prepare('PRAGMA table_info(inventory_items)').all() as { name: string }[]).map(c => c.name)
+  if (!invCols.includes('spec')) {
+    db.exec(`ALTER TABLE inventory_items ADD COLUMN spec TEXT`)
+  }
 }
 
 function migrateClientReferral(db: Database.Database) {

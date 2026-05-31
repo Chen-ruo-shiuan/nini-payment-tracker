@@ -14,6 +14,7 @@ interface InventoryItem {
   name: string
   category: Category
   unit: string
+  spec: string | null
   current_qty: number
   low_stock_threshold: number
   note: string | null
@@ -54,7 +55,7 @@ export default function InventoryPage() {
   // Add form
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState({
-    name: '', category: '原液' as Category, unit: '瓶',
+    name: '', category: '原液' as Category, unit: '瓶', spec: '',
     low_stock_threshold: '2', note: '',
   })
   const [addSaving, setAddSaving] = useState(false)
@@ -62,7 +63,7 @@ export default function InventoryPage() {
   // Edit
   const [editId, setEditId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState({
-    name: '', category: '原液' as Category, unit: '瓶',
+    name: '', category: '原液' as Category, unit: '瓶', spec: '',
     low_stock_threshold: '2', note: '',
   })
 
@@ -99,7 +100,7 @@ export default function InventoryPage() {
       body: JSON.stringify({ ...addForm, initial_qty: 0 }),
     })
     if (res.ok) {
-      setAddForm({ name: '', category: '原液', unit: '瓶', low_stock_threshold: '2', note: '' })
+      setAddForm({ name: '', category: '原液', unit: '瓶', spec: '', low_stock_threshold: '2', note: '' })
       setShowAdd(false)
       await load()
     }
@@ -172,6 +173,7 @@ export default function InventoryPage() {
   function startEdit(item: InventoryItem) {
     setEditForm({
       name: item.name, category: item.category, unit: item.unit,
+      spec: item.spec || '',
       low_stock_threshold: String(item.low_stock_threshold), note: item.note || '',
     })
     setEditId(item.id)
@@ -253,7 +255,7 @@ export default function InventoryPage() {
                 </select>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>單位</label>
                 <select value={addForm.unit}
@@ -264,8 +266,17 @@ export default function InventoryPage() {
               </div>
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
+                  規格（容量）
+                  <span style={{ color: '#b4aa9e', marginLeft: '4px', fontWeight: 400 }}>選填</span>
+                </label>
+                <input type="text" value={addForm.spec}
+                  onChange={e => setAddForm(p => ({ ...p, spec: e.target.value }))}
+                  placeholder="如：30ml、100ml" style={{ ...sInput, width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
                   安全庫存量
-                  <span style={{ color: '#b4aa9e', marginLeft: '4px', fontWeight: 400 }}>（低於此數量會提醒）</span>
+                  <span style={{ color: '#b4aa9e', marginLeft: '4px', fontWeight: 400 }}>（低於提醒）</span>
                 </label>
                 <input type="number" value={addForm.low_stock_threshold} min="0" step="0.5"
                   onChange={e => setAddForm(p => ({ ...p, low_stock_threshold: e.target.value }))}
@@ -353,6 +364,14 @@ export default function InventoryPage() {
                               {item.current_qty}
                               <span style={{ fontSize: '0.75rem', marginLeft: '3px', fontWeight: 400, color: '#9a8f84' }}>{item.unit}</span>
                             </span>
+                            {item.spec && (
+                              <span style={{
+                                background: '#f0ebe4', color: '#6b5f54',
+                                fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px',
+                              }}>
+                                每{item.unit} {item.spec}
+                              </span>
+                            )}
                             <span style={{ color: '#b4aa9e', fontSize: '0.7rem' }}>
                               安全庫存 {item.low_stock_threshold} {item.unit}
                             </span>
@@ -461,7 +480,7 @@ export default function InventoryPage() {
                                 </select>
                               </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                               <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>單位</label>
                                 <select value={editForm.unit}
@@ -469,6 +488,12 @@ export default function InventoryPage() {
                                   style={{ ...sInput, width: '100%', fontSize: '0.8rem' }}>
                                   {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                 </select>
+                              </div>
+                              <div>
+                                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>規格（容量）</label>
+                                <input type="text" value={editForm.spec}
+                                  onChange={e => setEditForm(p => ({ ...p, spec: e.target.value }))}
+                                  placeholder="如：30ml" style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
                               </div>
                               <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>安全庫存量</label>
