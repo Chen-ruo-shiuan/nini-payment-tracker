@@ -2744,20 +2744,15 @@ interface DocRow {
   note: string | null; file_size: number | null; signed_date: string | null; upload_date: string
 }
 
-const DOC_TYPES = [
-  '服務影像拍攝暨使用知情同意書',
-  '精細光彩肌膚保養服務同意書',
-  '原液調理肌膚保養服務同意書',
-  '輕盈光彩肌膚保養服務同意書',
-  '泡光氧彗肌膚保養服務同意書',
-  '小顏骨氣、森林癒撥筋服務同意書',
-  '雨林強健頭療服務同意書',
-  '皮膚提案/靈魂療癒提案 服務說明暨退款同意書',
-  '孕婦之風險告知暨同意書',
-  '會員制度暨預付型服務契約書',
-  '課程分期付款同意書',
-  '其他',
-]
+const DOC_TYPES = ['課程同意書', '消費契約書', '特殊同意書', '其他'] as const
+type DocType = typeof DOC_TYPES[number]
+
+const DOC_TYPE_STYLE: Record<DocType, { bg: string; color: string; border: string; borderLeft: string }> = {
+  '課程同意書': { bg: '#eef4fb', color: '#2d4f9a', border: '#9ab0e8', borderLeft: '#4a7ac8' },
+  '消費契約書': { bg: '#edf3eb', color: '#3a7a42', border: '#7ab884', borderLeft: '#3a7a42' },
+  '特殊同意書': { bg: '#fdf8ee', color: '#9a6a00', border: '#e0c055', borderLeft: '#c8940a' },
+  '其他':       { bg: '#f7f4ef', color: '#6b5f54', border: '#c8c4be', borderLeft: '#9a8f84' },
+}
 
 function fmtSize(bytes: number | null): string {
   if (!bytes) return ''
@@ -2771,7 +2766,7 @@ function DocumentsTab({ clientId }: { clientId: number }) {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
-  const [docType, setDocType] = useState(DOC_TYPES[0])
+  const [docType, setDocType] = useState<DocType>(DOC_TYPES[0])
   const [note, setNote] = useState('')
   const [signedDate, setSignedDate] = useState('')
   const [fileErr, setFileErr] = useState('')
@@ -2832,7 +2827,7 @@ function DocumentsTab({ clientId }: { clientId: number }) {
 
         <div>
           <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '3px' }}>文件類型</label>
-          <select value={docType} onChange={e => setDocType(e.target.value)} style={iStyle}>
+          <select value={docType} onChange={e => setDocType(e.target.value as DocType)} style={iStyle}>
             {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
           </select>
         </div>
@@ -2868,59 +2863,85 @@ function DocumentsTab({ clientId }: { clientId: number }) {
         </div>
       </div>
 
-      {/* Document list */}
+      {/* Document list — grouped by category */}
       {loading ? (
         <p style={{ color: '#c4b8aa', fontSize: '0.82rem', textAlign: 'center', padding: '20px 0' }}>載入中…</p>
       ) : docs.length === 0 ? (
         <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無上傳文件</p>
       ) : (
-        <div className="space-y-2">
-          {docs.map(doc => (
-            <div key={doc.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: '#2c2825', fontSize: '0.88rem', wordBreak: 'break-all' }}>
-                    📄 {doc.original_name}
-                  </div>
-                  <div style={{ color: '#9a8f84', fontSize: '0.7rem', marginTop: '3px' }}>
-                    {doc.doc_type}
-                    {doc.signed_date && (
-                      <span style={{ marginLeft: '6px', color: '#6b5f54' }}>
-                        簽署 {new Date(doc.signed_date + 'T00:00:00').toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
-                      </span>
-                    )}
-                    {doc.file_size ? `　${fmtSize(doc.file_size)}` : ''}
-                    {doc.note && `　${doc.note}`}
-                  </div>
+        <div className="space-y-5">
+          {DOC_TYPES.map(cat => {
+            const group = docs.filter(d => d.doc_type === cat)
+            if (group.length === 0) return null
+            const st = DOC_TYPE_STYLE[cat]
+            return (
+              <div key={cat}>
+                {/* Category header */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  marginBottom: '8px',
+                }}>
+                  <div style={{ width: '3px', height: '14px', background: st.borderLeft, borderRadius: '2px' }} />
+                  <span style={{ color: st.color, fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.06em' }}>
+                    {cat}
+                  </span>
+                  <span style={{ color: st.color, fontSize: '0.68rem', opacity: 0.7 }}>（{group.length}）</span>
                 </div>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-                  <a
-                    href={`/api/documents/${doc.id}/file`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      color: '#2d5f9a', fontSize: '0.72rem',
-                      background: '#e8f0fc', border: '1px solid #90b0e0',
-                      borderRadius: '4px', padding: '3px 10px',
-                      textDecoration: 'none', whiteSpace: 'nowrap',
+                <div className="space-y-2">
+                  {group.map(doc => (
+                    <div key={doc.id} style={{
+                      background: st.bg,
+                      border: `1px solid ${st.border}`,
+                      borderLeft: `3px solid ${st.borderLeft}`,
+                      borderRadius: '6px', padding: '10px 12px',
                     }}>
-                    開啟
-                  </a>
-                  <button
-                    onClick={() => deleteDoc(doc)}
-                    disabled={deleting === doc.id}
-                    style={{
-                      color: '#9a4a4a', fontSize: '0.72rem',
-                      background: 'none', border: '1px solid #e8a8a8',
-                      borderRadius: '4px', padding: '3px 10px',
-                      cursor: deleting === doc.id ? 'not-allowed' : 'pointer',
-                    }}>
-                    {deleting === doc.id ? '…' : '刪除'}
-                  </button>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: '#2c2825', fontSize: '0.88rem', wordBreak: 'break-all' }}>
+                            📄 {doc.original_name}
+                          </div>
+                          <div style={{ color: '#9a8f84', fontSize: '0.7rem', marginTop: '3px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {doc.signed_date && (
+                              <span style={{ color: '#6b5f54' }}>
+                                簽署 {new Date(doc.signed_date + 'T00:00:00').toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                              </span>
+                            )}
+                            {doc.file_size ? <span>{fmtSize(doc.file_size)}</span> : null}
+                            {doc.note ? <span style={{ color: '#6b5f54' }}>{doc.note}</span> : null}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                          <a
+                            href={`/api/documents/${doc.id}/file`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              color: st.color, fontSize: '0.72rem',
+                              background: '#fff', border: `1px solid ${st.border}`,
+                              borderRadius: '4px', padding: '3px 10px',
+                              textDecoration: 'none', whiteSpace: 'nowrap',
+                            }}>
+                            開啟
+                          </a>
+                          <button
+                            onClick={() => deleteDoc(doc)}
+                            disabled={deleting === doc.id}
+                            style={{
+                              color: '#9a4a4a', fontSize: '0.72rem',
+                              background: 'none', border: '1px solid #e8a8a8',
+                              borderRadius: '4px', padding: '3px 10px',
+                              cursor: deleting === doc.id ? 'not-allowed' : 'pointer',
+                            }}>
+                            {deleting === doc.id ? '…' : '刪除'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
