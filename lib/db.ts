@@ -705,6 +705,10 @@ function migrateInventory(db: Database.Database) {
   if (!invCols.includes('spec')) {
     db.exec(`ALTER TABLE inventory_items ADD COLUMN spec TEXT`)
   }
+
+  // rename old categories to new ones (one-time migration)
+  db.prepare(`UPDATE inventory_items SET category = '原液' WHERE category = '精華/原液'`).run()
+  db.prepare(`UPDATE inventory_items SET category = '其他' WHERE category IN ('消耗品', '銷售產品')`).run()
 }
 
 function migrateClientReferral(db: Database.Database) {

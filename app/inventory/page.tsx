@@ -199,9 +199,14 @@ export default function InventoryPage() {
   })
   const lowCount = items.filter(i => i.current_qty <= i.low_stock_threshold).length
 
-  // Group by category
+  // Group by category — items with unknown category fall into '其他'
   const grouped = CATEGORIES.reduce((acc, cat) => {
-    const list = displayed.filter(i => i.category === cat)
+    const list = displayed.filter(i => {
+      if (cat === '其他') {
+        return i.category === '其他' || !CATEGORIES.includes(i.category as Category)
+      }
+      return i.category === cat
+    })
     if (list.length > 0) acc[cat] = list
     return acc
   }, {} as Partial<Record<Category, InventoryItem[]>>)
