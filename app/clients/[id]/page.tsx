@@ -1136,10 +1136,24 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
     refresh()
   }
 
+  function pkgHealth(total: number, used: number): 'green' | 'yellow' | 'red' | null {
+    if (total <= 0 || used >= total) return null
+    const ratio = (total - used) / total
+    if (ratio <= 1 / 3) return 'green'
+    if (ratio <= 2 / 3) return 'yellow'
+    return 'red'
+  }
+  const PKG_HEALTH_STYLE = {
+    green:  { emoji: '🟢', color: '#3a7a42', bg: '#edf3eb', border: '#7ab884' },
+    yellow: { emoji: '🟡', color: '#8a6a00', bg: '#fdf8e0', border: '#c8a832' },
+    red:    { emoji: '🔴', color: '#9a3a3a', bg: '#fdf0f0', border: '#e89898' },
+  }
+
   function renderPkgCard(pkg: Package) {
     const remaining = pkg.total_sessions - pkg.used_sessions
     const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
     const isDone    = remaining <= 0
+    const health = pkgHealth(pkg.total_sessions, pkg.used_sessions)
     const isEditing = editingId === pkg.id
 
     // 任務倒數計算（含展延）— 從最後一次施作日開始算，尚未施作時不顯示截止
@@ -1172,7 +1186,12 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
       : null
 
     return (
-      <div style={{ background: isDone ? '#f5f2ee' : '#faf8f5', border: `1px solid ${isDone ? '#d9d0c5' : '#e0d9d0'}`, borderRadius: '6px', padding: '12px' }}>
+      <div style={{
+        background: isDone ? '#f5f2ee' : '#faf8f5',
+        border: `1px solid ${isDone ? '#d9d0c5' : '#e0d9d0'}`,
+        borderLeft: !isDone && health ? `4px solid ${PKG_HEALTH_STYLE[health].border}` : undefined,
+        borderRadius: '6px', padding: '12px',
+      }}>
             {!isEditing ? (
               <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1199,7 +1218,12 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', marginLeft: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-                  <div style={{ color: remaining > 0 ? '#4a6b52' : '#9a8f84', fontSize: '0.9rem', fontWeight: 500 }}>
+                  <div style={{
+                    color: !isDone && health ? PKG_HEALTH_STYLE[health].color : (remaining > 0 ? '#4a6b52' : '#9a8f84'),
+                    fontSize: '0.9rem', fontWeight: 500,
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                  }}>
+                    {!isDone && health && <span style={{ fontSize: '0.8rem' }}>{PKG_HEALTH_STYLE[health].emoji}</span>}
                     剩 {remaining} 次
                   </div>
                   <div style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtAmt(pkg.prepaid_amount)}</div>

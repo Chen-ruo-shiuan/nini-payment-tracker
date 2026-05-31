@@ -31,6 +31,20 @@ function addMonths(dateStr: string, n: number) {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
 }
 
+// ─── Package Health ───────────────────────────────────────────────────────────
+function pkgHealth(total: number, used: number): 'green' | 'yellow' | 'red' | null {
+  if (total <= 0 || used >= total) return null
+  const ratio = (total - used) / total
+  if (ratio <= 1 / 3) return 'green'
+  if (ratio <= 2 / 3) return 'yellow'
+  return 'red'
+}
+const HEALTH = {
+  green:  { emoji: '🟢', color: '#3a7a42', bg: '#edf3eb', border: '#7ab884', label: '健康' },
+  yellow: { emoji: '🟡', color: '#8a6a00', bg: '#fdf8e0', border: '#c8a832', label: '偏慢' },
+  red:    { emoji: '🔴', color: '#9a3a3a', bg: '#fdf0f0', border: '#e89898', label: '需關注' },
+}
+
 interface InstPeriod { due_date: string; amount: string; paid_at?: string | null }
 interface ContractRow { id: number; payment_method: string; note: string | null }
 interface InstRow { due_date: string; amount: number; paid_at: string | null }
@@ -48,6 +62,7 @@ export default function PackagesPage() {
   const [editInstPayMethod, setEditInstPayMethod] = useState('現金')
   const [editInstContractId, setEditInstContractId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [healthFilter, setHealthFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all')
 
   function load() {
     setLoading(true)
@@ -57,12 +72,16 @@ export default function PackagesPage() {
   }
   useEffect(load, [filter])
 
-  const filtered = search.trim()
-    ? packages.filter(p =>
-        p.client_name.toLowerCase().includes(search.toLowerCase()) ||
-        p.service_name.toLowerCase().includes(search.toLowerCase())
-      )
-    : packages
+  const filtered = packages.filter(p => {
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      if (!p.client_name.toLowerCase().includes(q) && !p.service_name.toLowerCase().includes(q)) return false
+    }
+    if (healthFilter !== 'all' && filter === 'active') {
+      return pkgHealth(p.total_sessions, p.used_sessions) === healthFilter
+    }
+    return true
+  })
 
   async function quickUse(pkg: PkgRow) {
     if (!confirm(`核銷「${pkg.client_name}｜${pkg.service_name}」一次？`)) return
@@ -196,9 +215,9 @@ export default function PackagesPage() {
 
       {/* Filter + Search */}
       <div className="space-y-2">
-        <div style={{ display: 'flex', gap: '6px' }}>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           {(['active', 'all'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)}
+            <button key={f} onClick={() => { setFilter(f); if (f === 'all') setHealthFilter('all') }}
               style={{
                 background: filter === f ? '#2c2825' : '#f0ebe4',
                 color: filter === f ? '#f7f4ef' : '#6b5f54',
@@ -209,6 +228,24 @@ export default function PackagesPage() {
             </button>
           ))}
         </div>
+        {filter === 'active' && (
+          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+            {(['all', 'green', 'yellow', 'red'] as const).map(h => {
+              const isActive = healthFilter === h
+              return (
+                <button key={h} onClick={() => setHealthFilter(h)}
+                  style={{
+                    background: isActive ? (h === 'all' ? '#6b5f54' : HEALTH[h].bg) : '#f5f2ee',
+                    color: isActive ? (h === 'all' ? '#f7f4ef' : HEALTH[h].color) : '#9a8f84',
+                    border: `1px solid ${isActive && h !== 'all' ? HEALTH[h].border : 'transparent'}`,
+                    borderRadius: '20px', fontSize: '0.72rem', padding: '3px 11px', cursor: 'pointer',
+                  }}>
+                  {h === 'all' ? '全部狀態' : `${HEALTH[h].emoji} ${HEALTH[h].label}`}
+                </button>
+              )
+            })}
+          </div>
+        )}
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -237,10 +274,16 @@ export default function PackagesPage() {
             const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
             const pending = pkg.prepaid_amount - pkg.used_sessions * pkg.unit_price
             const isEditing = editingId === pkg.id
+            const health = pkgHealth(pkg.total_sessions, pkg.used_sessions)
 
             return (
               <div key={pkg.id}
-                style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '14px' }}>
+                style={{
+                  background: '#faf8f5',
+                  border: '1px solid #e0d9d0',
+                  borderLeft: health ? `4px solid ${HEALTH[health].border}` : '1px solid #e0d9d0',
+                  borderRadius: '6px', padding: '14px',
+                }}>
 
                 {/* ── View mode ── */}
                 {!isEditing && (
@@ -290,11 +333,13 @@ export default function PackagesPage() {
                     {/* Action buttons */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
                       <div style={{
-                        background: remaining > 0 ? '#edf3eb' : '#f0ebe4',
-                        color: remaining > 0 ? '#4a6b52' : '#9a8f84',
-                        fontSize: '0.9rem', fontWeight: 600,
+                        background: health ? HEALTH[health].bg : (remaining > 0 ? '#edf3eb' : '#f0ebe4'),
+                        color: health ? HEALTH[health].color : (remaining > 0 ? '#4a6b52' : '#9a8f84'),
+                        fontSize: '0.85rem', fontWeight: 600,
                         padding: '4px 10px', borderRadius: '5px',
+                        display: 'flex', alignItems: 'center', gap: '4px',
                       }}>
+                        {health && <span style={{ fontSize: '0.8rem' }}>{HEALTH[health].emoji}</span>}
                         剩 {remaining} 次
                       </div>
                       {remaining > 0 && (

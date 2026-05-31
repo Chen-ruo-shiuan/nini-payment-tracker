@@ -154,16 +154,36 @@ function DueSection({ label, items, urgent }: { label: string; items: DueItem[];
   )
 }
 
+// ─── Package Health ───────────────────────────────────────────────────────────
+function pkgHealth(total: number, used: number): 'green' | 'yellow' | 'red' | null {
+  if (total <= 0 || used >= total) return null
+  const ratio = (total - used) / total
+  if (ratio <= 1 / 3) return 'green'
+  if (ratio <= 2 / 3) return 'yellow'
+  return 'red'
+}
+const HEALTH = {
+  green:  { emoji: '🟢', color: '#3a7a42', bg: '#edf3eb', border: '#7ab884', label: '健康' },
+  yellow: { emoji: '🟡', color: '#8a6a00', bg: '#fdf8e0', border: '#c8a832', label: '偏慢' },
+  red:    { emoji: '🔴', color: '#9a3a3a', bg: '#fdf0f0', border: '#e89898', label: '需關注' },
+}
+
 // ─── Package Progress ─────────────────────────────────────────────────────────
 function PackageRow({ pkg }: { pkg: ActivePackage }) {
   const remaining = pkg.total_sessions - pkg.used_sessions
   const pct = pkg.total_sessions > 0 ? (pkg.used_sessions / pkg.total_sessions) * 100 : 0
   const realized = pkg.used_sessions * pkg.unit_price
   const pending = pkg.prepaid_amount - realized
+  const health = pkgHealth(pkg.total_sessions, pkg.used_sessions)
 
   return (
     <Link href={`/clients/${pkg.client_id}`}>
-      <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}
+      <div style={{
+        background: '#faf8f5',
+        border: '1px solid #e0d9d0',
+        borderLeft: health ? `4px solid ${HEALTH[health].border}` : '1px solid #e0d9d0',
+        borderRadius: '6px', padding: '12px',
+      }}
         className="hover:opacity-80 transition-opacity">
         <div className="flex items-start justify-between gap-3">
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -174,7 +194,7 @@ function PackageRow({ pkg }: { pkg: ActivePackage }) {
             <div style={{ color: '#6b5f54', fontSize: '0.8rem', marginTop: '2px' }}>{pkg.service_name}</div>
             <div style={{ marginTop: '6px' }}>
               <div style={{ background: '#f0ebe4', borderRadius: '4px', height: '5px', overflow: 'hidden' }}>
-                <div style={{ background: '#9ab89e', width: `${pct}%`, height: '100%', borderRadius: '4px' }} />
+                <div style={{ background: health ? HEALTH[health].border : '#9ab89e', width: `${pct}%`, height: '100%', borderRadius: '4px' }} />
               </div>
               <div style={{ color: '#9a8f84', fontSize: '0.7rem', marginTop: '2px' }}>
                 已用 {pkg.used_sessions} / {pkg.total_sessions} 次
@@ -182,7 +202,14 @@ function PackageRow({ pkg }: { pkg: ActivePackage }) {
             </div>
           </div>
           <div style={{ textAlign: 'right' } as React.CSSProperties}>
-            <div style={{ color: '#4a6b52', fontSize: '0.82rem', fontWeight: 500 }}>剩 {remaining} 次</div>
+            <div style={{
+              color: health ? HEALTH[health].color : '#4a6b52',
+              fontSize: '0.82rem', fontWeight: 500,
+              display: 'flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end',
+            }}>
+              {health && <span style={{ fontSize: '0.75rem' }}>{HEALTH[health].emoji}</span>}
+              剩 {remaining} 次
+            </div>
             {pending > 0 && (
               <div style={{ color: '#9a6a4a', fontSize: '0.72rem', marginTop: '2px' }}>
                 待履行 {fmtAmt(pending)}
@@ -558,6 +585,8 @@ export default function OverviewPage() {
               ) : (
                 data.activePackages.slice(0, 5).map(pkg => {
                   const pending = pkg.prepaid_amount - pkg.used_sessions * pkg.unit_price
+                  const h = pkgHealth(pkg.total_sessions, pkg.used_sessions)
+                  const remaining = pkg.total_sessions - pkg.used_sessions
                   return (
                     <Link key={pkg.id} href={`/clients/${pkg.client_id}`}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #f0ebe4' }}>
@@ -566,8 +595,13 @@ export default function OverviewPage() {
                           <div style={{ color: '#9a8f84', fontSize: '0.7rem' }}>{pkg.service_name}</div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ color: '#4a6b52', fontSize: '0.75rem' }}>
-                            剩 {pkg.total_sessions - pkg.used_sessions} 次
+                          <div style={{
+                            color: h ? HEALTH[h].color : '#4a6b52',
+                            fontSize: '0.75rem',
+                            display: 'flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end',
+                          }}>
+                            {h && <span style={{ fontSize: '0.7rem' }}>{HEALTH[h].emoji}</span>}
+                            剩 {remaining} 次
                           </div>
                           {pending > 0 && (
                             <div style={{ color: '#9a4a4a', fontSize: '0.7rem' }}>{fmtAmt(pending)}</div>
@@ -661,14 +695,38 @@ export default function OverviewPage() {
 
         {/* 套組進度 */}
         {activeTab === '套組' && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {data.activePackages.length === 0 ? (
               <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
                 目前無進行中套組
               </p>
-            ) : (
-              data.activePackages.map(pkg => <PackageRow key={pkg.id} pkg={pkg} />)
-            )}
+            ) : (() => {
+              const needAttention = data.activePackages.filter(p => {
+                const h = pkgHealth(p.total_sessions, p.used_sessions)
+                return h === 'red' || h === 'yellow'
+              })
+              const healthy = data.activePackages.filter(p =>
+                pkgHealth(p.total_sessions, p.used_sessions) === 'green'
+              )
+              return (
+                <>
+                  {needAttention.length > 0 && (
+                    <div className="space-y-2">
+                      <p style={{ color: '#9a8f84', fontSize: '0.68rem', letterSpacing: '0.1em' }}>需要關注</p>
+                      {needAttention.map(pkg => <PackageRow key={pkg.id} pkg={pkg} />)}
+                    </div>
+                  )}
+                  {healthy.length > 0 && (
+                    <div className="space-y-2">
+                      {needAttention.length > 0 && (
+                        <p style={{ color: '#9a8f84', fontSize: '0.68rem', letterSpacing: '0.1em' }}>進度健康</p>
+                      )}
+                      {healthy.map(pkg => <PackageRow key={pkg.id} pkg={pkg} />)}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
           </div>
         )}
 
