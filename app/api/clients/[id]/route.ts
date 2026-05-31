@@ -78,7 +78,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const db = getDb()
   const body = await req.json()
-  const { name, phone, note, level, level_since, birthday, next_appointment } = body
+  const { name, phone, note, level, level_since, birthday, next_appointment,
+          allergy_note, medical_note, skin_note } = body
 
   if (!name) return NextResponse.json({ error: '請輸入姓名' }, { status: 400 })
 
@@ -94,9 +95,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       level_since = @level_since,
       birthday = @birthday,
       next_appointment = @next_appointment,
+      allergy_note = @allergy_note,
+      medical_note = @medical_note,
+      skin_note = @skin_note,
       updated_at = datetime('now')
     WHERE id = @id
-  `).run({ id: Number(id), name, phone: phone || null, note: note || null, level: level || '癒米', level_since: level_since || null, birthday: birthday || null, next_appointment: next_appointment || null })
+  `).run({
+    id: Number(id), name, phone: phone || null, note: note || null,
+    level: level || '癒米', level_since: level_since || null,
+    birthday: birthday || null, next_appointment: next_appointment || null,
+    allergy_note: allergy_note || null,
+    medical_note: medical_note || null,
+    skin_note:    skin_note    || null,
+  })
 
   return NextResponse.json({ success: true })
 }

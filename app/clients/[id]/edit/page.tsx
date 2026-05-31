@@ -15,6 +15,7 @@ export default function EditClientPage() {
   const [error, setError] = useState('')
   const [form, setForm] = useState({
     name: '', phone: '', note: '', level: '癒米', level_since: '', birthday: '',
+    allergy_note: '', medical_note: '', skin_note: '',
   })
 
   useEffect(() => {
@@ -28,6 +29,9 @@ export default function EditClientPage() {
           level: data.level || '癒米',
           level_since: data.level_since || '',
           birthday: data.birthday || '',
+          allergy_note: data.allergy_note || '',
+          medical_note: data.medical_note || '',
+          skin_note: data.skin_note || '',
         })
         setLoading(false)
       })
@@ -96,9 +100,33 @@ export default function EditClientPage() {
 
         <Field label="備註">
           <textarea value={form.note} onChange={e => set('note', e.target.value)}
-            placeholder="備註（選填）" rows={3}
+            placeholder="備註（選填）" rows={2}
             style={{ ...inputStyle, resize: 'none' }} />
         </Field>
+
+        {/* ── 健康注意事項 ── */}
+        <div style={{ borderTop: '1px solid #e0d9d0', paddingTop: '16px' }}>
+          <p style={{ color: '#9a6a2a', fontSize: '0.75rem', letterSpacing: '0.06em', marginBottom: '12px' }}>
+            ⚠ 健康注意事項
+          </p>
+          <div className="space-y-4">
+            <Field label="過敏成分 / 物質">
+              <textarea value={form.allergy_note} onChange={e => set('allergy_note', e.target.value)}
+                placeholder="例：對水楊酸過敏、對香精過敏、對蝦蟹過敏…"
+                rows={2} style={{ ...inputStyle, resize: 'none' }} />
+            </Field>
+            <Field label="特殊健康狀況（懷孕、疾病、長期藥物）">
+              <textarea value={form.medical_note} onChange={e => set('medical_note', e.target.value)}
+                placeholder="例：懷孕中、有甲狀腺亢進、長期服用抗凝血藥物…"
+                rows={2} style={{ ...inputStyle, resize: 'none' }} />
+            </Field>
+            <Field label="皮膚特殊注意事項">
+              <textarea value={form.skin_note} onChange={e => set('skin_note', e.target.value)}
+                placeholder="例：有雷射術後修護需避開特定步驟、右臉有傷口…"
+                rows={2} style={{ ...inputStyle, resize: 'none' }} />
+            </Field>
+          </div>
+        </div>
 
         {error && (
           <p style={{ color: '#9a4a4a', fontSize: '0.85rem', background: '#fdf0f0', border: '1px solid #e8a8a8', borderRadius: '5px' }}

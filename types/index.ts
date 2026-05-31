@@ -58,6 +58,9 @@ export interface Client {
   harvest_given: string | null  // date string when harvest gift was given
   shopping_credit: number  // 購物金餘額
   next_appointment: string | null  // 下次預約日期 YYYY-MM-DD
+  allergy_note: string | null      // 過敏成分/物質
+  medical_note: string | null      // 特殊健康狀況（懷孕、疾病、藥物）
+  skin_note: string | null         // 皮膚注意事項
   legacy_id: string | null
   created_at: string
   updated_at: string

@@ -34,6 +34,7 @@ export function getDb(): Database.Database {
     migrateAppointmentTime(db)
     migrateClosedDays(db)
     migrateClientDocuments(db)
+    migrateClientHealthNotes(db)
   }
   return db
 }
@@ -607,6 +608,19 @@ function migrateClientDocuments(db: Database.Database) {
   const cols = (db.prepare('PRAGMA table_info(client_documents)').all() as { name: string }[]).map(c => c.name)
   if (!cols.includes('signed_date')) {
     db.exec(`ALTER TABLE client_documents ADD COLUMN signed_date TEXT`)
+  }
+}
+
+function migrateClientHealthNotes(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(clients)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('allergy_note')) {
+    db.exec(`ALTER TABLE clients ADD COLUMN allergy_note TEXT`)
+  }
+  if (!cols.includes('medical_note')) {
+    db.exec(`ALTER TABLE clients ADD COLUMN medical_note TEXT`)
+  }
+  if (!cols.includes('skin_note')) {
+    db.exec(`ALTER TABLE clients ADD COLUMN skin_note TEXT`)
   }
 }
 

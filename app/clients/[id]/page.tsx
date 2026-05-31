@@ -2549,6 +2549,39 @@ export default function ClientDetailPage() {
         {/* Tags */}
         <ClientTagsRow clientId={Number(id)} />
 
+        {/* ── 健康注意事項警示 ── */}
+        {(client.allergy_note || client.medical_note || client.skin_note) && (
+          <div style={{
+            background: '#fdf8ee', border: '1px solid #e8c96a',
+            borderLeft: '4px solid #c8940a',
+            borderRadius: '6px', padding: '12px 14px', marginTop: '12px',
+          }}>
+            <p style={{ color: '#7a5a00', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.06em', marginBottom: '8px' }}>
+              ⚠ 施作前請確認
+            </p>
+            <div className="space-y-2">
+              {client.allergy_note && (
+                <div>
+                  <span style={{ color: '#9a6a00', fontSize: '0.68rem', fontWeight: 600 }}>過敏　</span>
+                  <span style={{ color: '#6b5030', fontSize: '0.8rem' }}>{client.allergy_note}</span>
+                </div>
+              )}
+              {client.medical_note && (
+                <div>
+                  <span style={{ color: '#9a6a00', fontSize: '0.68rem', fontWeight: 600 }}>健康　</span>
+                  <span style={{ color: '#6b5030', fontSize: '0.8rem' }}>{client.medical_note}</span>
+                </div>
+              )}
+              {client.skin_note && (
+                <div>
+                  <span style={{ color: '#9a6a00', fontSize: '0.68rem', fontWeight: 600 }}>皮膚　</span>
+                  <span style={{ color: '#6b5030', fontSize: '0.8rem' }}>{client.skin_note}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Quick stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '14px' }}>
           {[
