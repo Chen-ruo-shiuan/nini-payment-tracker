@@ -36,6 +36,7 @@ export function getDb(): Database.Database {
     migrateClientDocuments(db)
     migrateClientHealthNotes(db)
     migrateClientReferral(db)
+    migrateProductUsageLogs(db)
   }
   return db
 }
@@ -623,6 +624,22 @@ function migrateClientHealthNotes(db: Database.Database) {
   if (!cols.includes('skin_note')) {
     db.exec(`ALTER TABLE clients ADD COLUMN skin_note TEXT`)
   }
+}
+
+function migrateProductUsageLogs(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS product_usage_logs (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      date         TEXT    NOT NULL,
+      product_name TEXT    NOT NULL,
+      quantity     REAL,
+      unit         TEXT,
+      batch_note   TEXT,
+      note         TEXT,
+      created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
 }
 
 function migrateClientReferral(db: Database.Database) {
