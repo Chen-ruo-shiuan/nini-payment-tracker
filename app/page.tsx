@@ -251,6 +251,41 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
+// ─── Low Stock Banner ─────────────────────────────────────────────────────────
+function LowStockBanner() {
+  const [items, setItems] = useState<{ id: number; name: string; current_qty: number; unit: string; low_stock_threshold: number }[]>([])
+
+  useEffect(() => {
+    fetch('/api/inventory')
+      .then(r => r.json())
+      .then((data: { id: number; name: string; current_qty: number; unit: string; low_stock_threshold: number }[]) => {
+        if (!Array.isArray(data)) return
+        setItems(data.filter(i => i.current_qty <= i.low_stock_threshold))
+      })
+      .catch(() => {})
+  }, [])
+
+  if (items.length === 0) return null
+
+  return (
+    <div style={{ background: '#fdf8ee', border: '1px solid #e8c96a', borderLeft: '4px solid #c8940a', borderRadius: '6px', padding: '10px 14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ color: '#7a5a00', fontSize: '0.82rem', fontWeight: 600 }}>
+          ⚠ 庫存不足 {items.length} 項
+        </span>
+        <a href="/inventory" style={{ color: '#c8940a', fontSize: '0.75rem', textDecoration: 'underline' }}>前往庫存管理 →</a>
+      </div>
+      <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+        {items.map(i => (
+          <span key={i.id} style={{ background: '#fff', border: '1px solid #e8c96a', borderRadius: '4px', padding: '2px 8px', fontSize: '0.72rem', color: '#7a5a00' }}>
+            {i.name} {i.current_qty}{i.unit}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Report Views ─────────────────────────────────────────────────────────────
 function DailyReportView({ data }: { data: DailyReport }) {
   return (
@@ -516,6 +551,7 @@ export default function OverviewPage() {
   const [dormant, setDormant] = useState<DormantClient[]>([])
   const [dormantOpen, setDormantOpen] = useState(false)
   const [dormantDays, setDormantDays] = useState(60)
+  const [lowStockCount, setLowStockCount] = useState(0)
 
   function toggleCard(card: typeof expandedCard) {
     setExpandedCard(prev => prev === card ? null : card)
@@ -534,6 +570,16 @@ export default function OverviewPage() {
       .then(setDormant)
       .catch(() => {})
   }, [dormantDays])
+
+  useEffect(() => {
+    fetch('/api/inventory')
+      .then(r => r.json())
+      .then((data: { current_qty: number; low_stock_threshold: number }[]) => {
+        if (!Array.isArray(data)) return
+        setLowStockCount(data.filter(i => i.current_qty <= i.low_stock_threshold).length)
+      })
+      .catch(() => {})
+  }, [])
 
   if (loading) {
     return (
@@ -659,6 +705,9 @@ export default function OverviewPage() {
           )}
         </div>
       )}
+
+      {/* ── 庫存不足警示 ── */}
+      <LowStockBanner />
 
       {/* ── 預收 vs 實收 stat cards ── */}
       <div className="space-y-2">

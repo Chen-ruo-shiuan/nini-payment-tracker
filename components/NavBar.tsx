@@ -40,6 +40,10 @@ export default function NavBar() {
               style={{ color: pathname.startsWith('/appointments') ? '#2c2825' : '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
               📅 預約
             </Link>
+            <Link href="/inventory"
+              style={{ color: pathname.startsWith('/inventory') ? '#2c2825' : '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
+              📦 庫存
+            </Link>
             <Link href="/tags"
               style={{ color: '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
               標籤

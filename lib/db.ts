@@ -37,6 +37,7 @@ export function getDb(): Database.Database {
     migrateClientHealthNotes(db)
     migrateClientReferral(db)
     migrateProductUsageLogs(db)
+    migrateInventory(db)
   }
   return db
 }
@@ -638,6 +639,33 @@ function migrateProductUsageLogs(db: Database.Database) {
       batch_note   TEXT,
       note         TEXT,
       created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+}
+
+function migrateInventory(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS inventory_items (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      name                TEXT    NOT NULL,
+      category            TEXT    NOT NULL DEFAULT '其他',
+      unit                TEXT    NOT NULL DEFAULT '瓶',
+      current_qty         REAL    NOT NULL DEFAULT 0,
+      low_stock_threshold REAL    NOT NULL DEFAULT 2,
+      note                TEXT,
+      created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS inventory_ledger (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id     INTEGER NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+      delta       REAL    NOT NULL,
+      reason      TEXT    NOT NULL DEFAULT '手動調整',
+      ref_id      INTEGER,
+      date        TEXT    NOT NULL,
+      note        TEXT,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     )
   `)
 }
