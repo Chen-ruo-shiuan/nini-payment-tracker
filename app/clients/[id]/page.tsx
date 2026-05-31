@@ -2455,8 +2455,8 @@ function AppointmentSection({ clientId }: { clientId: string }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = '時間軸' | '服務日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄' | '同意書' | '產品紀錄' | '追蹤紀錄'
-const TABS: Tab[] = ['時間軸', '服務日誌', '分期', '福利', '套組', '儲值', '消費紀錄', '同意書', '產品紀錄', '追蹤紀錄']
+type Tab = '時間軸' | '日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄' | '同意書' | '產品紀錄'
+const TABS: Tab[] = ['時間軸', '日誌', '分期', '福利', '套組', '儲值', '消費紀錄', '同意書', '產品紀錄']
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -2706,8 +2706,15 @@ export default function ClientDetailPage() {
         {TABS.map(t => <TabBtn key={t} label={t} active={tab === t} onClick={() => setTab(t)} />)}
       </div>
 
-      {tab === '時間軸'   && <TimelineTab client={client} />}
-      {tab === '服務日誌' && <ServiceLogTab client={client} />}
+      {tab === '時間軸' && <TimelineTab client={client} />}
+      {tab === '日誌' && (
+        <div className="space-y-6">
+          <ServiceLogTab client={client} />
+          <div style={{ borderTop: '1px solid #e0d9d0', paddingTop: '16px' }}>
+            <FollowUpTab clientId={client.id} clientName={client.name} />
+          </div>
+        </div>
+      )}
       {tab === '分期' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -2728,7 +2735,6 @@ export default function ClientDetailPage() {
       {tab === '消費紀錄' && <ConsumptionTab client={client} refresh={load} />}
       {tab === '同意書' && <DocumentsTab clientId={client.id} />}
       {tab === '產品紀錄' && <ProductUsageTab clientId={client.id} checkouts={client.checkouts} />}
-      {tab === '追蹤紀錄' && <FollowUpTab clientId={client.id} clientName={client.name} />}
 
       {/* Delete */}
       <div style={{ borderTop: '1px solid #f0ebe4', paddingTop: '16px', marginTop: '8px' }}>

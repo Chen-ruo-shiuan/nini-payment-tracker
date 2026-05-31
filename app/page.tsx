@@ -549,6 +549,11 @@ interface FollowUpTask {
   note: string | null; completed_at: string | null
 }
 
+// ─── Top Referrer Types ───────────────────────────────────────────────────────
+interface TopReferrer {
+  id: number; name: string; level: string; referral_count: number
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function OverviewPage() {
   const [data, setData] = useState<OverviewData | null>(null)
@@ -561,6 +566,8 @@ export default function OverviewPage() {
   const [lowStockCount, setLowStockCount] = useState(0)
   const [pendingFollowUps, setPendingFollowUps] = useState<FollowUpTask[]>([])
   const [followUpsOpen, setFollowUpsOpen] = useState(false)
+  const [topReferrers, setTopReferrers] = useState<TopReferrer[]>([])
+  const [referrersOpen, setReferrersOpen] = useState(false)
 
   function toggleCard(card: typeof expandedCard) {
     setExpandedCard(prev => prev === card ? null : card)
@@ -594,6 +601,13 @@ export default function OverviewPage() {
     fetch('/api/follow-ups?status=pending')
       .then(r => r.json())
       .then((data: FollowUpTask[]) => { if (Array.isArray(data)) setPendingFollowUps(data) })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/stats/referrals')
+      .then(r => r.json())
+      .then((data: TopReferrer[]) => { if (Array.isArray(data)) setTopReferrers(data) })
       .catch(() => {})
   }, [])
 
@@ -772,6 +786,49 @@ export default function OverviewPage() {
                   </Link>
                 )
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 推薦人排行 ── */}
+      {topReferrers.length > 0 && (
+        <div style={{
+          background: referrersOpen ? '#f0f9f2' : '#eef8f1',
+          border: '1px solid #8ec4a0', borderLeft: '4px solid #3a8a52',
+          borderRadius: '6px', overflow: 'hidden',
+        }}>
+          <button onClick={() => setReferrersOpen(v => !v)}
+            style={{ width: '100%', background: 'none', border: 'none', padding: '10px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: '#1e5c33', fontSize: '0.85rem', fontWeight: 600 }}>
+                🌟 推薦人排行
+              </span>
+              <span style={{ background: '#3a8a52', color: '#fff', fontSize: '0.68rem', fontWeight: 700, borderRadius: '10px', padding: '1px 7px' }}>
+                {topReferrers.length}
+              </span>
+            </div>
+            <span style={{ color: '#8ec4a0', fontSize: '0.75rem' }}>{referrersOpen ? '▲' : '▼'}</span>
+          </button>
+          {referrersOpen && (
+            <div style={{ borderTop: '1px solid #c0ddc8', padding: '0 8px 8px' }}>
+              {topReferrers.map((r, i) => (
+                <Link key={r.id} href={`/clients/${r.id}`}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 8px', borderBottom: '1px solid #d5eedd', textDecoration: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: i < 3 ? '#3a8a52' : '#9a8f84', fontSize: '0.82rem', fontWeight: 600, width: '18px' }}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: '#2c2825', fontSize: '0.85rem' }}>{r.name}</span>
+                      {r.level && <MembershipBadge tier={r.level as MembershipLevel} />}
+                    </div>
+                  </div>
+                  <div style={{ background: '#edf7f1', border: '1px solid #8ec4a0', borderRadius: '4px', padding: '3px 10px', fontSize: '0.75rem', color: '#1e5c33', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    帶來 {r.referral_count} 人
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
         </div>

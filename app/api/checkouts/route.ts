@@ -168,6 +168,36 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── 5. 自動課後追蹤（結帳後 +2 天）────────────────────────────────────────
+    if (client_id) {
+      const coDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+      const due = new Date(coDate + 'T00:00:00')
+      due.setDate(due.getDate() + 2)
+      const dueStr = due.toLocaleDateString('en-CA')
+      db.prepare(`
+        INSERT INTO follow_up_tasks (client_id, checkout_id, due_date, note)
+        VALUES (?, ?, ?, ?)
+      `).run(client_id, coId, dueStr, `結帳後 2 天追蹤`)
+    }
+
+    // ── 6. 自動寫入產品紀錄（category='產品' 的品項）────────────────────────
+    if (client_id) {
+      const coDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+      for (const item of items as { category: string; label: string; price: number; qty: number }[]) {
+        if (item.category !== '產品') continue
+        db.prepare(`
+          INSERT INTO product_usage_logs
+            (client_id, date, product_name, record_type, checkout_id, note)
+          VALUES (?, ?, ?, '店內購買', ?, ?)
+        `).run(
+          client_id, coDate,
+          item.label.trim(),
+          coId,
+          item.qty > 1 ? `數量 ${item.qty}` : null
+        )
+      }
+    }
+
     return { id: coId, pointsEarned, yodomoEarned, totalAmount }
   })
 
