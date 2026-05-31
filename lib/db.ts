@@ -642,6 +642,17 @@ function migrateProductUsageLogs(db: Database.Database) {
       created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
     )
   `)
+  // 補充欄位：紀錄類型（店內購買 / 自用）、連結結帳
+  const cols = (db.prepare('PRAGMA table_info(product_usage_logs)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('record_type')) {
+    db.exec(`ALTER TABLE product_usage_logs ADD COLUMN record_type TEXT NOT NULL DEFAULT '店內購買'`)
+  }
+  if (!cols.includes('checkout_id')) {
+    db.exec(`ALTER TABLE product_usage_logs ADD COLUMN checkout_id INTEGER REFERENCES checkouts(id) ON DELETE SET NULL`)
+  }
+  if (!cols.includes('category')) {
+    db.exec(`ALTER TABLE product_usage_logs ADD COLUMN category TEXT`)
+  }
 }
 
 function migrateFollowUps(db: Database.Database) {

@@ -2455,8 +2455,8 @@ function AppointmentSection({ clientId }: { clientId: string }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = '時間軸' | '服務日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄' | '同意書' | '用品紀錄' | '追蹤紀錄'
-const TABS: Tab[] = ['時間軸', '服務日誌', '分期', '福利', '套組', '儲值', '消費紀錄', '同意書', '用品紀錄', '追蹤紀錄']
+type Tab = '時間軸' | '服務日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄' | '同意書' | '產品紀錄' | '追蹤紀錄'
+const TABS: Tab[] = ['時間軸', '服務日誌', '分期', '福利', '套組', '儲值', '消費紀錄', '同意書', '產品紀錄', '追蹤紀錄']
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -2727,7 +2727,7 @@ export default function ClientDetailPage() {
       {tab === '儲值' && <StoredValueTab client={client} refresh={load} />}
       {tab === '消費紀錄' && <ConsumptionTab client={client} refresh={load} />}
       {tab === '同意書' && <DocumentsTab clientId={client.id} />}
-      {tab === '用品紀錄' && <ProductUsageTab clientId={client.id} />}
+      {tab === '產品紀錄' && <ProductUsageTab clientId={client.id} checkouts={client.checkouts} />}
       {tab === '追蹤紀錄' && <FollowUpTab clientId={client.id} clientName={client.name} />}
 
       {/* Delete */}
@@ -2964,73 +2964,85 @@ const miniBtn: React.CSSProperties = {
   borderRadius: '5px', fontSize: '0.82rem', padding: '6px 14px', cursor: 'pointer',
 }
 
-// ─── Product Usage Tab ───────────────────────────────────────────────────────
-const PRODUCT_PRESETS = [
-  '玻尿酸原液', '積雪草安瓶', '維生素C原液', '水楊酸精華', '煙醯胺精華',
-  'A醇精華', '神經醯胺', '角鯊烷', '膠原蛋白胜肽', '熊果素精華',
-  '杏仁酸精華', 'NMF保濕因子', '益生菌舒緩精華', '薑黃調理精華',
-  '複合維他命C+E精華', '深層清潔泥膜', '活膚賦活乳',
+// ─── Product Records Tab ─────────────────────────────────────────────────────
+const PRODUCT_GROUPS = [
+  { label: '原液', items: ['神經醯胺', 'EGF', '藍銅胜肽', '積雪草', 'B3菸鹼醯胺', 'B5泛醇', '穀胱甘肽', '維他命C', '兒茶素', '金縷梅', '膠原蛋白', '阿魏酸+C'] },
+  { label: '純露', items: ['千葉玫瑰', '洋甘菊', '橙花', '桂花', '茶樹', '葡萄柚'] },
+  { label: '面膜', items: ['晶凍面膜', '胜肽點滴面膜', '凍膜'] },
+  { label: '其他', items: [] },
 ]
-const UNIT_PRESETS = ['瓶', '支', '格', 'ml', '滴', '組', '盒', '包', '顆']
+
+// flatten all known items for edit-mode lookup
+const ALL_PRESET_ITEMS = PRODUCT_GROUPS.flatMap(g => g.items)
 
 interface ProductLog {
   id: number; client_id: number; date: string
-  product_name: string; quantity: number | null; unit: string | null
-  batch_note: string | null; note: string | null; created_at: string
+  product_name: string; category: string | null
+  record_type: string; checkout_id: number | null
+  checkout_date: string | null; checkout_total: number | null
+  note: string | null; created_at: string
 }
 
-function ProductUsageTab({ clientId }: { clientId: number }) {
+function ProductUsageTab({ clientId, checkouts }: { clientId: number; checkouts: Checkout[] }) {
   const [logs, setLogs] = useState<ProductLog[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<number | null>(null)
 
-  // Add form
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
-  const emptyForm = { date: today, product_name: '', custom_name: '', quantity: '', unit: '瓶', batch_note: '', note: '' }
+  const emptyForm = {
+    date: today, record_type: '店內購買',
+    product_name: '', custom_name: '', checkout_id: '', note: '',
+  }
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
-
-  // Edit form
-  const [editForm, setEditForm] = useState({ date: '', product_name: '', custom_name: '', quantity: '', unit: '', batch_note: '', note: '' })
+  const [editForm, setEditForm] = useState({ ...emptyForm })
 
   async function load() {
     setLoading(true)
     const res = await fetch(`/api/clients/${clientId}/product-logs`)
-    const data = await res.json()
-    setLogs(Array.isArray(data) ? data : [])
+    setLogs(Array.isArray(await res.json()) ? await (await fetch(`/api/clients/${clientId}/product-logs`)).json() : [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [clientId])
+  useEffect(() => {
+    fetch(`/api/clients/${clientId}/product-logs`)
+      .then(r => r.json())
+      .then(d => { setLogs(Array.isArray(d) ? d : []); setLoading(false) })
+  }, [clientId])
 
-  function resolvedName(f: typeof form) {
+  async function reloadLogs() {
+    const d = await (await fetch(`/api/clients/${clientId}/product-logs`)).json()
+    setLogs(Array.isArray(d) ? d : [])
+  }
+
+  // resolve product name from form
+  function resolveName(f: typeof form) {
     return f.product_name === '__custom__' ? f.custom_name.trim() : f.product_name.trim()
+  }
+  // find which group a product belongs to
+  function findCategory(name: string): string | null {
+    const g = PRODUCT_GROUPS.find(g => g.items.includes(name))
+    return g ? g.label : null
   }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    const name = resolvedName(form)
+    const name = resolveName(form)
     if (!name) { setFormError('請填寫產品名稱'); return }
     setSaving(true); setFormError('')
     const res = await fetch(`/api/clients/${clientId}/product-logs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         date: form.date, product_name: name,
-        quantity: form.quantity ? Number(form.quantity) : null,
-        unit: form.unit || null,
-        batch_note: form.batch_note || null,
+        category: findCategory(name),
+        record_type: form.record_type,
+        checkout_id: form.checkout_id ? Number(form.checkout_id) : null,
         note: form.note || null,
       }),
     })
-    if (res.ok) {
-      setForm(emptyForm)
-      await load()
-    } else {
-      const d = await res.json()
-      setFormError(d.error || '發生錯誤')
-    }
+    if (res.ok) { setForm(emptyForm); await reloadLogs() }
+    else { const d = await res.json(); setFormError(d.error || '發生錯誤') }
     setSaving(false)
   }
 
@@ -3041,110 +3053,193 @@ function ProductUsageTab({ clientId }: { clientId: number }) {
   }
 
   function startEdit(log: ProductLog) {
-    const isCustom = !PRODUCT_PRESETS.includes(log.product_name)
+    const isCustom = !ALL_PRESET_ITEMS.includes(log.product_name)
     setEditForm({
       date: log.date,
+      record_type: log.record_type || '店內購買',
       product_name: isCustom ? '__custom__' : log.product_name,
       custom_name: isCustom ? log.product_name : '',
-      quantity: log.quantity != null ? String(log.quantity) : '',
-      unit: log.unit || '瓶',
-      batch_note: log.batch_note || '',
+      checkout_id: log.checkout_id ? String(log.checkout_id) : '',
       note: log.note || '',
     })
     setEditingId(log.id)
   }
 
   async function handleSaveEdit(id: number) {
-    const name = editForm.product_name === '__custom__' ? editForm.custom_name.trim() : editForm.product_name.trim()
+    const name = resolveName(editForm)
     if (!name) return
     await fetch(`/api/product-logs/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         date: editForm.date, product_name: name,
-        quantity: editForm.quantity ? Number(editForm.quantity) : null,
-        unit: editForm.unit || null,
-        batch_note: editForm.batch_note || null,
+        category: findCategory(name),
+        record_type: editForm.record_type,
+        checkout_id: editForm.checkout_id ? Number(editForm.checkout_id) : null,
         note: editForm.note || null,
       }),
     })
     setEditingId(null)
-    await load()
+    await reloadLogs()
   }
 
-  // Group by date
-  const grouped = logs.reduce((acc, log) => {
-    const d = log.date; if (!acc[d]) acc[d] = []
-    acc[d].push(log); return acc
-  }, {} as Record<string, ProductLog[]>)
-  const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
+  // Grouped by record_type for display
+  const purchased = logs.filter(l => l.record_type === '店內購買')
+  const selfUsed  = logs.filter(l => l.record_type === '自用')
 
   const sInput: React.CSSProperties = {
     background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '5px',
     color: '#2c2825', fontSize: '0.82rem', outline: 'none', padding: '6px 10px',
   }
 
+  // Shared product select (optgroup)
+  function ProductSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    return (
+      <>
+        <select value={value} onChange={e => onChange(e.target.value)} style={{ ...sInput, width: '100%' }}>
+          <option value="">— 選擇產品 —</option>
+          {PRODUCT_GROUPS.map(g => (
+            <optgroup key={g.label} label={`── ${g.label} ──`}>
+              {g.items.map(item => <option key={item} value={item}>{item}</option>)}
+              <option value={`__custom_${g.label}__`}>　✏ 自訂義（{g.label}）</option>
+            </optgroup>
+          ))}
+        </select>
+        {value.startsWith('__custom_') && (
+          <input type="text" placeholder="輸入產品名稱"
+            style={{ ...sInput, width: '100%', marginTop: '5px' }}
+            onChange={e => onChange(e.target.value)} />
+        )}
+      </>
+    )
+  }
+
+  // Log card
+  function LogCard({ log }: { log: ProductLog }) {
+    const isPurchased = log.record_type === '店內購買'
+    const cardBg = isPurchased ? '#edf3eb' : '#f7f4ef'
+    const cardBorder = isPurchased ? '#7ab884' : '#c8c4be'
+    const cardBorderLeft = isPurchased ? '#3a7a42' : '#9a8f84'
+    return (
+      <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderLeft: `3px solid ${cardBorderLeft}`, borderRadius: '6px', padding: '9px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
+            <span style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500 }}>{log.product_name}</span>
+            {log.category && <span style={{ color: isPurchased ? '#3a7a42' : '#9a8f84', fontSize: '0.68rem' }}>{log.category}</span>}
+            <span style={{ color: '#b4aa9e', fontSize: '0.68rem' }}>{fmtShort(log.date)}</span>
+          </div>
+          {log.checkout_date && (
+            <p style={{ color: '#4a7a52', fontSize: '0.72rem', marginTop: '2px' }}>
+              🔗 連結結帳 {fmtShort(log.checkout_date)}（${(log.checkout_total || 0).toLocaleString()}）
+            </p>
+          )}
+          {log.note && <p style={{ color: '#6b5f54', fontSize: '0.75rem', marginTop: '2px' }}>{log.note}</p>}
+        </div>
+        <div style={{ display: 'flex', gap: '5px', marginLeft: '8px', flexShrink: 0 }}>
+          <button onClick={() => startEdit(log)}
+            style={{ background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', color: '#9a8f84', fontSize: '0.68rem', padding: '3px 8px', cursor: 'pointer' }}>
+            編輯
+          </button>
+          <button onClick={() => handleDelete(log.id)}
+            style={{ background: 'none', border: '1px solid #e8a8a8', borderRadius: '4px', color: '#9a6060', fontSize: '0.68rem', padding: '3px 8px', cursor: 'pointer' }}>
+            刪除
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       {/* ── Add form ── */}
       <form onSubmit={handleAdd} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '14px' }}>
-        <p style={{ color: '#6b5f54', fontSize: '0.82rem', fontWeight: 500, marginBottom: '12px' }}>新增施作用品記錄</p>
+        <p style={{ color: '#6b5f54', fontSize: '0.82rem', fontWeight: 500, marginBottom: '12px' }}>新增產品記錄</p>
         <div className="space-y-3">
+
+          {/* Record type toggle */}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {(['店內購買', '自用'] as const).map(rt => (
+              <button key={rt} type="button"
+                onClick={() => setForm(p => ({ ...p, record_type: rt, checkout_id: '' }))}
+                style={{
+                  flex: 1, border: 'none', borderRadius: '6px', fontSize: '0.82rem', padding: '7px', cursor: 'pointer',
+                  background: form.record_type === rt ? (rt === '店內購買' ? '#3a7a42' : '#6b5f54') : '#f0ece6',
+                  color: form.record_type === rt ? '#fff' : '#6b5f54',
+                }}>
+                {rt === '店內購買' ? '🛍 店內購買' : '💊 自用（外部品牌）'}
+              </button>
+            ))}
+          </div>
+
           {/* Date */}
           <div>
-            <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '4px' }}>施作日期</label>
+            <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>日期</label>
             <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
               style={{ ...sInput, width: '100%' }} />
           </div>
-          {/* Product name */}
+
+          {/* Product name with optgroup */}
           <div>
-            <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '4px' }}>產品名稱 *</label>
-            <select value={form.product_name} onChange={e => setForm(p => ({ ...p, product_name: e.target.value, custom_name: '' }))}
-              style={{ ...sInput, width: '100%' }}>
-              <option value="">— 選擇常用產品 —</option>
-              {PRODUCT_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
-              <option value="__custom__">✏ 手動輸入</option>
-            </select>
-            {form.product_name === '__custom__' && (
+            <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
+              {form.record_type === '店內購買' ? '購買產品 *' : '自用產品 *'}
+            </label>
+            {form.record_type === '店內購買' ? (
+              <>
+                <select value={form.product_name}
+                  onChange={e => setForm(p => ({ ...p, product_name: e.target.value, custom_name: '' }))}
+                  style={{ ...sInput, width: '100%' }}>
+                  <option value="">— 選擇產品 —</option>
+                  {PRODUCT_GROUPS.map(g => (
+                    <optgroup key={g.label} label={`── ${g.label} ──`}>
+                      {g.items.map(item => <option key={item} value={item}>{item}</option>)}
+                      <option value={`__custom_${g.label}__`}>　✏ 自訂義（{g.label}）</option>
+                    </optgroup>
+                  ))}
+                </select>
+                {form.product_name.startsWith('__custom_') && (
+                  <input type="text" value={form.custom_name}
+                    onChange={e => setForm(p => ({ ...p, custom_name: e.target.value }))}
+                    placeholder="輸入產品名稱" style={{ ...sInput, width: '100%', marginTop: '5px' }} />
+                )}
+              </>
+            ) : (
+              /* 自用：自由輸入外部品牌 */
               <input type="text" value={form.custom_name}
-                onChange={e => setForm(p => ({ ...p, custom_name: e.target.value }))}
-                placeholder="輸入產品名稱" style={{ ...sInput, width: '100%', marginTop: '6px' }} />
+                onChange={e => setForm(p => ({ ...p, custom_name: e.target.value, product_name: '__custom__' }))}
+                placeholder="EX：DR.WU 杏仁酸、適樂膚保濕乳液…"
+                style={{ ...sInput, width: '100%' }} />
             )}
           </div>
-          {/* Quantity + Unit */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+
+          {/* Link to checkout (店內購買 only) */}
+          {form.record_type === '店內購買' && checkouts.length > 0 && (
             <div>
-              <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '4px' }}>用量</label>
-              <input type="number" value={form.quantity} min="0" step="0.5"
-                onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))}
-                placeholder="0" style={{ ...sInput, width: '100%' }} />
-            </div>
-            <div>
-              <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '4px' }}>單位</label>
-              <select value={form.unit} onChange={e => setForm(p => ({ ...p, unit: e.target.value }))}
+              <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>連結結帳紀錄（選填）</label>
+              <select value={form.checkout_id} onChange={e => setForm(p => ({ ...p, checkout_id: e.target.value }))}
                 style={{ ...sInput, width: '100%' }}>
-                {UNIT_PRESETS.map(u => <option key={u} value={u}>{u}</option>)}
+                <option value="">— 不連結 —</option>
+                {checkouts.slice(0, 20).map(co => (
+                  <option key={co.id} value={co.id}>
+                    {co.date}　${co.total_amount.toLocaleString()}
+                    {co.note ? `　${co.note}` : ''}
+                  </option>
+                ))}
               </select>
             </div>
-          </div>
-          {/* Batch note */}
-          <div>
-            <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '4px' }}>批號 / 效期</label>
-            <input type="text" value={form.batch_note}
-              onChange={e => setForm(p => ({ ...p, batch_note: e.target.value }))}
-              placeholder="EX：LOT-240810、效期2025-12…" style={{ ...sInput, width: '100%' }} />
-          </div>
+          )}
+
           {/* Note */}
           <div>
-            <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '4px' }}>備註</label>
+            <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
+              {form.record_type === '店內購買' ? '備註' : '備註（用法、感受…）'}
+            </label>
             <textarea value={form.note} rows={2}
               onChange={e => setForm(p => ({ ...p, note: e.target.value }))}
-              placeholder="施作部位、皮膚反應…" style={{ ...sInput, width: '100%', resize: 'none' }} />
+              placeholder={form.record_type === '自用' ? 'EX：每晚使用、皮膚有改善…' : ''}
+              style={{ ...sInput, width: '100%', resize: 'none' }} />
           </div>
         </div>
-        {formError && (
-          <p style={{ color: '#9a4a4a', fontSize: '0.82rem', marginTop: '8px' }}>{formError}</p>
-        )}
+
+        {formError && <p style={{ color: '#9a4a4a', fontSize: '0.82rem', marginTop: '8px' }}>{formError}</p>}
         <button type="submit" disabled={saving}
           style={{ marginTop: '12px', width: '100%', background: saving ? '#c4b8aa' : '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '6px', fontSize: '0.88rem', padding: '10px', cursor: saving ? 'not-allowed' : 'pointer' }}>
           {saving ? '儲存中…' : '新增記錄'}
@@ -3155,102 +3250,117 @@ function ProductUsageTab({ clientId }: { clientId: number }) {
       {loading ? (
         <p style={{ color: '#9a8f84', textAlign: 'center', padding: '20px 0' }}>載入中…</p>
       ) : logs.length === 0 ? (
-        <p style={{ color: '#b4aa9e', textAlign: 'center', padding: '20px 0', fontSize: '0.85rem' }}>尚無施作用品記錄</p>
+        <p style={{ color: '#b4aa9e', textAlign: 'center', padding: '20px 0', fontSize: '0.85rem' }}>尚無產品紀錄</p>
       ) : (
-        <div className="space-y-4">
-          {dates.map(date => (
-            <div key={date}>
-              <p style={{ color: '#9a8f84', fontSize: '0.75rem', letterSpacing: '0.05em', marginBottom: '6px' }}>
-                {new Date(date + 'T00:00:00').toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
+        <div className="space-y-5">
+
+          {/* 店內購買 section */}
+          {purchased.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div style={{ width: '3px', height: '14px', background: '#3a7a42', borderRadius: '2px' }} />
+                <span style={{ color: '#3a7a42', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.06em' }}>店內購買</span>
+                <span style={{ color: '#3a7a42', fontSize: '0.68rem', opacity: 0.7 }}>（{purchased.length}）</span>
+              </div>
               <div className="space-y-2">
-                {grouped[date].map(log => (
-                  <div key={log.id}>
-                    {editingId === log.id ? (
-                      /* Edit row */
-                      <div style={{ background: '#fff9f0', border: '1px solid #e8c96a', borderRadius: '6px', padding: '12px' }}>
-                        <div className="space-y-2">
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            <div>
-                              <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>日期</label>
-                              <input type="date" value={editForm.date} onChange={e => setEditForm(p => ({ ...p, date: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.78rem' }} />
-                            </div>
-                            <div>
-                              <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>用量</label>
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                <input type="number" value={editForm.quantity} min="0" step="0.5" onChange={e => setEditForm(p => ({ ...p, quantity: e.target.value }))} placeholder="0" style={{ ...sInput, flex: 1, fontSize: '0.78rem' }} />
-                                <select value={editForm.unit} onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))} style={{ ...sInput, fontSize: '0.78rem' }}>
-                                  {UNIT_PRESETS.map(u => <option key={u} value={u}>{u}</option>)}
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                          <div>
-                            <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>產品名稱</label>
-                            <select value={editForm.product_name} onChange={e => setEditForm(p => ({ ...p, product_name: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.78rem' }}>
-                              {PRODUCT_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
-                              <option value="__custom__">✏ 手動輸入</option>
-                            </select>
-                            {editForm.product_name === '__custom__' && (
-                              <input type="text" value={editForm.custom_name} onChange={e => setEditForm(p => ({ ...p, custom_name: e.target.value }))} style={{ ...sInput, width: '100%', marginTop: '4px', fontSize: '0.78rem' }} />
-                            )}
-                          </div>
-                          <div>
-                            <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>批號 / 效期</label>
-                            <input type="text" value={editForm.batch_note} onChange={e => setEditForm(p => ({ ...p, batch_note: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.78rem' }} />
-                          </div>
-                          <div>
-                            <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>備註</label>
-                            <textarea value={editForm.note} rows={2} onChange={e => setEditForm(p => ({ ...p, note: e.target.value }))} style={{ ...sInput, width: '100%', resize: 'none', fontSize: '0.78rem' }} />
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                          <button onClick={() => handleSaveEdit(log.id)}
-                            style={{ flex: 1, background: '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '5px', fontSize: '0.8rem', padding: '7px', cursor: 'pointer' }}>
-                            儲存
-                          </button>
-                          <button onClick={() => setEditingId(null)}
-                            style={{ flex: 1, background: '#e0d9d0', color: '#6b5f54', border: 'none', borderRadius: '5px', fontSize: '0.8rem', padding: '7px', cursor: 'pointer' }}>
-                            取消
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Display row */
-                      <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500 }}>{log.product_name}</span>
-                            {(log.quantity != null || log.unit) && (
-                              <span style={{ background: '#e8f0fc', color: '#2d4f9a', fontSize: '0.72rem', padding: '1px 7px', borderRadius: '10px' }}>
-                                {log.quantity != null ? log.quantity : ''}{log.unit || ''}
-                              </span>
-                            )}
-                            {log.batch_note && (
-                              <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>批：{log.batch_note}</span>
-                            )}
-                          </div>
-                          {log.note && <p style={{ color: '#6b5f54', fontSize: '0.78rem', marginTop: '3px' }}>{log.note}</p>}
-                        </div>
-                        <div style={{ display: 'flex', gap: '6px', marginLeft: '8px', flexShrink: 0 }}>
-                          <button onClick={() => startEdit(log)}
-                            style={{ background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', color: '#9a8f84', fontSize: '0.72rem', padding: '3px 8px', cursor: 'pointer' }}>
-                            編輯
-                          </button>
-                          <button onClick={() => handleDelete(log.id)}
-                            style={{ background: 'none', border: '1px solid #e8a8a8', borderRadius: '4px', color: '#9a6060', fontSize: '0.72rem', padding: '3px 8px', cursor: 'pointer' }}>
-                            刪除
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                {purchased.map(log => (
+                  editingId === log.id
+                    ? <EditLogRow key={log.id} log={log} checkouts={checkouts} editForm={editForm} setEditForm={setEditForm} onSave={() => handleSaveEdit(log.id)} onCancel={() => setEditingId(null)} sInput={sInput} />
+                    : <LogCard key={log.id} log={log} />
                 ))}
               </div>
             </div>
-          ))}
+          )}
+
+          {/* 自用 section */}
+          {selfUsed.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div style={{ width: '3px', height: '14px', background: '#9a8f84', borderRadius: '2px' }} />
+                <span style={{ color: '#6b5f54', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.06em' }}>自用產品（外部）</span>
+                <span style={{ color: '#9a8f84', fontSize: '0.68rem', opacity: 0.7 }}>（{selfUsed.length}）</span>
+              </div>
+              <div className="space-y-2">
+                {selfUsed.map(log => (
+                  editingId === log.id
+                    ? <EditLogRow key={log.id} log={log} checkouts={checkouts} editForm={editForm} setEditForm={setEditForm} onSave={() => handleSaveEdit(log.id)} onCancel={() => setEditingId(null)} sInput={sInput} />
+                    : <LogCard key={log.id} log={log} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+    </div>
+  )
+}
+
+function EditLogRow({ log, checkouts, editForm, setEditForm, onSave, onCancel, sInput }: {
+  log: ProductLog
+  checkouts: Checkout[]
+  editForm: { date: string; record_type: string; product_name: string; custom_name: string; checkout_id: string; note: string }
+  setEditForm: React.Dispatch<React.SetStateAction<typeof editForm>>
+  onSave: () => void
+  onCancel: () => void
+  sInput: React.CSSProperties
+}) {
+  const isCustom = editForm.product_name === '__custom__' || editForm.product_name.startsWith('__custom_')
+  return (
+    <div style={{ background: '#fff9f0', border: '1px solid #e8c96a', borderRadius: '6px', padding: '12px' }}>
+      <div className="space-y-2">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>日期</label>
+            <input type="date" value={editForm.date} onChange={e => setEditForm(p => ({ ...p, date: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.78rem' }} />
+          </div>
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>類型</label>
+            <select value={editForm.record_type} onChange={e => setEditForm(p => ({ ...p, record_type: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.78rem' }}>
+              <option value="店內購買">店內購買</option>
+              <option value="自用">自用</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>產品名稱</label>
+          {editForm.record_type === '店內購買' ? (
+            <>
+              <select value={editForm.product_name} onChange={e => setEditForm(p => ({ ...p, product_name: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.78rem' }}>
+                {PRODUCT_GROUPS.map(g => (
+                  <optgroup key={g.label} label={`── ${g.label} ──`}>
+                    {g.items.map(item => <option key={item} value={item}>{item}</option>)}
+                    <option value={`__custom_${g.label}__`}>　✏ 自訂義（{g.label}）</option>
+                  </optgroup>
+                ))}
+              </select>
+              {isCustom && <input type="text" value={editForm.custom_name} onChange={e => setEditForm(p => ({ ...p, custom_name: e.target.value }))} style={{ ...sInput, width: '100%', marginTop: '4px', fontSize: '0.78rem' }} />}
+            </>
+          ) : (
+            <input type="text" value={isCustom ? editForm.custom_name : editForm.product_name}
+              onChange={e => setEditForm(p => ({ ...p, product_name: '__custom__', custom_name: e.target.value }))}
+              style={{ ...sInput, width: '100%', fontSize: '0.78rem' }} />
+          )}
+        </div>
+        {editForm.record_type === '店內購買' && checkouts.length > 0 && (
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>連結結帳</label>
+            <select value={editForm.checkout_id} onChange={e => setEditForm(p => ({ ...p, checkout_id: e.target.value }))} style={{ ...sInput, width: '100%', fontSize: '0.78rem' }}>
+              <option value="">— 不連結 —</option>
+              {checkouts.slice(0, 20).map(co => (
+                <option key={co.id} value={co.id}>{co.date}　${co.total_amount.toLocaleString()}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div>
+          <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>備註</label>
+          <textarea value={editForm.note} rows={2} onChange={e => setEditForm(p => ({ ...p, note: e.target.value }))} style={{ ...sInput, width: '100%', resize: 'none', fontSize: '0.78rem' }} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+        <button onClick={onSave} style={{ flex: 1, background: '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '5px', fontSize: '0.8rem', padding: '7px', cursor: 'pointer' }}>儲存</button>
+        <button onClick={onCancel} style={{ flex: 1, background: '#e0d9d0', color: '#6b5f54', border: 'none', borderRadius: '5px', fontSize: '0.8rem', padding: '7px', cursor: 'pointer' }}>取消</button>
+      </div>
     </div>
   )
 }
