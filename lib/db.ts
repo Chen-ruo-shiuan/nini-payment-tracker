@@ -3,6 +3,8 @@ import path from 'path'
 import { mkdirSync } from 'fs'
 
 const DB_PATH = process.env.DATABASE_URL || path.join(process.cwd(), 'data', 'nini.db')
+export const DATA_DIR = path.dirname(DB_PATH)
+export const DOCS_DIR = path.join(DATA_DIR, 'documents')
 
 let db: Database.Database
 
@@ -31,6 +33,7 @@ export function getDb(): Database.Database {
     migrateCheckoutEarned(db)
     migrateAppointmentTime(db)
     migrateClosedDays(db)
+    migrateClientDocuments(db)
   }
   return db
 }
@@ -582,6 +585,23 @@ function migrateAppointmentTime(db: Database.Database) {
   if (!cols.includes('time')) {
     db.exec(`ALTER TABLE appointment_logs ADD COLUMN time TEXT`)
   }
+}
+
+function migrateClientDocuments(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS client_documents (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      filename     TEXT    NOT NULL,
+      original_name TEXT   NOT NULL,
+      doc_type     TEXT    NOT NULL DEFAULT '其他',
+      note         TEXT,
+      file_size    INTEGER,
+      upload_date  TEXT    NOT NULL,
+      created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+  mkdirSync(DOCS_DIR, { recursive: true })
 }
 
 function migrateCheckoutEarned(db: Database.Database) {

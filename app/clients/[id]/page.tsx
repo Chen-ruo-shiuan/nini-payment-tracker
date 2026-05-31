@@ -2450,8 +2450,8 @@ function AppointmentSection({ clientId }: { clientId: string }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = '時間軸' | '服務日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄'
-const TABS: Tab[] = ['時間軸', '服務日誌', '分期', '福利', '套組', '儲值', '消費紀錄']
+type Tab = '時間軸' | '服務日誌' | '分期' | '福利' | '套組' | '儲值' | '消費紀錄' | '同意書'
+const TABS: Tab[] = ['時間軸', '服務日誌', '分期', '福利', '套組', '儲值', '消費紀錄', '同意書']
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -2641,11 +2641,178 @@ export default function ClientDetailPage() {
       {tab === '套組' && <PackagesTab client={client} refresh={load} />}
       {tab === '儲值' && <StoredValueTab client={client} refresh={load} />}
       {tab === '消費紀錄' && <ConsumptionTab client={client} refresh={load} />}
+      {tab === '同意書' && <DocumentsTab clientId={client.id} />}
 
       {/* Delete */}
       <div style={{ borderTop: '1px solid #f0ebe4', paddingTop: '16px', marginTop: '8px' }}>
         <button onClick={deleteClient} style={{ color: '#9a8f84', fontSize: '0.75rem', background: 'none', border: 'none', cursor: 'pointer' }}>刪除此客人</button>
       </div>
+    </div>
+  )
+}
+
+// ─── Documents Tab ────────────────────────────────────────────────────────────
+interface DocRow {
+  id: number; client_id: number; original_name: string; doc_type: string
+  note: string | null; file_size: number | null; upload_date: string
+}
+
+const DOC_TYPES = ['服務施作同意書', '影像拍攝同意書', '購課同意書', '其他']
+
+function fmtSize(bytes: number | null): string {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function DocumentsTab({ clientId }: { clientId: number }) {
+  const [docs, setDocs] = useState<DocRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [deleting, setDeleting] = useState<number | null>(null)
+  const [docType, setDocType] = useState(DOC_TYPES[0])
+  const [note, setNote] = useState('')
+  const [fileErr, setFileErr] = useState('')
+  const fileRef = useState<HTMLInputElement | null>(null)
+  const inputRef = { current: null as HTMLInputElement | null }
+
+  function loadDocs() {
+    setLoading(true)
+    fetch(`/api/clients/${clientId}/documents`)
+      .then(r => r.json())
+      .then(d => { setDocs(d); setLoading(false) })
+  }
+  useEffect(loadDocs, [clientId])
+
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileErr('')
+    if (file.size > 20 * 1024 * 1024) { setFileErr('檔案超過 20MB'); return }
+    const form = new FormData()
+    form.append('file', file)
+    form.append('doc_type', docType)
+    if (note.trim()) form.append('note', note.trim())
+    setUploading(true)
+    const res = await fetch(`/api/clients/${clientId}/documents`, { method: 'POST', body: form })
+    setUploading(false)
+    if (res.ok) {
+      setNote('')
+      if (inputRef.current) inputRef.current.value = ''
+      loadDocs()
+    } else {
+      const j = await res.json()
+      setFileErr(j.error || '上傳失敗')
+    }
+  }
+
+  async function deleteDoc(doc: DocRow) {
+    if (!confirm(`確定刪除「${doc.original_name}」？此操作無法復原。`)) return
+    setDeleting(doc.id)
+    await fetch(`/api/documents/${doc.id}/file`, { method: 'DELETE' })
+    setDeleting(null)
+    loadDocs()
+  }
+
+  const iStyle: React.CSSProperties = {
+    width: '100%', background: '#fff', border: '1px solid #e0d9d0',
+    borderRadius: '5px', color: '#2c2825', fontSize: '0.85rem',
+    outline: 'none', padding: '7px 10px',
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Upload form */}
+      <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '14px' }}
+        className="space-y-3">
+        <p style={{ color: '#6b5f54', fontSize: '0.82rem', fontWeight: 500 }}>上傳同意書 / 文件</p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '3px' }}>文件類型</label>
+            <select value={docType} onChange={e => setDocType(e.target.value)} style={iStyle}>
+              {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '3px' }}>備註（選填）</label>
+            <input value={note} onChange={e => setNote(e.target.value)}
+              placeholder="例：2025年簽" style={iStyle} />
+          </div>
+        </div>
+
+        <div>
+          <label style={{ color: '#9a8f84', fontSize: '0.7rem', display: 'block', marginBottom: '3px' }}>
+            選擇檔案（PDF / JPG / PNG，上限 20MB）
+          </label>
+          <input
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            ref={el => { inputRef.current = el }}
+            onChange={upload}
+            disabled={uploading}
+            style={{
+              width: '100%', fontSize: '0.82rem', color: '#6b5f54',
+              padding: '6px 0', cursor: uploading ? 'not-allowed' : 'pointer',
+            }}
+          />
+          {uploading && <p style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '4px' }}>上傳中…</p>}
+          {fileErr && <p style={{ color: '#9a4a4a', fontSize: '0.75rem', marginTop: '4px' }}>{fileErr}</p>}
+        </div>
+      </div>
+
+      {/* Document list */}
+      {loading ? (
+        <p style={{ color: '#c4b8aa', fontSize: '0.82rem', textAlign: 'center', padding: '20px 0' }}>載入中…</p>
+      ) : docs.length === 0 ? (
+        <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>尚無上傳文件</p>
+      ) : (
+        <div className="space-y-2">
+          {docs.map(doc => (
+            <div key={doc.id} style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: '#2c2825', fontSize: '0.88rem', wordBreak: 'break-all' }}>
+                    📄 {doc.original_name}
+                  </div>
+                  <div style={{ color: '#9a8f84', fontSize: '0.7rem', marginTop: '3px' }}>
+                    {doc.doc_type}
+                    {doc.file_size ? `　${fmtSize(doc.file_size)}` : ''}
+                    　{doc.upload_date}
+                    {doc.note && `　${doc.note}`}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                  <a
+                    href={`/api/documents/${doc.id}/file`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: '#2d5f9a', fontSize: '0.72rem',
+                      background: '#e8f0fc', border: '1px solid #90b0e0',
+                      borderRadius: '4px', padding: '3px 10px',
+                      textDecoration: 'none', whiteSpace: 'nowrap',
+                    }}>
+                    開啟
+                  </a>
+                  <button
+                    onClick={() => deleteDoc(doc)}
+                    disabled={deleting === doc.id}
+                    style={{
+                      color: '#9a4a4a', fontSize: '0.72rem',
+                      background: 'none', border: '1px solid #e8a8a8',
+                      borderRadius: '4px', padding: '3px 10px',
+                      cursor: deleting === doc.id ? 'not-allowed' : 'pointer',
+                    }}>
+                    {deleting === doc.id ? '…' : '刪除'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
