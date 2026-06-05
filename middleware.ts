@@ -46,10 +46,12 @@ async function verifyToken(
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // 放行：登入相關、靜態資源、行事曆公開 API
+  // 完全放行：靜態資源、登入頁面、登入/登出 API、公開行事曆
+  // 注意：/api/auth/me 與 /api/auth/users 需要驗證，不在此放行
   if (
     pathname.startsWith('/login') ||
-    pathname.startsWith('/api/auth') ||
+    pathname === '/api/auth/login' ||
+    pathname === '/api/auth/logout' ||
     pathname === '/api/calendar-state' ||
     pathname.startsWith('/_next') ||
     pathname === '/favicon.ico' ||
