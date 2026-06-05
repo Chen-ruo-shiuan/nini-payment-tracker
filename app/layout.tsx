@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Noto_Serif_TC } from 'next/font/google'
 import './globals.css'
 import NavBar from '@/components/NavBar'
+import RoleProvider from '@/components/RoleProvider'
 
 const notoSerif = Noto_Serif_TC({ subsets: ['latin'], weight: ['400', '500', '700'] })
 
@@ -32,10 +33,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body className={notoSerif.className} style={{ background: '#f7f4ef', minHeight: '100vh' }}>
-        <NavBar />
-        <main className="max-w-xl mx-auto px-5 pb-28 pt-4">
-          {children}
-        </main>
+        <RoleProvider>
+          <NavBar />
+          <main className="max-w-xl mx-auto px-5 pb-28 pt-4">
+            {children}
+          </main>
+        </RoleProvider>
       </body>
     </html>
   )

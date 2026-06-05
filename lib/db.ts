@@ -39,6 +39,7 @@ export function getDb(): Database.Database {
     migrateProductUsageLogs(db)
     migrateInventory(db)
     migrateFollowUps(db)
+    migrateUsers(db)
   }
   return db
 }
@@ -731,5 +732,31 @@ function migrateCheckoutEarned(db: Database.Database) {
   }
   if (!cols.includes('yodomo_earned')) {
     db.exec(`ALTER TABLE checkouts ADD COLUMN yodomo_earned INTEGER NOT NULL DEFAULT 0`)
+  }
+}
+
+function migrateUsers(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      username      TEXT    NOT NULL UNIQUE,
+      password_hash TEXT    NOT NULL,
+      role          TEXT    NOT NULL DEFAULT 'staff',
+      display_name  TEXT,
+      active        INTEGER NOT NULL DEFAULT 1,
+      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+
+  // 若尚無任何使用者，自動用現有 AUTH_PASSWORD 建立老闆帳號
+  const count = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c
+  if (count === 0) {
+    const { hashPassword } = require('./auth') as { hashPassword: (p: string) => string }
+    const pw = process.env.AUTH_PASSWORD || 'nini-admin'
+    db.prepare(`
+      INSERT INTO users (username, password_hash, role, display_name)
+      VALUES ('owner', ?, 'owner', '店長')
+    `).run(hashPassword(pw))
+    console.log('[DB] 已建立老闆帳號 owner，密碼使用 AUTH_PASSWORD 環境變數')
   }
 }

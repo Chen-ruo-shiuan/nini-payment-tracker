@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRole } from '@/components/RoleProvider'
 
 const CATEGORIES = ['原液', '純露', '面膜', '寄賣商品', '儀器耗材', '自訂義', '其他'] as const
 type Category = typeof CATEGORIES[number]
@@ -48,6 +49,9 @@ const sInput: React.CSSProperties = {
 }
 
 export default function InventoryPage() {
+  const { role } = useRole()
+  const isOwner = role === 'owner'
+
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filterCat, setFilterCat] = useState<Category | 'all'>('all')
@@ -281,8 +285,8 @@ export default function InventoryPage() {
                   placeholder="如：30ml、100ml" style={{ ...sInput, width: '100%' }} />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <div>
+            <div style={{ display: 'grid', gridTemplateColumns: isOwner ? '1fr 1fr' : '1fr', gap: '8px' }}>
+              {isOwner && <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
                   進貨成本（每{addForm.unit || '單位'}）
                   <span style={{ color: '#b4aa9e', marginLeft: '4px', fontWeight: 400 }}>填了才能算毛利</span>
@@ -290,7 +294,7 @@ export default function InventoryPage() {
                 <input type="number" value={addForm.cost_price} min="0" step="1"
                   onChange={e => setAddForm(p => ({ ...p, cost_price: e.target.value }))}
                   placeholder="如：500" style={{ ...sInput, width: '100%' }} />
-              </div>
+              </div>}
               <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
                   安全庫存量
@@ -390,7 +394,7 @@ export default function InventoryPage() {
                                 每{item.unit} {item.spec}
                               </span>
                             )}
-                            {item.cost_price > 0 && (
+                            {isOwner && item.cost_price > 0 && (
                               <span style={{
                                 background: '#edf3eb', color: '#3a7a42',
                                 fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px',
@@ -522,13 +526,13 @@ export default function InventoryPage() {
                                   placeholder="如：30ml" style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
                               </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                              <div>
+                            <div style={{ display: 'grid', gridTemplateColumns: isOwner ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                              {isOwner && <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>進貨成本（每{editForm.unit}）</label>
                                 <input type="number" value={editForm.cost_price} min="0" step="1"
                                   onChange={e => setEditForm(p => ({ ...p, cost_price: e.target.value }))}
                                   placeholder="0" style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
-                              </div>
+                              </div>}
                               <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>安全庫存量</label>
                                 <input type="number" value={editForm.low_stock_threshold} min="0" step="0.5"

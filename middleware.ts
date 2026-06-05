@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const COOKIE_NAME = 'nini-auth'
 
+// Routes staff cannot access
+const STAFF_BLOCKED = ['/reports', '/expenses', '/export', '/import', '/settings']
+
 // Web Crypto API — 在 Edge runtime 可用
-async function verifyToken(token: string, secret: string): Promise<boolean> {
+async function verifyToken(
+  token: string,
+  secret: string
+): Promise<{ username: string; role: string } | null> {
   try {
     const [payloadB64, sigHex] = token.split('.')
-    if (!payloadB64 || !sigHex) return false
+    if (!payloadB64 || !sigHex) return null
 
     const encoder = new TextEncoder()
     const key = await crypto.subtle.importKey(
@@ -23,12 +29,17 @@ async function verifyToken(token: string, secret: string): Promise<boolean> {
     const valid = await crypto.subtle.verify(
       'HMAC', key, sigBytes, encoder.encode(payloadB64)
     )
-    if (!valid) return false
+    if (!valid) return null
 
-    const { exp } = JSON.parse(atob(payloadB64))
-    return Date.now() < exp
+    const payload = JSON.parse(atob(payloadB64))
+    if (!payload.exp || Date.now() > payload.exp) return null
+
+    return {
+      username: payload.username ?? '',
+      role: payload.role ?? 'staff',
+    }
   } catch {
-    return false
+    return null
   }
 }
 
@@ -52,13 +63,27 @@ export async function middleware(req: NextRequest) {
   const secret = process.env.AUTH_SECRET ?? 'nini-dev-secret'
   const token  = req.cookies.get(COOKIE_NAME)?.value
 
-  if (!token || !(await verifyToken(token, secret))) {
+  const payload = token ? await verifyToken(token, secret) : null
+
+  if (!payload) {
     const loginUrl = new URL('/login', req.url)
     loginUrl.searchParams.set('from', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  return NextResponse.next()
+  const { role } = payload
+
+  // Block staff from restricted routes
+  if (role === 'staff' && STAFF_BLOCKED.some(p => pathname.startsWith(p))) {
+    return NextResponse.redirect(new URL('/', req.url))
+  }
+
+  // Attach role to request headers for API routes
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set('x-user-role', role)
+  requestHeaders.set('x-username', payload.username)
+
+  return NextResponse.next({ request: { headers: requestHeaders } })
 }
 
 export const config = {

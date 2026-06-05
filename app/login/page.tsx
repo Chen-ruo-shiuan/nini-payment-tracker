@@ -6,9 +6,10 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const from = searchParams.get('from') || '/'
 
-  const [pw, setPw]           = useState('')
-  const [error, setError]     = useState('')
-  const [loading, setLoading] = useState(false)
+  const [username, setUsername] = useState('')
+  const [pw, setPw]             = useState('')
+  const [error, setError]       = useState('')
+  const [loading, setLoading]   = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -18,14 +19,14 @@ function LoginForm() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pw }),
+        body: JSON.stringify({ username: username.trim(), password: pw }),
       })
       if (res.ok) {
         // 強制整頁跳轉，確保 middleware 重新驗證新 cookie
         window.location.href = from
       } else {
         const data = await res.json()
-        setError(data.error || '密碼錯誤，請再試一次')
+        setError(data.error || '登入失敗，請再試一次')
         setPw('')
       }
     } catch {
@@ -34,6 +35,13 @@ function LoginForm() {
       setLoading(false)
     }
   }
+
+  const inputStyle = (hasError: boolean) => ({
+    width: '100%', padding: '10px 12px',
+    border: `1px solid ${hasError ? '#c0504a' : '#ddd8d0'}`,
+    borderRadius: '8px', fontSize: '0.9rem', background: '#fff',
+    color: '#2c2825', outline: 'none', boxSizing: 'border-box' as const,
+  })
 
   return (
     <div style={{
@@ -57,6 +65,21 @@ function LoginForm() {
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '14px' }}>
             <label style={{ fontSize: '0.8rem', color: '#706c68', display: 'block', marginBottom: '6px' }}>
+              帳號
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="請輸入帳號"
+              autoFocus
+              autoComplete="username"
+              style={inputStyle(false)}
+            />
+          </div>
+
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ fontSize: '0.8rem', color: '#706c68', display: 'block', marginBottom: '6px' }}>
               密碼
             </label>
             <input
@@ -64,14 +87,8 @@ function LoginForm() {
               value={pw}
               onChange={e => setPw(e.target.value)}
               placeholder="請輸入密碼"
-              autoFocus
               autoComplete="current-password"
-              style={{
-                width: '100%', padding: '10px 12px',
-                border: `1px solid ${error ? '#c0504a' : '#ddd8d0'}`,
-                borderRadius: '8px', fontSize: '0.9rem', background: '#fff',
-                color: '#2c2825', outline: 'none', boxSizing: 'border-box',
-              }}
+              style={inputStyle(!!error)}
             />
             {error && (
               <div style={{ fontSize: '0.75rem', color: '#c0504a', marginTop: '6px' }}>{error}</div>
@@ -80,12 +97,12 @@ function LoginForm() {
 
           <button
             type="submit"
-            disabled={loading || !pw}
+            disabled={loading || !username || !pw}
             style={{
               width: '100%', padding: '11px',
-              background: loading || !pw ? '#b5b0a8' : '#2c2825',
+              background: loading || !username || !pw ? '#b5b0a8' : '#2c2825',
               color: '#f7f4ef', border: 'none', borderRadius: '8px', fontSize: '0.9rem',
-              fontWeight: '500', cursor: loading || !pw ? 'not-allowed' : 'pointer',
+              fontWeight: '500', cursor: loading || !username || !pw ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit', letterSpacing: '0.04em',
             }}
           >

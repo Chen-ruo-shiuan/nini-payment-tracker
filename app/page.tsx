@@ -4,6 +4,7 @@ import Link from 'next/link'
 import MembershipBadge from '@/components/MembershipBadge'
 import PushSubscribeButton from '@/components/PushSubscribeButton'
 import { MembershipLevel } from '@/types'
+import { useRole } from '@/components/RoleProvider'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DueItem {
@@ -663,6 +664,9 @@ interface TopReferrer {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function OverviewPage() {
+  const { role } = useRole()
+  const isOwner = role === 'owner'
+
   const [data, setData] = useState<OverviewData | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'套組' | '分期' | '本月' | '報表'>('套組')
@@ -944,8 +948,8 @@ export default function OverviewPage() {
       {/* ── 庫存不足警示 ── */}
       <LowStockBanner />
 
-      {/* ── 預收 vs 實收 stat cards ── */}
-      <div className="space-y-2">
+      {/* ── 預收 vs 實收 stat cards (owner only) ── */}
+      {isOwner && <div className="space-y-2">
         <SectionLabel>預收 vs 實收</SectionLabel>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
 
@@ -1069,18 +1073,18 @@ export default function OverviewPage() {
         <p style={{ color: '#c4b8aa', fontSize: '0.68rem', paddingLeft: '2px' }}>
           ＊ 預收含套組預購及儲值加值；履行預收含商品券、儲值金消費及金米折抵
         </p>
-      </div>
+      </div>}
 
-      {/* ── 分期待收小卡 ── */}
-      {data.installment_outstanding > 0 && (
+      {/* ── 分期待收小卡 (owner only) ── */}
+      {isOwner && data.installment_outstanding > 0 && (
         <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '8px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ color: '#6b5f54', fontSize: '0.82rem' }}>分期待收款</span>
           <span style={{ color: '#9a6a4a', fontSize: '1rem', fontWeight: 600 }}>{fmtAmt(data.installment_outstanding)}</span>
         </div>
       )}
 
-      {/* ── 付款警示 ── */}
-      {totalDue > 0 && (
+      {/* ── 付款警示 (owner only) ── */}
+      {isOwner && totalDue > 0 && (
         <div className="space-y-3">
           <SectionLabel>付款提醒</SectionLabel>
           <DueSection label="已逾期" items={data.overdue} urgent />
@@ -1092,7 +1096,10 @@ export default function OverviewPage() {
       {/* ── 四分頁切換 ── */}
       <div className="space-y-3">
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {((['套組', '分期', '本月', '報表'] as const)).map(tab => (
+          {(isOwner
+            ? (['套組', '分期', '本月', '報表'] as const)
+            : (['套組'] as const)
+          ).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               style={{
                 background: activeTab === tab ? '#2c2825' : '#f0ebe4',
