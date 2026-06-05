@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import path from 'path'
-import archiver from 'archiver'
+import JSZip from 'jszip'
 import { DOCS_DIR } from '@/lib/db'
 
 export const runtime = 'nodejs'
@@ -16,19 +16,20 @@ export async function GET() {
     return NextResponse.json({ error: '目前沒有任何上傳文件' }, { status: 404 })
   }
 
-  const archive = archiver('zip', { zlib: { level: 6 } })
+  const zip = new JSZip()
+  const folder = zip.folder('documents')!
 
-  // 將 /data/documents/ 底下所有檔案打包進 zip 的 documents/ 目錄
-  archive.directory(DOCS_DIR, 'documents')
-  archive.finalize()
+  for (const filename of files) {
+    try {
+      const content = readFileSync(path.join(DOCS_DIR, filename))
+      folder.file(filename, content)
+    } catch { /* skip unreadable files */ }
+  }
 
-  // 把 Node.js Readable Stream 轉換成 Web ReadableStream
-  const readable = new ReadableStream({
-    start(controller) {
-      archive.on('data',  (chunk: Buffer) => controller.enqueue(chunk))
-      archive.on('end',   ()              => controller.close())
-      archive.on('error', (err: Error)    => controller.error(err))
-    },
+  const zipBuffer = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
   })
 
   const now = new Date().toLocaleDateString('zh-TW', {
@@ -38,7 +39,7 @@ export async function GET() {
 
   const filename = `NINI文件備份_${now}.zip`
 
-  return new NextResponse(readable, {
+  return new NextResponse(new Uint8Array(zipBuffer), {
     headers: {
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
