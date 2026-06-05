@@ -1499,8 +1499,12 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   </div>
                   <div style={{ marginTop: '6px' }}>
                     <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>達標贈品內容</label>
-                    <input value={editForm.bonus_desc ?? ''} onChange={e => setEditForm(f => ({ ...f, bonus_desc: e.target.value }))}
-                      placeholder="例：B5熱導+頸部" style={miniInput} />
+                    <PkgSelectOrInput
+                      presets={PKG_BONUS_DESC_PRESETS}
+                      value={editForm.bonus_desc ?? ''}
+                      onChange={v => setEditForm(f => ({ ...f, bonus_desc: v }))}
+                      placeholder="輸入自訂贈品說明"
+                    />
                   </div>
                   <div style={{ marginTop: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                     <div>
@@ -1523,13 +1527,22 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>附加課程名稱（達標時自動建立）</label>
-                      <input value={editForm.completion_bonus_service ?? ''} onChange={e => setEditForm(f => ({ ...f, completion_bonus_service: e.target.value }))}
-                        placeholder="例：泡光氧彗（梅）" style={miniInput} />
+                      <PkgSelectOrInput
+                        presets={PKG_COMPLETION_SERVICE_PRESETS}
+                        value={editForm.completion_bonus_service ?? ''}
+                        onChange={v => setEditForm(f => ({ ...f, completion_bonus_service: v }))}
+                        placeholder="輸入自訂課程名稱"
+                      />
                     </div>
                     <div>
                       <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>課程價值（記帳用）</label>
-                      <input type="number" min="0" value={editForm.completion_bonus_price ?? ''} onChange={e => setEditForm(f => ({ ...f, completion_bonus_price: e.target.value ? Number(e.target.value) : undefined }))}
-                        placeholder="例：2880" style={miniInput} />
+                      <PkgSelectOrInput
+                        presets={PKG_COMPLETION_PRICE_PRESETS}
+                        value={editForm.completion_bonus_price != null ? String(editForm.completion_bonus_price) : ''}
+                        onChange={v => setEditForm(f => ({ ...f, completion_bonus_price: v ? Number(v) : undefined }))}
+                        placeholder="輸入自訂金額"
+                        type="number"
+                      />
                     </div>
                     <div>
                       <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>完成期限（週）</label>
@@ -3645,6 +3658,70 @@ function BenefitSection({ label, children, color = '#6b5f54', bg = '#faf8f5', bo
     <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: '8px', padding: '14px' }}>
       <p style={{ color, fontSize: '0.72rem', letterSpacing: '0.1em', marginBottom: '10px', fontWeight: 500 }}>{label}</p>
       {children}
+    </div>
+  )
+}
+
+// ── 套組編輯用下拉選單 ──────────────────────────────────────────────────────
+const PKG_BONUS_DESC_PRESETS = [
+  'B5熱導+頸部',
+  '臉部芳草精油+頸部',
+  '原液調理一種',
+  '原液調理一種+頸部+下頷線',
+  '頭部刮舒+封膜',
+]
+const PKG_COMPLETION_SERVICE_PRESETS = ['泡光氧彗(梅)']
+const PKG_COMPLETION_PRICE_PRESETS   = ['2880']
+
+const pkgMiniInput: React.CSSProperties = {
+  width: '100%', padding: '4px 7px', borderRadius: '4px',
+  border: '1px solid #d9d0c5', fontSize: '0.78rem', background: '#faf8f5',
+  outline: 'none', color: '#2c2825',
+}
+
+function PkgSelectOrInput({
+  presets, value, onChange, placeholder, type = 'text',
+}: {
+  presets: string[]
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  type?: 'text' | 'number'
+}) {
+  const [customMode, setCustomMode] = useState(() => value !== '' && !presets.includes(value))
+
+  useEffect(() => {
+    if (presets.includes(value))    setCustomMode(false)
+    else if (value !== '')          setCustomMode(true)
+  }, [value, presets])
+
+  const selectVal = customMode ? '__custom__' : value
+
+  return (
+    <div>
+      <select
+        value={selectVal}
+        onChange={e => {
+          if (e.target.value === '__custom__') { setCustomMode(true); onChange('') }
+          else                                 { setCustomMode(false); onChange(e.target.value) }
+        }}
+        style={pkgMiniInput}
+      >
+        <option value="">— 請選擇 —</option>
+        {presets.map(p => <option key={p} value={p}>{p}</option>)}
+        <option value="__custom__">自訂義</option>
+      </select>
+      {customMode && (
+        <input
+          type={type}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{ ...pkgMiniInput, marginTop: '4px' }}
+          autoFocus
+          min={type === 'number' ? 0 : undefined}
+        />
+      )}
     </div>
   )
 }
