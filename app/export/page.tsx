@@ -49,22 +49,28 @@ export default function ExportPage() {
         background: '#faf8f5', border: '1px solid #e0d9d0',
         borderRadius: '6px', padding: '16px',
       }} className="space-y-2">
-        <p style={{ color: '#6b5f54', fontSize: '0.85rem', fontWeight: 500 }}>備份內容</p>
+        <p style={{ color: '#6b5f54', fontSize: '0.85rem', fontWeight: 500 }}>備份內容（v3）</p>
         {[
-          '所有客人資料（等級、生日、備註）',
-          '儲值金明細帳（sv_ledger）',
-          '金米明細帳（points_ledger）',
-          '預購套組記錄',
-          '所有結帳記錄（含品項與付款方式）',
-          '支出記錄',
-          '分期合約與各期付款',
-        ].map(item => (
-          <div key={item} style={{ color: '#9a8f84', fontSize: '0.8rem', display: 'flex', gap: '6px' }}>
-            <span>•</span><span>{item}</span>
+          ['客人資料', '基本資料、等級、生日、過敏 / 膚質備註、轉介來源'],
+          ['標籤',     '標籤定義 + 客人標籤關聯'],
+          ['套組',     '預購套組 + 核銷記錄（sessions）'],
+          ['結帳',     '所有結帳記錄（品項 & 付款方式已內嵌）'],
+          ['金流帳本', '儲值金、金米、購物金明細帳'],
+          ['支出',     '支出記錄'],
+          ['分期',     '分期合約 + 各期付款'],
+          ['日誌追蹤', '服務日誌、預約記錄、課後追蹤任務'],
+          ['產品',     '產品使用紀錄（product_usage_logs）'],
+          ['庫存',     '庫存品項 + 進出帳（inventory_items / inventory_ledger）'],
+          ['設定',     '公休日設定 + 客人文件清單（metadata）'],
+        ].map(([title, desc]) => (
+          <div key={title} style={{ color: '#9a8f84', fontSize: '0.8rem', display: 'flex', gap: '6px' }}>
+            <span style={{ color: '#c4b8aa', flexShrink: 0 }}>•</span>
+            <span><span style={{ color: '#6b5f54', fontWeight: 500 }}>{title}：</span>{desc}</span>
           </div>
         ))}
-        <p style={{ color: '#c4b8aa', fontSize: '0.75rem', marginTop: '8px' }}>
-          ※ 檔案格式：JSON，可作為資料備份或轉移使用
+        <p style={{ color: '#c4b8aa', fontSize: '0.72rem', marginTop: '10px' }}>
+          ※ 格式：JSON。客人上傳的文件實際檔案存於伺服器磁碟，JSON 內只含清單 metadata，
+          如需完整備份請另行下載 <code>/data/documents/</code> 資料夾。
         </p>
       </div>
 
