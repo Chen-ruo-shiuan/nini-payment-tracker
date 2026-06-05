@@ -733,8 +733,12 @@ function NewPackageForm() {
               })()}
 
               <Field label="贈品說明">
-                <input value={bonusDesc} onChange={e => { setBonusDesc(e.target.value); setTaskTemplateLoaded(false) }}
-                  placeholder="例：B5熱導＋頸部" style={iStyle} />
+                <SelectOrInput
+                  presets={BONUS_DESC_PRESETS}
+                  value={bonusDesc}
+                  onChange={v => { setBonusDesc(v); setTaskTemplateLoaded(false) }}
+                  placeholder="輸入自訂贈品說明"
+                />
               </Field>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -818,12 +822,21 @@ function NewPackageForm() {
               })()}
 
               <Field label="附加課程名稱（商品券名稱）">
-                <input value={completionBonusService} onChange={e => { setCompletionBonusService(e.target.value); setCbTemplateLoaded(false) }}
-                  placeholder="例：泡光氧彗（梅）" style={iStyle} />
+                <SelectOrInput
+                  presets={COMPLETION_SERVICE_PRESETS}
+                  value={completionBonusService}
+                  onChange={v => { setCompletionBonusService(v); setCbTemplateLoaded(false) }}
+                  placeholder="輸入自訂課程名稱"
+                />
               </Field>
               <Field label="附加課程單價">
-                <input value={completionBonusPrice} onChange={e => { setCompletionBonusPrice(e.target.value); setCbTemplateLoaded(false) }}
-                  type="number" min="0" placeholder="例：2880" style={iStyle} />
+                <SelectOrInput
+                  presets={COMPLETION_PRICE_PRESETS}
+                  value={completionBonusPrice}
+                  onChange={v => { setCompletionBonusPrice(v); setCbTemplateLoaded(false) }}
+                  placeholder="輸入自訂金額"
+                  type="number"
+                />
               </Field>
               <Field label="附加說明（顯示用）">
                 <input value={completionBonusDesc} onChange={e => { setCompletionBonusDesc(e.target.value); setCbTemplateLoaded(false) }}
@@ -891,6 +904,64 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="space-y-1.5">
       <label style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>{label}</label>
       {children}
+    </div>
+  )
+}
+
+// ── 下拉選單 + 自訂義輸入 ──────────────────────────────────────────────────────
+const BONUS_DESC_PRESETS = [
+  'B5熱導+頸部',
+  '臉部芳草精油+頸部',
+  '原液調理一種',
+  '原液調理一種+頸部+下頷線',
+  '頭部刮舒+封膜',
+]
+const COMPLETION_SERVICE_PRESETS = ['泡光氧彗(梅)']
+const COMPLETION_PRICE_PRESETS   = ['2880']
+
+function SelectOrInput({
+  presets, value, onChange, placeholder, type = 'text',
+}: {
+  presets: string[]
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  type?: 'text' | 'number'
+}) {
+  const [customMode, setCustomMode] = useState(() => value !== '' && !presets.includes(value))
+
+  useEffect(() => {
+    if (presets.includes(value))    setCustomMode(false)
+    else if (value !== '')          setCustomMode(true)
+  }, [value, presets])
+
+  const selectVal = customMode ? '__custom__' : value
+
+  return (
+    <div>
+      <select
+        value={selectVal}
+        onChange={e => {
+          if (e.target.value === '__custom__') { setCustomMode(true); onChange('') }
+          else                                 { setCustomMode(false); onChange(e.target.value) }
+        }}
+        style={iStyle}
+      >
+        <option value="">— 請選擇 —</option>
+        {presets.map(p => <option key={p} value={p}>{p}</option>)}
+        <option value="__custom__">自訂義</option>
+      </select>
+      {customMode && (
+        <input
+          type={type}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{ ...iStyle, marginTop: '6px' }}
+          autoFocus
+          min={type === 'number' ? 0 : undefined}
+        />
+      )}
     </div>
   )
 }
