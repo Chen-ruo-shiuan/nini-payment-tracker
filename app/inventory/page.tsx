@@ -55,6 +55,7 @@ export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filterCat, setFilterCat] = useState<Category | 'all'>('all')
+  const [filterSpec, setFilterSpec] = useState<string>('all')
   const [showLowOnly, setShowLowOnly] = useState(false)
 
   // Add form
@@ -83,6 +84,12 @@ export default function InventoryPage() {
   const [historyId, setHistoryId] = useState<number | null>(null)
   const [ledger, setLedger] = useState<LedgerEntry[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
+
+  // Ledger edit/delete
+  const [editLedgerId, setEditLedgerId] = useState<number | null>(null)
+  const [editLedgerForm, setEditLedgerForm] = useState({
+    delta: '', reason: '補貨', date: '', note: '',
+  })
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
 
@@ -175,6 +182,44 @@ export default function InventoryPage() {
     await loadHistory(id)
   }
 
+  function startLedgerEdit(entry: LedgerEntry) {
+    setEditLedgerId(entry.id)
+    setEditLedgerForm({
+      delta:  String(Math.abs(entry.delta)),
+      reason: entry.reason,
+      date:   entry.date,
+      note:   entry.note ?? '',
+    })
+  }
+
+  async function saveLedgerEdit(itemId: number, entryId: number, originalDelta: number) {
+    const absQty = Number(editLedgerForm.delta)
+    if (!absQty || isNaN(absQty)) return
+    // preserve sign of original delta
+    const newDelta = originalDelta > 0 ? Math.abs(absQty) : -Math.abs(absQty)
+    const res = await fetch(`/api/inventory/ledger/${entryId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delta: newDelta, reason: editLedgerForm.reason, date: editLedgerForm.date, note: editLedgerForm.note || null }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, current_qty: data.current_qty } : i))
+      setEditLedgerId(null)
+      await loadHistory(itemId)
+    }
+  }
+
+  async function deleteLedgerEntry(itemId: number, entryId: number) {
+    if (!confirm('確定要刪除這筆進出貨記錄？庫存數量會自動重新計算。')) return
+    const res = await fetch(`/api/inventory/ledger/${entryId}`, { method: 'DELETE' })
+    if (res.ok) {
+      const data = await res.json()
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, current_qty: data.current_qty } : i))
+      await loadHistory(itemId)
+    }
+  }
+
   function startEdit(item: InventoryItem) {
     setEditForm({
       name: item.name, category: item.category, unit: item.unit,
@@ -200,10 +245,19 @@ export default function InventoryPage() {
   // Filter
   const displayed = items.filter(i => {
     if (filterCat !== 'all' && i.category !== filterCat) return false
+    if (filterSpec !== 'all' && i.spec !== filterSpec) return false
     if (showLowOnly && i.current_qty > i.low_stock_threshold) return false
     return true
   })
   const lowCount = items.filter(i => i.current_qty <= i.low_stock_threshold).length
+
+  // Collect unique specs for the current category filter
+  const availableSpecs = Array.from(new Set(
+    items
+      .filter(i => filterCat === 'all' || i.category === filterCat)
+      .map(i => i.spec)
+      .filter((s): s is string => !!s)
+  )).sort()
 
   // Group by category — items with unknown category fall into '其他'
   const grouped = CATEGORIES.reduce((acc, cat) => {
@@ -325,10 +379,10 @@ export default function InventoryPage() {
         </form>
       )}
 
-      {/* Filter tabs */}
+      {/* Category filter */}
       <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
         {(['all', ...CATEGORIES] as const).map(cat => (
-          <button key={cat} onClick={() => setFilterCat(cat)}
+          <button key={cat} onClick={() => { setFilterCat(cat); setFilterSpec('all') }}
             style={{
               whiteSpace: 'nowrap', padding: '5px 12px', borderRadius: '20px', fontSize: '0.78rem', cursor: 'pointer', border: 'none',
               background: filterCat === cat ? '#2c2825' : '#f0ece6',
@@ -340,6 +394,31 @@ export default function InventoryPage() {
           </button>
         ))}
       </div>
+
+      {/* Spec filter（只在有 spec 品項時才顯示）*/}
+      {availableSpecs.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px', alignItems: 'center' }}>
+          <span style={{ color: '#b4aa9e', fontSize: '0.7rem', whiteSpace: 'nowrap' }}>規格</span>
+          <button onClick={() => setFilterSpec('all')}
+            style={{
+              whiteSpace: 'nowrap', padding: '3px 10px', borderRadius: '20px', fontSize: '0.75rem', cursor: 'pointer', border: 'none',
+              background: filterSpec === 'all' ? '#6b5f54' : '#f0ece6',
+              color: filterSpec === 'all' ? '#f7f4ef' : '#6b5f54',
+            }}>
+            全部
+          </button>
+          {availableSpecs.map(spec => (
+            <button key={spec} onClick={() => setFilterSpec(filterSpec === spec ? 'all' : spec)}
+              style={{
+                whiteSpace: 'nowrap', padding: '3px 10px', borderRadius: '20px', fontSize: '0.75rem', cursor: 'pointer', border: 'none',
+                background: filterSpec === spec ? '#6b5f54' : '#f0ece6',
+                color: filterSpec === spec ? '#f7f4ef' : '#6b5f54',
+              }}>
+              {spec}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Items */}
       {loading ? (
@@ -444,44 +523,94 @@ export default function InventoryPage() {
                           ) : ledger.length === 0 ? (
                             <p style={{ color: '#b4aa9e', textAlign: 'center', padding: '12px', fontSize: '0.8rem' }}>尚無進出貨紀錄</p>
                           ) : (
-                            <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                            <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
                               {ledger.map((entry, idx) => {
                                 const isIn = entry.delta > 0
-                                // running total from bottom up
                                 const runningTotal = ledger.slice(idx).reduce((s, e) => s + e.delta, 0)
+                                const isEditingThis = editLedgerId === entry.id
+                                const reasons = isIn ? REASONS_IN : REASONS_OUT
                                 return (
                                   <div key={entry.id} style={{
-                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    padding: '7px 14px',
                                     borderBottom: '1px solid #f0ebe4',
                                     background: idx % 2 === 0 ? '#faf8f5' : '#fff',
                                   }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                      <span style={{
-                                        color: isIn ? '#3a7a42' : '#9a4a4a',
-                                        fontSize: '0.8rem', fontWeight: 700, minWidth: '36px',
-                                      }}>
-                                        {isIn ? `+${entry.delta}` : `${entry.delta}`}
-                                      </span>
-                                      <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                          <span style={{
-                                            background: isIn ? '#edf3eb' : '#fdf0f0',
-                                            color: isIn ? '#3a7a42' : '#9a4a4a',
-                                            fontSize: '0.68rem', padding: '1px 6px', borderRadius: '3px',
-                                          }}>
-                                            {entry.reason}
+                                    {!isEditingThis ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <span style={{ color: isIn ? '#3a7a42' : '#9a4a4a', fontSize: '0.8rem', fontWeight: 700, minWidth: '36px' }}>
+                                            {isIn ? `+${entry.delta}` : `${entry.delta}`}
                                           </span>
-                                          <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>{fmtDate(entry.date)}</span>
+                                          <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                              <span style={{ background: isIn ? '#edf3eb' : '#fdf0f0', color: isIn ? '#3a7a42' : '#9a4a4a', fontSize: '0.65rem', padding: '1px 5px', borderRadius: '3px' }}>
+                                                {entry.reason}
+                                              </span>
+                                              <span style={{ color: '#9a8f84', fontSize: '0.7rem' }}>{fmtDate(entry.date)}</span>
+                                              {entry.checkout_id && <span style={{ color: '#b4aa9e', fontSize: '0.65rem' }}>結帳</span>}
+                                            </div>
+                                            {entry.note && <div style={{ color: '#b4aa9e', fontSize: '0.65rem', marginTop: '1px' }}>{entry.note}</div>}
+                                          </div>
                                         </div>
-                                        {entry.note && (
-                                          <div style={{ color: '#b4aa9e', fontSize: '0.68rem', marginTop: '1px' }}>{entry.note}</div>
-                                        )}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <span style={{ color: '#9a8f84', fontSize: '0.7rem', whiteSpace: 'nowrap' }}>庫存 {runningTotal}{item.unit}</span>
+                                          {!entry.checkout_id && (
+                                            <>
+                                              <button onClick={() => startLedgerEdit(entry)}
+                                                style={{ background: 'none', border: '1px solid #e0d9d0', borderRadius: '3px', color: '#9a8f84', fontSize: '0.62rem', padding: '1px 6px', cursor: 'pointer' }}>
+                                                編輯
+                                              </button>
+                                              <button onClick={() => deleteLedgerEntry(item.id, entry.id)}
+                                                style={{ background: 'none', border: '1px solid #e8a8a8', borderRadius: '3px', color: '#9a4a4a', fontSize: '0.62rem', padding: '1px 6px', cursor: 'pointer' }}>
+                                                刪除
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
-                                    <span style={{ color: '#9a8f84', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
-                                      庫存 {runningTotal}{item.unit}
-                                    </span>
+                                    ) : (
+                                      <div style={{ padding: '8px 10px', background: '#fdf8f5', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                          <div>
+                                            <label style={{ color: '#9a8f84', fontSize: '0.65rem', display: 'block', marginBottom: '2px' }}>數量</label>
+                                            <input type="number" min="0.5" step="0.5" value={editLedgerForm.delta}
+                                              onChange={e => setEditLedgerForm(p => ({ ...p, delta: e.target.value }))}
+                                              style={{ ...sInput, width: '100%', fontSize: '0.8rem', padding: '4px 8px' }} />
+                                          </div>
+                                          <div>
+                                            <label style={{ color: '#9a8f84', fontSize: '0.65rem', display: 'block', marginBottom: '2px' }}>原因</label>
+                                            <select value={editLedgerForm.reason}
+                                              onChange={e => setEditLedgerForm(p => ({ ...p, reason: e.target.value }))}
+                                              style={{ ...sInput, width: '100%', fontSize: '0.8rem', padding: '4px 8px' }}>
+                                              {reasons.map(r => <option key={r} value={r}>{r}</option>)}
+                                            </select>
+                                          </div>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                          <div>
+                                            <label style={{ color: '#9a8f84', fontSize: '0.65rem', display: 'block', marginBottom: '2px' }}>日期</label>
+                                            <input type="date" value={editLedgerForm.date}
+                                              onChange={e => setEditLedgerForm(p => ({ ...p, date: e.target.value }))}
+                                              style={{ ...sInput, width: '100%', fontSize: '0.8rem', padding: '4px 8px' }} />
+                                          </div>
+                                          <div>
+                                            <label style={{ color: '#9a8f84', fontSize: '0.65rem', display: 'block', marginBottom: '2px' }}>備註</label>
+                                            <input value={editLedgerForm.note}
+                                              onChange={e => setEditLedgerForm(p => ({ ...p, note: e.target.value }))}
+                                              style={{ ...sInput, width: '100%', fontSize: '0.8rem', padding: '4px 8px' }} />
+                                          </div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                          <button onClick={() => saveLedgerEdit(item.id, entry.id, entry.delta)}
+                                            style={{ background: '#2c2825', color: '#f7f4ef', border: 'none', borderRadius: '4px', fontSize: '0.75rem', padding: '5px 12px', cursor: 'pointer' }}>
+                                            儲存
+                                          </button>
+                                          <button onClick={() => setEditLedgerId(null)}
+                                            style={{ background: '#e0d9d0', color: '#6b5f54', border: 'none', borderRadius: '4px', fontSize: '0.75rem', padding: '5px 12px', cursor: 'pointer' }}>
+                                            取消
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )
                               })}

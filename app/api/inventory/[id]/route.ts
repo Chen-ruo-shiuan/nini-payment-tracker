@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     id: Number(id), name: name.trim(), category: category || '其他',
     unit: unit || '瓶', spec: spec?.trim() || null,
     cost_price: Number(cost_price) || 0,
-    low_stock_threshold: Number(low_stock_threshold) || 2,
+    low_stock_threshold: low_stock_threshold != null && low_stock_threshold !== '' ? Number(low_stock_threshold) : 2,
     note: note || null,
   })
 
