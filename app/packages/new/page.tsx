@@ -912,6 +912,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const BONUS_DESC_PRESETS = [
   'B5熱導+頸部',
   '臉部芳草精油+頸部',
+  '臉部芳草精油撥筋',
   '原液調理一種',
   '原液調理一種+頸部+下頷線',
   '頭部刮舒+封膜',
