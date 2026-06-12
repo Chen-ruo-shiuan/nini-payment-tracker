@@ -2716,9 +2716,11 @@ export default function ClientDetailPage() {
               }} />
             </div>
             <div style={{ marginTop: '4px', color: '#9a8f84', fontSize: '0.68rem' }}>
-              {renewGap > 0
-                ? `還差 ${fmtAmt(renewGap)} 達甜癒米門檻（明年年費基準）`
-                : '✓ 已達甜癒米門檻，明年年費有保障'}
+              {isPendingUpgrade
+                ? `✓ 已達悟癒米升等門檻，待升等 ${client.level_since}`
+                : renewGap > 0
+                  ? `還差 ${fmtAmt(renewGap)} 達甜癒米門檻（明年年費基準）`
+                  : '✓ 已達甜癒米門檻，明年年費有保障'}
             </div>
           </div>
         )}
