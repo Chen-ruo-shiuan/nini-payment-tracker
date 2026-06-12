@@ -2524,11 +2524,13 @@ export default function ClientDetailPage() {
     .reduce((s, e) => s + e.amount, 0)
   const annualCourseSpending = checkoutCourseSpending + pkgCourseSpending + svCourseSpending
 
-  const nextLevel = NEXT_LEVEL[effectiveLevel]
+  // 進度條用實際等級（待升等時不回退到癒米，直接顯示已達目標等級）
+  const progressLevel: MembershipLevel = isPendingUpgrade ? level : effectiveLevel
+  const nextLevel = NEXT_LEVEL[progressLevel]
   const nextThreshold = nextLevel ? LEVEL_THRESHOLDS[nextLevel] : null
   const upgradeGap = nextThreshold ? Math.max(0, nextThreshold - annualCourseSpending) : 0
   // 進度條：只計算「目前等級門檻 → 下個等級門檻」的帶內進度
-  const currentThreshold = LEVEL_THRESHOLDS[effectiveLevel]
+  const currentThreshold = LEVEL_THRESHOLDS[progressLevel]
   const bandSize = nextThreshold ? nextThreshold - currentThreshold : 1
   const bandProgress = Math.max(0, annualCourseSpending - currentThreshold)
   const upgradePct = nextThreshold ? Math.min(100, Math.round((bandProgress / bandSize) * 100)) : 100
@@ -2672,7 +2674,7 @@ export default function ClientDetailPage() {
           <div style={{ background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '10px 12px', marginTop: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <span style={{ color: '#6b5f54', fontSize: '0.72rem', letterSpacing: '0.06em' }}>
-                升等進度　{effectiveLevel} → {nextLevel}
+                升等進度　{progressLevel} → {nextLevel}
               </span>
               <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>
                 {fmtAmt(bandProgress)} / {fmtAmt(bandSize)}
