@@ -103,6 +103,9 @@ export default function CheckoutPage() {
       pkg_id: (i as typeof i & { pkg_id?: number }).pkg_id,
       discount: String((i as typeof i & { discount?: number }).discount ?? ''),
       discountMode: '元' as const,
+      custom: i.category === '產品' && invProducts.length > 0
+        ? !invProducts.some(p => p.name === i.label)
+        : false,
     })))
     setEditPays(co.payments.map(p => ({
       id: uid(), method: p.method, amount: String(p.amount),
@@ -111,7 +114,7 @@ export default function CheckoutPage() {
 
   async function saveLogEdit(coId: number) {
     if (editItems.some(i => !i.label || !i.price)) { alert('請填寫完整品項名稱和金額'); return }
-    const eTot = editItems.reduce((s, i) => s + (Number(i.price) || 0) * i.qty, 0)
+    const eTot = editItems.reduce((s, i) => s + (Number(i.price) || 0) * i.qty - calcDiscountAmt(i), 0)
     const pTot = editPays.reduce((s, p) => s + (Number(p.amount) || 0), 0)
     if (Math.round(eTot - pTot) !== 0) { alert(`付款金額與消費金額不符，差距 $${Math.abs(eTot - pTot).toLocaleString()}`); return }
     setSavingEdit(true)
@@ -123,7 +126,7 @@ export default function CheckoutPage() {
         note: editNote,
         incl_course: editInclCourse,
         incl_product: editInclProduct,
-        items: editItems.map(i => ({ category: i.category, label: i.label, price: Number(i.price), qty: i.qty, pkg_id: i.pkg_id })),
+        items: editItems.map(i => ({ category: i.category, label: i.label, price: Number(i.price), qty: i.qty, pkg_id: i.pkg_id, discount: calcDiscountAmt(i) })),
         payments: editPays.map(p => ({ method: p.method, amount: Number(p.amount) })),
       }),
     })
@@ -176,6 +179,17 @@ export default function CheckoutPage() {
   function refreshSaved() {
     setSavedItems({ '服務': getSavedItems('服務'), '加購': getSavedItems('加購'), '產品': getSavedItems('產品'), '活動': getSavedItems('活動') })
   }
+
+  // Inventory products (for 產品 dropdown)
+  const [invProducts, setInvProducts] = useState<{ id: number; name: string; spec: string | null }[]>([])
+  useEffect(() => {
+    fetch('/api/inventory')
+      .then(r => r.json())
+      .then((items: { id: number; name: string; spec: string | null }[]) => {
+        if (Array.isArray(items)) setInvProducts(items)
+      })
+      .catch(() => {})
+  }, [])
 
   // Client search
   const searchClients = useCallback(async (q: string) => {
@@ -551,10 +565,15 @@ export default function CheckoutPage() {
                     }}
                     style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
                     <option value="">選擇產品…</option>
-                    {savedItems['產品']?.map(s => (
-                      <option key={s.label} value={s.label}>{s.label}　${s.price.toLocaleString()}</option>
-                    ))}
-                    <option value="__custom__">＋ 新增產品…</option>
+                    {invProducts.map(p => {
+                      const saved = savedItems['產品']?.find(s => s.label === p.name)
+                      return (
+                        <option key={p.id} value={p.name}>
+                          {p.name}{p.spec ? ` ${p.spec}` : ''}{saved ? `　$${saved.price.toLocaleString()}` : ''}
+                        </option>
+                      )
+                    })}
+                    <option value="__custom__">＋ 自訂義…</option>
                   </select>
                 )
               ) : item.category === '活動' ? (
@@ -906,18 +925,69 @@ export default function CheckoutPage() {
                             <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>小計 {fmtAmt(editTotal)}</span>
                           </div>
                           {editItems.map((item, idx) => (
-                            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: '4px', alignItems: 'center' }}>
+                            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: '4px', alignItems: 'start' }}>
                               <select value={item.category}
-                                onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, category: e.target.value, label: '', pkg_id: undefined } : i))}
+                                onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, category: e.target.value, label: '', pkg_id: undefined, custom: false } : i))}
                                 style={{ ...iStyle, fontSize: '0.75rem', padding: '4px 6px', width: 'auto' }}>
                                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                               </select>
-                              <input value={item.label}
-                                onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, label: e.target.value } : i))}
-                                placeholder="品項名稱" style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px' }} />
-                              <input value={item.price}
-                                onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, price: e.target.value } : i))}
-                                type="number" placeholder="金額" style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px', width: '72px' }} />
+                              {/* label: 產品 → 庫存下拉，其他 → 文字輸入 */}
+                              {item.category === '產品' ? (
+                                item.custom ? (
+                                  <input value={item.label}
+                                    onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, label: e.target.value } : i))}
+                                    placeholder="產品名稱" autoFocus style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px' }} />
+                                ) : (
+                                  <select value={item.label}
+                                    onChange={e => {
+                                      const val = e.target.value
+                                      if (val === '__custom__') { setEditItems(p => p.map(i => i.id === item.id ? { ...i, custom: true } : i)); return }
+                                      const saved = savedItems['產品']?.find(s => s.label === val)
+                                      setEditItems(p => p.map(i => i.id === item.id ? { ...i, label: val, price: saved ? String(saved.price) : i.price } : i))
+                                    }}
+                                    style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px' }}>
+                                    <option value="">選擇產品…</option>
+                                    {invProducts.map(p => {
+                                      const saved = savedItems['產品']?.find(s => s.label === p.name)
+                                      return (
+                                        <option key={p.id} value={p.name}>
+                                          {p.name}{p.spec ? ` ${p.spec}` : ''}{saved ? `　$${saved.price.toLocaleString()}` : ''}
+                                        </option>
+                                      )
+                                    })}
+                                    <option value="__custom__">＋ 自訂義…</option>
+                                  </select>
+                                )
+                              ) : (
+                                <input value={item.label}
+                                  onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, label: e.target.value } : i))}
+                                  placeholder="品項名稱" style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px' }} />
+                              )}
+                              {/* 金額 + 折扣 */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <input value={item.price}
+                                  onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, price: e.target.value } : i))}
+                                  type="number" placeholder="金額" style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px', width: '72px' }} />
+                                {item.category !== '商品券' && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                    <button type="button"
+                                      onClick={() => setEditItems(p => p.map(i => i.id === item.id ? { ...i, discountMode: i.discountMode === '元' ? '折' : '元', discount: '' } : i))}
+                                      style={{ fontSize: '0.6rem', padding: '1px 4px', border: '1px solid #c4a8d8', borderRadius: '3px', background: item.discount ? '#f0ebf8' : '#faf8f5', color: '#7a4a9a', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                      -{item.discountMode}
+                                    </button>
+                                    <input value={item.discount}
+                                      onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, discount: e.target.value } : i))}
+                                      type="number" min="0"
+                                      placeholder={item.discountMode === '折' ? '88' : '0'}
+                                      style={{ ...iStyle, fontSize: '0.7rem', padding: '2px 4px', width: '48px', color: item.discount ? '#7a4a9a' : '#b4aa9e' }} />
+                                    {item.discount && Number(item.discount) > 0 && (
+                                      <span style={{ fontSize: '0.6rem', color: '#9a4a4a', whiteSpace: 'nowrap' }}>
+                                        -{calcDiscountAmt(item).toLocaleString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                                 <button type="button" onClick={() => setEditItems(p => p.map(i => i.id === item.id ? { ...i, qty: Math.max(1, i.qty - 1) } : i))}
                                   style={{ ...qBtn, background: item.qty > 1 ? '#f0ebe4' : '#faf8f5' }}>−</button>
@@ -963,12 +1033,21 @@ export default function CheckoutPage() {
                             background: Math.round(editDiff) === 0 ? '#edf3eb' : '#fdf0f0',
                             border: `1px solid ${Math.round(editDiff) === 0 ? '#9ab89e' : '#e8a8a8'}`,
                             borderRadius: '4px', padding: '6px 10px',
-                            display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', gap: '8px',
                           }}>
                             <span style={{ color: '#6b5f54' }}>已分配 {fmtAmt(editPayTotal)}</span>
-                            <span style={{ color: Math.round(editDiff) === 0 ? '#4a6b52' : '#9a4a4a', fontWeight: 500 }}>
-                              {Math.round(editDiff) === 0 ? '✓ 已全額' : editDiff > 0 ? `尚差 ${fmtAmt(editDiff)}` : `超額 ${fmtAmt(-editDiff)}`}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {Math.round(editDiff) !== 0 && (
+                                <button type="button"
+                                  onClick={() => setEditPays(p => [...p, { id: uid(), method: '優惠折扣', amount: String(Math.abs(editDiff)) }])}
+                                  style={{ fontSize: '0.7rem', color: '#7a4a9a', background: '#f0ebf8', border: '1px solid #c4a8d8', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                  套用折扣平衡
+                                </button>
+                              )}
+                              <span style={{ color: Math.round(editDiff) === 0 ? '#4a6b52' : '#9a4a4a', fontWeight: 500 }}>
+                                {Math.round(editDiff) === 0 ? '✓ 已全額' : editDiff > 0 ? `尚差 ${fmtAmt(editDiff)}` : `超額 ${fmtAmt(-editDiff)}`}
+                              </span>
+                            </div>
                           </div>
                         </div>
 

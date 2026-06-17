@@ -36,8 +36,8 @@ export async function PATCH(
   if (!items?.length)    return NextResponse.json({ error: '請新增消費品項' }, { status: 400 })
   if (!payments?.length) return NextResponse.json({ error: '請新增付款方式' }, { status: 400 })
 
-  const totalAmount = (items as { price: number; qty: number }[])
-    .reduce((s, i) => s + i.price * i.qty, 0)
+  const totalAmount = (items as { price: number; qty: number; discount?: number }[])
+    .reduce((s, i) => s + i.price * i.qty - (i.discount ?? 0), 0)
 
   const run = db.transaction(() => {
     // ── 1. Reverse old side effects ────────────────────────────────────────────
@@ -55,6 +55,20 @@ export async function PATCH(
           db.prepare(`DELETE FROM sv_ledger WHERE client_id = ? AND note = ? AND date = ? AND amount = ?`)
             .run(checkout.client_id, `結帳 #${id} 儲值金消費`, checkout.date, -pay.amount)
         }
+      }
+    }
+    // Reverse old inventory deductions for this checkout
+    {
+      const affectedItems = db.prepare(
+        `SELECT DISTINCT item_id FROM inventory_ledger WHERE reason = '結帳銷售' AND note = ?`
+      ).all(`結帳 #${id}`) as { item_id: number }[]
+      db.prepare(`DELETE FROM inventory_ledger WHERE reason = '結帳銷售' AND note = ?`).run(`結帳 #${id}`)
+      for (const { item_id } of affectedItems) {
+        const { total } = db.prepare(
+          `SELECT COALESCE(SUM(delta), 0) as total FROM inventory_ledger WHERE item_id = ?`
+        ).get(item_id) as { total: number }
+        db.prepare(`UPDATE inventory_items SET current_qty = ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(total, item_id)
       }
     }
 
@@ -75,20 +89,36 @@ export async function PATCH(
 
     // ── 3. Replace items ──────────────────────────────────────────────────────
     db.prepare('DELETE FROM checkout_items WHERE checkout_id = ?').run(id)
-    for (const item of items as { category: string; label: string; price: number; qty: number; pkg_id?: number }[]) {
+    const newDate = date || checkout.date
+    for (const item of items as { category: string; label: string; price: number; qty: number; pkg_id?: number; discount?: number }[]) {
       db.prepare(`
-        INSERT INTO checkout_items (checkout_id, category, label, price, qty, pkg_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(Number(id), item.category, item.label, item.price, item.qty, item.pkg_id ?? null)
+        INSERT INTO checkout_items (checkout_id, category, label, price, qty, pkg_id, discount)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(Number(id), item.category, item.label, item.price, item.qty, item.pkg_id ?? null, item.discount ?? 0)
 
       if (item.category === '商品券' && item.pkg_id) {
         db.prepare('UPDATE packages SET used_sessions = used_sessions + ? WHERE id = ?')
           .run(item.qty, item.pkg_id)
       }
+
+      // Re-apply inventory deduction for 產品
+      if (item.category === '產品') {
+        const invItem = db.prepare(
+          `SELECT id FROM inventory_items WHERE TRIM(LOWER(name)) = TRIM(LOWER(?))`
+        ).get(item.label.trim()) as { id: number } | undefined
+        if (invItem) {
+          db.prepare(`INSERT INTO inventory_ledger (item_id, delta, reason, date, note) VALUES (?, ?, '結帳銷售', ?, ?)`)
+            .run(invItem.id, -item.qty, newDate, `結帳 #${id}`)
+          const { total } = db.prepare(
+            `SELECT COALESCE(SUM(delta), 0) as total FROM inventory_ledger WHERE item_id = ?`
+          ).get(invItem.id) as { total: number }
+          db.prepare(`UPDATE inventory_items SET current_qty = ?, updated_at = datetime('now') WHERE id = ?`)
+            .run(total, invItem.id)
+        }
+      }
     }
 
     // ── 4. Replace payments ───────────────────────────────────────────────────
-    const newDate = date || checkout.date
     db.prepare('DELETE FROM checkout_payments WHERE checkout_id = ?').run(id)
     for (const pay of payments as { method: string; amount: number }[]) {
       db.prepare(`INSERT INTO checkout_payments (checkout_id, method, amount) VALUES (?, ?, ?)`)
