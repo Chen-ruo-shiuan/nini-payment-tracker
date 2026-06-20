@@ -453,7 +453,12 @@ export default function InventoryPage() {
                       <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span style={{ color: '#2c2825', fontSize: '0.92rem', fontWeight: 500 }}>{item.name}</span>
+                            <span style={{ color: '#2c2825', fontSize: '0.92rem', fontWeight: 500 }}>
+                              {item.name}
+                              {item.spec && !item.name.includes(item.spec) && (
+                                <span style={{ color: '#9a8f84', fontSize: '0.75rem', fontWeight: 400, marginLeft: '4px' }}>{item.spec}</span>
+                              )}
+                            </span>
                             {isLow && (
                               <span style={{ background: '#f0c040', color: '#7a5a00', fontSize: '0.68rem', padding: '1px 7px', borderRadius: '10px', fontWeight: 600 }}>
                                 ⚠ 不足

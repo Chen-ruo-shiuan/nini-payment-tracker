@@ -1184,7 +1184,10 @@ function ProductPicker({
                       border: 'none', borderBottom: '1px solid #f0ebe4', cursor: 'pointer', textAlign: 'left',
                     }}>
                     <span style={{ color: '#2c2825', fontSize: '0.82rem' }}>
-                      {p.name}{p.spec ? <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}> {p.spec}</span> : null}
+                      {p.name}
+                      {p.spec && !p.name.includes(p.spec)
+                        ? <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}> {p.spec}</span>
+                        : null}
                     </span>
                     {saved && <span style={{ color: '#6b5f54', fontSize: '0.75rem', flexShrink: 0 }}>${saved.price.toLocaleString()}</span>}
                   </button>
