@@ -832,7 +832,7 @@ export default function CheckoutPage() {
               {/* Individual records */}
               {dailyLog.map(co => {
                 const isEditingThis = editingLogId === co.id
-                const editTotal = editItems.reduce((s, i) => s + (Number(i.price) || 0) * i.qty, 0)
+                const editTotal = editItems.reduce((s, i) => s + (Number(i.price) || 0) * i.qty - calcDiscountAmt(i), 0)
                 const editPayTotal = editPays.reduce((s, p) => s + (Number(p.amount) || 0), 0)
                 const editDiff = editTotal - editPayTotal
 
