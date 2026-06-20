@@ -181,7 +181,7 @@ export default function CheckoutPage() {
   }
 
   // Inventory products (for 產品 dropdown)
-  const [invProducts, setInvProducts] = useState<{ id: number; name: string; spec: string | null }[]>([])
+  const [invProducts, setInvProducts] = useState<{ id: number; name: string; spec: string | null; category: string; selling_price: number }[]>([])
   useEffect(() => {
     fetch('/api/inventory')
       .then(r => r.json())
@@ -1097,7 +1097,7 @@ function Label({ children }: { children: React.ReactNode }) {
 }
 
 // ─── 可搜尋產品選擇器 ─────────────────────────────────────────────────────────
-interface InvProduct { id: number; name: string; spec: string | null; category?: string }
+interface InvProduct { id: number; name: string; spec: string | null; category?: string; selling_price?: number }
 function ProductPicker({
   invProducts, savedItems, value, onChange, onCustom, inputStyle,
 }: {
@@ -1137,7 +1137,9 @@ function ProductPicker({
 
   function select(p: InvProduct) {
     const saved = savedItems.find(s => s.label === p.name)
-    onChange(p.name, saved?.price)
+    // selling_price 優先；若未設定則用歷史記憶價
+    const price = (p.selling_price && p.selling_price > 0) ? p.selling_price : saved?.price
+    onChange(p.name, price)
     setQuery('')
     setOpen(false)
   }
@@ -1176,6 +1178,7 @@ function ProductPicker({
               </div>
               {items.map(p => {
                 const saved = savedItems.find(s => s.label === p.name)
+                const displayPrice = (p.selling_price && p.selling_price > 0) ? p.selling_price : saved?.price
                 return (
                   <button key={p.id} type="button" onMouseDown={() => select(p)}
                     style={{
@@ -1189,7 +1192,7 @@ function ProductPicker({
                         ? <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}> {p.spec}</span>
                         : null}
                     </span>
-                    {saved && <span style={{ color: '#6b5f54', fontSize: '0.75rem', flexShrink: 0 }}>${saved.price.toLocaleString()}</span>}
+                    {displayPrice && <span style={{ color: '#6b5f54', fontSize: '0.75rem', flexShrink: 0 }}>${displayPrice.toLocaleString()}</span>}
                   </button>
                 )
               })}

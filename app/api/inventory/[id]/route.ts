@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   const db = getDb()
   const body = await req.json()
-  const { name, category, unit, spec, cost_price, low_stock_threshold, note } = body
+  const { name, category, unit, spec, cost_price, selling_price, low_stock_threshold, note } = body
 
   if (!name?.trim()) return NextResponse.json({ error: '請填寫品項名稱' }, { status: 400 })
 
@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   db.prepare(`
     UPDATE inventory_items SET
       name = @name, category = @category, unit = @unit, spec = @spec,
-      cost_price = @cost_price,
+      cost_price = @cost_price, selling_price = @selling_price,
       low_stock_threshold = @low_stock_threshold, note = @note,
       updated_at = datetime('now')
     WHERE id = @id
@@ -45,6 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     id: Number(id), name: name.trim(), category: category || '其他',
     unit: unit || '瓶', spec: spec?.trim() || null,
     cost_price: Number(cost_price) || 0,
+    selling_price: Number(selling_price) || 0,
     low_stock_threshold: low_stock_threshold != null && low_stock_threshold !== '' ? Number(low_stock_threshold) : 2,
     note: note || null,
   })

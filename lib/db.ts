@@ -42,6 +42,7 @@ export function getDb(): Database.Database {
     migrateFollowUps(db)
     migrateUsers(db)
     migrateCreatedBy(db)
+    migrateInventorySellingPrice(db)
   }
   return db
 }
@@ -724,6 +725,13 @@ function migrateClientReferral(db: Database.Database) {
   }
   if (!cols.includes('referral_source')) {
     db.exec(`ALTER TABLE clients ADD COLUMN referral_source TEXT`)
+  }
+}
+
+function migrateInventorySellingPrice(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(inventory_items)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('selling_price')) {
+    db.exec(`ALTER TABLE inventory_items ADD COLUMN selling_price INTEGER NOT NULL DEFAULT 0`)
   }
 }
 

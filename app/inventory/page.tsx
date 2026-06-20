@@ -17,6 +17,7 @@ interface InventoryItem {
   unit: string
   spec: string | null
   cost_price: number
+  selling_price: number
   current_qty: number
   low_stock_threshold: number
   note: string | null
@@ -62,7 +63,7 @@ export default function InventoryPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState({
     name: '', category: '原液' as Category, unit: '瓶', spec: '',
-    cost_price: '', low_stock_threshold: '2', note: '',
+    cost_price: '', selling_price: '', low_stock_threshold: '2', note: '',
   })
   const [addSaving, setAddSaving] = useState(false)
 
@@ -70,7 +71,7 @@ export default function InventoryPage() {
   const [editId, setEditId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState({
     name: '', category: '原液' as Category, unit: '瓶', spec: '',
-    cost_price: '', low_stock_threshold: '2', note: '',
+    cost_price: '', selling_price: '', low_stock_threshold: '2', note: '',
   })
 
   // Adjust
@@ -112,7 +113,7 @@ export default function InventoryPage() {
       body: JSON.stringify({ ...addForm, initial_qty: 0 }),
     })
     if (res.ok) {
-      setAddForm({ name: '', category: '原液', unit: '瓶', spec: '', cost_price: '', low_stock_threshold: '2', note: '' })
+      setAddForm({ name: '', category: '原液', unit: '瓶', spec: '', cost_price: '', selling_price: '', low_stock_threshold: '2', note: '' })
       setShowAdd(false)
       await load()
     }
@@ -225,6 +226,7 @@ export default function InventoryPage() {
       name: item.name, category: item.category, unit: item.unit,
       spec: item.spec || '',
       cost_price: item.cost_price > 0 ? String(item.cost_price) : '',
+      selling_price: item.selling_price > 0 ? String(item.selling_price) : '',
       low_stock_threshold: String(item.low_stock_threshold), note: item.note || '',
     })
     setEditId(item.id)
@@ -340,6 +342,15 @@ export default function InventoryPage() {
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: isOwner ? '1fr 1fr' : '1fr', gap: '8px' }}>
+              <div>
+                <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
+                  售價（每{addForm.unit || '單位'}）
+                  <span style={{ color: '#b4aa9e', marginLeft: '4px', fontWeight: 400 }}>結帳自動帶入</span>
+                </label>
+                <input type="number" value={addForm.selling_price} min="0" step="1"
+                  onChange={e => setAddForm(p => ({ ...p, selling_price: e.target.value }))}
+                  placeholder="如：1200" style={{ ...sInput, width: '100%' }} />
+              </div>
               {isOwner && <div>
                 <label style={{ color: '#9a8f84', fontSize: '0.72rem', display: 'block', marginBottom: '3px' }}>
                   進貨成本（每{addForm.unit || '單位'}）
@@ -484,6 +495,9 @@ export default function InventoryPage() {
                                 fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px',
                               }}>
                                 成本 ${item.cost_price.toLocaleString()}/{item.unit}
+                                {item.selling_price > 0 && (
+                                  <> ／ 售 ${item.selling_price.toLocaleString()}</>
+                                )}
                               </span>
                             )}
                             <span style={{ color: '#b4aa9e', fontSize: '0.7rem' }}>
@@ -660,7 +674,13 @@ export default function InventoryPage() {
                                   placeholder="如：30ml" style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
                               </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: isOwner ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>售價（每{editForm.unit}）</label>
+                                <input type="number" value={editForm.selling_price} min="0" step="1"
+                                  onChange={e => setEditForm(p => ({ ...p, selling_price: e.target.value }))}
+                                  placeholder="0" style={{ ...sInput, width: '100%', fontSize: '0.8rem' }} />
+                              </div>
                               {isOwner && <div>
                                 <label style={{ color: '#9a8f84', fontSize: '0.68rem', display: 'block', marginBottom: '2px' }}>進貨成本（每{editForm.unit}）</label>
                                 <input type="number" value={editForm.cost_price} min="0" step="1"

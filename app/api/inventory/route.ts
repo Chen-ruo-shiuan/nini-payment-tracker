@@ -19,7 +19,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const db = getDb()
   const body = await req.json()
-  const { name, category, unit, spec, cost_price, initial_qty, low_stock_threshold, note } = body
+  const { name, category, unit, spec, cost_price, selling_price, initial_qty, low_stock_threshold, note } = body
 
   if (!name?.trim()) return NextResponse.json({ error: '請填寫品項名稱' }, { status: 400 })
 
@@ -27,14 +27,15 @@ export async function POST(req: NextRequest) {
   const initQty = Number(initial_qty) || 0
 
   const result = db.prepare(`
-    INSERT INTO inventory_items (name, category, unit, spec, cost_price, current_qty, low_stock_threshold, note)
-    VALUES (@name, @category, @unit, @spec, @cost_price, @current_qty, @low_stock_threshold, @note)
+    INSERT INTO inventory_items (name, category, unit, spec, cost_price, selling_price, current_qty, low_stock_threshold, note)
+    VALUES (@name, @category, @unit, @spec, @cost_price, @selling_price, @current_qty, @low_stock_threshold, @note)
   `).run({
     name: name.trim(),
     category: category || '其他',
     unit: unit || '瓶',
     spec: spec?.trim() || null,
     cost_price: Number(cost_price) || 0,
+    selling_price: Number(selling_price) || 0,
     current_qty: initQty,
     low_stock_threshold: Number(low_stock_threshold) || 2,
     note: note || null,
