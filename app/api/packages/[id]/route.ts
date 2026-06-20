@@ -90,12 +90,18 @@ export async function DELETE(
   const { id } = await params
   const db = getDb()
 
-  const pkg = db.prepare('SELECT id, client_id, service_name, payment_method FROM packages WHERE id = ?').get(id) as {
-    id: number; client_id: number; service_name: string; payment_method: string
+  const pkg = db.prepare('SELECT id, client_id, service_name, payment_method, include_in_points, points_earned FROM packages WHERE id = ?').get(id) as {
+    id: number; client_id: number; service_name: string; payment_method: string;
+    include_in_points: number; points_earned: number
   } | undefined
   if (!pkg) return NextResponse.json({ error: '找不到套組' }, { status: 404 })
 
   db.transaction(() => {
+    // 還原金米點數
+    if (pkg.include_in_points && (pkg.points_earned ?? 0) > 0) {
+      db.prepare(`UPDATE clients SET points = MAX(0, points - ?), updated_at = datetime('now') WHERE id = ?`)
+        .run(pkg.points_earned, pkg.client_id)
+    }
     // Delete any linked installment contracts (when payment_method was 分期)
     if (pkg.payment_method === '分期') {
       const contracts = db.prepare(

@@ -31,6 +31,7 @@ export function getDb(): Database.Database {
     migrateClientNextAppointment(db)
     migrateCheckoutItemsDiscount(db)
     migrateCheckoutEarned(db)
+    migratePackagePointsEarned(db)
     migrateAppointmentTime(db)
     migrateClosedDays(db)
     migrateClientDocuments(db)
@@ -722,6 +723,13 @@ function migrateClientReferral(db: Database.Database) {
   }
   if (!cols.includes('referral_source')) {
     db.exec(`ALTER TABLE clients ADD COLUMN referral_source TEXT`)
+  }
+}
+
+function migratePackagePointsEarned(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(packages)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('points_earned')) {
+    db.exec(`ALTER TABLE packages ADD COLUMN points_earned INTEGER NOT NULL DEFAULT 0`)
   }
 }
 

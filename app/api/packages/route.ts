@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
+import { LEVEL_POINTS } from '@/types'
 
 export const runtime = 'nodejs'
 
@@ -95,6 +96,20 @@ export async function POST(req: NextRequest) {
         `套組扣款：${service_name}`,
         finalDate,
       )
+    }
+
+    // 若勾選列入金米計算，計算並新增點數
+    if (include_in_points && finalAmount > 0) {
+      const clientRow = db.prepare('SELECT level FROM clients WHERE id = ?').get(Number(client_id)) as
+        { level: string } | undefined
+      const rate = LEVEL_POINTS[(clientRow?.level ?? '癒米') as keyof typeof LEVEL_POINTS] ?? 0
+      const pointsEarned = Math.floor(finalAmount / 1000) * rate
+      if (pointsEarned > 0) {
+        db.prepare(`UPDATE clients SET points = points + ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(pointsEarned, Number(client_id))
+        db.prepare(`UPDATE packages SET points_earned = ? WHERE id = ?`)
+          .run(pointsEarned, pkgId)
+      }
     }
   })() } catch (err) {
     console.error('[Package POST Error]', err)
