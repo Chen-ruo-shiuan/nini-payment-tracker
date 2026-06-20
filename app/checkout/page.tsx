@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import MembershipBadge from '@/components/MembershipBadge'
@@ -556,25 +556,16 @@ export default function CheckoutPage() {
                     onChange={e => setItem(item.id, 'label', e.target.value)}
                     placeholder="產品名稱" autoFocus style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }} />
                 ) : (
-                  <select value={item.label}
-                    onChange={e => {
-                      const val = e.target.value
-                      if (val === '__custom__') { setItem(item.id, 'custom', 1); return }
-                      const saved = savedItems['產品']?.find(s => s.label === val)
-                      setItems(p => p.map(i => i.id === item.id ? { ...i, label: val, price: saved ? String(saved.price) : '' } : i))
-                    }}
-                    style={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}>
-                    <option value="">選擇產品…</option>
-                    {invProducts.map(p => {
-                      const saved = savedItems['產品']?.find(s => s.label === p.name)
-                      return (
-                        <option key={p.id} value={p.name}>
-                          {p.name}{p.spec ? ` ${p.spec}` : ''}{saved ? `　$${saved.price.toLocaleString()}` : ''}
-                        </option>
-                      )
-                    })}
-                    <option value="__custom__">＋ 自訂義…</option>
-                  </select>
+                  <ProductPicker
+                    invProducts={invProducts}
+                    savedItems={savedItems['產品'] ?? []}
+                    value={item.label}
+                    onChange={(name, price) => setItems(p => p.map(i => i.id === item.id
+                      ? { ...i, label: name, price: price != null ? String(price) : i.price }
+                      : i))}
+                    onCustom={() => setItem(item.id, 'custom', 1)}
+                    inputStyle={{ ...iStyle, fontSize: '0.82rem', padding: '6px 8px' }}
+                  />
                 )
               ) : item.category === '活動' ? (
                 item.custom ? (
@@ -936,32 +927,23 @@ export default function CheckoutPage() {
                                 style={{ ...iStyle, fontSize: '0.75rem', padding: '4px 6px', width: 'auto' }}>
                                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                               </select>
-                              {/* label: 產品 → 庫存下拉，其他 → 文字輸入 */}
+                              {/* label: 產品 → 搜尋下拉，其他 → 文字輸入 */}
                               {item.category === '產品' ? (
                                 item.custom ? (
                                   <input value={item.label}
                                     onChange={e => setEditItems(p => p.map(i => i.id === item.id ? { ...i, label: e.target.value } : i))}
                                     placeholder="產品名稱" autoFocus style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px' }} />
                                 ) : (
-                                  <select value={item.label}
-                                    onChange={e => {
-                                      const val = e.target.value
-                                      if (val === '__custom__') { setEditItems(p => p.map(i => i.id === item.id ? { ...i, custom: true } : i)); return }
-                                      const saved = savedItems['產品']?.find(s => s.label === val)
-                                      setEditItems(p => p.map(i => i.id === item.id ? { ...i, label: val, price: saved ? String(saved.price) : i.price } : i))
-                                    }}
-                                    style={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px' }}>
-                                    <option value="">選擇產品…</option>
-                                    {invProducts.map(p => {
-                                      const saved = savedItems['產品']?.find(s => s.label === p.name)
-                                      return (
-                                        <option key={p.id} value={p.name}>
-                                          {p.name}{p.spec ? ` ${p.spec}` : ''}{saved ? `　$${saved.price.toLocaleString()}` : ''}
-                                        </option>
-                                      )
-                                    })}
-                                    <option value="__custom__">＋ 自訂義…</option>
-                                  </select>
+                                  <ProductPicker
+                                    invProducts={invProducts}
+                                    savedItems={savedItems['產品'] ?? []}
+                                    value={item.label}
+                                    onChange={(name, price) => setEditItems(p => p.map(i => i.id === item.id
+                                      ? { ...i, label: name, price: price != null ? String(price) : i.price }
+                                      : i))}
+                                    onCustom={() => setEditItems(p => p.map(i => i.id === item.id ? { ...i, custom: true } : i))}
+                                    inputStyle={{ ...iStyle, fontSize: '0.8rem', padding: '4px 6px' }}
+                                  />
                                 )
                               ) : (
                                 <input value={item.label}
@@ -1112,4 +1094,110 @@ const qBtn: React.CSSProperties = {
 }
 function Label({ children }: { children: React.ReactNode }) {
   return <p style={{ color: '#6b5f54', fontSize: '0.78rem', letterSpacing: '0.06em' }}>{children}</p>
+}
+
+// ─── 可搜尋產品選擇器 ─────────────────────────────────────────────────────────
+interface InvProduct { id: number; name: string; spec: string | null; category?: string }
+function ProductPicker({
+  invProducts, savedItems, value, onChange, onCustom, inputStyle,
+}: {
+  invProducts: InvProduct[]
+  savedItems: SavedItem[]
+  value: string
+  onChange: (name: string, price?: number) => void
+  onCustom: () => void
+  inputStyle?: React.CSSProperties
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen]   = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // Filter & group
+  const q = query.trim().toLowerCase()
+  const filtered = q
+    ? invProducts.filter(p =>
+        p.name.toLowerCase().includes(q) || (p.spec ?? '').toLowerCase().includes(q))
+    : invProducts
+
+  const groups = filtered.reduce<Record<string, InvProduct[]>>((acc, p) => {
+    const cat = p.category ?? '其他'
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push(p)
+    return acc
+  }, {})
+
+  function select(p: InvProduct) {
+    const saved = savedItems.find(s => s.label === p.name)
+    onChange(p.name, saved?.price)
+    setQuery('')
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <input
+          value={open ? query : value}
+          placeholder={value || '搜尋或選擇產品…'}
+          onFocus={() => { setQuery(''); setOpen(true) }}
+          onChange={e => { setQuery(e.target.value); setOpen(true) }}
+          style={{ ...inputStyle, width: '100%' }}
+        />
+        {value && !open && (
+          <button type="button" onClick={() => { onChange(''); setOpen(true) }}
+            style={{ color: '#c4b8aa', background: 'none', border: 'none', fontSize: '0.8rem', cursor: 'pointer', flexShrink: 0 }}>
+            ✕
+          </button>
+        )}
+      </div>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          background: '#faf8f5', border: '1px solid #e0d9d0', borderRadius: '6px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)', maxHeight: '240px', overflowY: 'auto',
+          marginTop: '2px',
+        }}>
+          {Object.entries(groups).length === 0 && (
+            <div style={{ padding: '10px 12px', color: '#b4aa9e', fontSize: '0.8rem' }}>無符合品項</div>
+          )}
+          {Object.entries(groups).map(([cat, items]) => (
+            <div key={cat}>
+              <div style={{ padding: '5px 10px 2px', color: '#9a8f84', fontSize: '0.65rem', letterSpacing: '0.08em', background: '#f0ebe4', fontWeight: 600 }}>
+                {cat}
+              </div>
+              {items.map(p => {
+                const saved = savedItems.find(s => s.label === p.name)
+                return (
+                  <button key={p.id} type="button" onMouseDown={() => select(p)}
+                    style={{
+                      width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '7px 12px', background: value === p.name ? '#edf3eb' : 'none',
+                      border: 'none', borderBottom: '1px solid #f0ebe4', cursor: 'pointer', textAlign: 'left',
+                    }}>
+                    <span style={{ color: '#2c2825', fontSize: '0.82rem' }}>
+                      {p.name}{p.spec ? <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}> {p.spec}</span> : null}
+                    </span>
+                    {saved && <span style={{ color: '#6b5f54', fontSize: '0.75rem', flexShrink: 0 }}>${saved.price.toLocaleString()}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+          <button type="button" onMouseDown={onCustom}
+            style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', borderTop: '1px solid #e0d9d0', color: '#9a8f84', fontSize: '0.8rem', cursor: 'pointer', textAlign: 'left' }}>
+            ＋ 自訂義…
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
