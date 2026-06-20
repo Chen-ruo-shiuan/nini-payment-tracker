@@ -185,7 +185,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     fetch('/api/inventory')
       .then(r => r.json())
-      .then((items: { id: number; name: string; spec: string | null }[]) => {
+      .then((items: { id: number; name: string; spec: string | null; category: string; selling_price: number }[]) => {
         if (Array.isArray(items)) setInvProducts(items)
       })
       .catch(() => {})
