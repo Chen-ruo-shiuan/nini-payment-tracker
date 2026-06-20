@@ -1251,7 +1251,14 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                     {!isDone && health && <span style={{ fontSize: '0.8rem' }}>{PKG_HEALTH_STYLE[health].emoji}</span>}
                     剩 {remaining} 次
                   </div>
-                  <div style={{ color: '#9a8f84', fontSize: '0.75rem' }}>{fmtAmt(pkg.prepaid_amount)}</div>
+                  <div style={{ color: '#9a8f84', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {fmtAmt(pkg.prepaid_amount)}
+                    {(pkg as typeof pkg & { created_by?: string | null }).created_by && (
+                      <span style={{ fontSize: '0.62rem', color: '#7a6a8a', background: '#f0ecf8', border: '1px solid #d4c8e8', borderRadius: '8px', padding: '0px 6px' }}>
+                        {(pkg as typeof pkg & { created_by?: string | null }).created_by}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button onClick={() => startEdit(pkg)}
                       style={{ color: '#6b5f54', fontSize: '0.65rem', background: 'none', border: '1px solid #e0d9d0', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}>

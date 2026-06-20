@@ -36,7 +36,7 @@ function upsertSavedItem(cat: string, label: string, price: number) {
 interface DailyCheckout {
   id: number; client_id: number | null; client_name: string | null
   date: string; note: string | null; total_amount: number
-  incl_course: number; incl_product: number
+  incl_course: number; incl_product: number; created_by: string | null
   items: { id: number; category: string; label: string; price: number; qty: number; pkg_id?: number; bonus_desc?: string | null; timing_note?: string | null; bonus_active?: number }[]
   payments: { id: number; method: string; amount: number }[]
 }
@@ -885,13 +885,18 @@ export default function CheckoutPage() {
                               </div>
                             ))}
                           </div>
-                          <div style={{ marginTop: '4px', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                          <div style={{ marginTop: '4px', display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
                             {co.payments.map(pay => (
                               <span key={pay.id} style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ebe4', borderRadius: '10px', padding: '1px 7px' }}>
                                 {pay.method} {fmtAmt(pay.amount)}
                               </span>
                             ))}
                             {co.note && <span style={{ fontSize: '0.68rem', color: '#9a8f84' }}>{co.note}</span>}
+                            {co.created_by && (
+                              <span style={{ fontSize: '0.65rem', color: '#7a6a8a', background: '#f0ecf8', border: '1px solid #d4c8e8', borderRadius: '10px', padding: '1px 7px', marginLeft: 'auto' }}>
+                                🧾 {co.created_by}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexShrink: 0 }}>

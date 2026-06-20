@@ -53,6 +53,8 @@ export async function POST(req: NextRequest) {
   if (!items?.length)    return NextResponse.json({ error: '請新增消費品項' }, { status: 400 })
   if (!payments?.length) return NextResponse.json({ error: '請新增付款方式' }, { status: 400 })
 
+  const createdBy = req.headers.get('x-username') || null
+
   // totalAmount = 實收金額（已扣除品項折扣）
   const totalAmount = (items as { price: number; qty: number; discount?: number }[])
     .reduce((s, i) => s + i.price * i.qty - (i.discount ?? 0), 0)
@@ -60,8 +62,8 @@ export async function POST(req: NextRequest) {
   const run = db.transaction(() => {
     // ── 1. Insert checkout ───────────────────────────────────────────────────
     const coRes = db.prepare(`
-      INSERT INTO checkouts (client_id, date, note, total_amount, incl_course, incl_product, incl_yodomo, incl_points, points_earned, yodomo_earned)
-      VALUES (@client_id, @date, @note, @total_amount, @incl_course, @incl_product, @incl_yodomo, @incl_points, 0, 0)
+      INSERT INTO checkouts (client_id, date, note, total_amount, incl_course, incl_product, incl_yodomo, incl_points, points_earned, yodomo_earned, created_by)
+      VALUES (@client_id, @date, @note, @total_amount, @incl_course, @incl_product, @incl_yodomo, @incl_points, 0, 0, @created_by)
     `).run({
       client_id: client_id ?? null,
       date: date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }),
@@ -71,6 +73,7 @@ export async function POST(req: NextRequest) {
       incl_product: incl_product ? 1 : 0,
       incl_yodomo:  incl_yodomo  ? 1 : 0,
       incl_points:  incl_points  ? 1 : 0,
+      created_by:   createdBy,
     })
     const coId = Number(coRes.lastInsertRowid)
 

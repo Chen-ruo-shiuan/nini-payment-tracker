@@ -41,6 +41,7 @@ export function getDb(): Database.Database {
     migrateInventory(db)
     migrateFollowUps(db)
     migrateUsers(db)
+    migrateCreatedBy(db)
   }
   return db
 }
@@ -723,6 +724,17 @@ function migrateClientReferral(db: Database.Database) {
   }
   if (!cols.includes('referral_source')) {
     db.exec(`ALTER TABLE clients ADD COLUMN referral_source TEXT`)
+  }
+}
+
+function migrateCreatedBy(db: Database.Database) {
+  const coCols = (db.prepare('PRAGMA table_info(checkouts)').all() as { name: string }[]).map(c => c.name)
+  if (!coCols.includes('created_by')) {
+    db.exec(`ALTER TABLE checkouts ADD COLUMN created_by TEXT`)
+  }
+  const pkgCols = (db.prepare('PRAGMA table_info(packages)').all() as { name: string }[]).map(c => c.name)
+  if (!pkgCols.includes('created_by')) {
+    db.exec(`ALTER TABLE packages ADD COLUMN created_by TEXT`)
   }
 }
 

@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
   const finalDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
   const finalAmount = Number(prepaid_amount) || 0
   const finalMethod = payment_method || '現金'
+  const createdBy = req.headers.get('x-username') || null
 
   let pkgId: bigint | number = 0
 
@@ -54,13 +55,15 @@ export async function POST(req: NextRequest) {
          unit_price, unit_price_orig, prepaid_amount, payment_method,
          include_in_accumulation, include_in_points, note, date,
          timing_note, bonus_desc, timing_max_weeks, bonus_active, expiry_date,
-         completion_bonus_desc, completion_weeks, completion_bonus_service, completion_bonus_price)
+         completion_bonus_desc, completion_weeks, completion_bonus_service, completion_bonus_price,
+         created_by)
       VALUES
         (@client_id, @service_name, @total_sessions, 0,
          @unit_price, @unit_price_orig, @prepaid_amount, @payment_method,
          @include_in_acc, @include_in_pts, @note, @date,
          @timing_note, @bonus_desc, @timing_max_weeks, @bonus_active, @expiry_date,
-         @completion_bonus_desc, @completion_weeks, @completion_bonus_service, @completion_bonus_price)
+         @completion_bonus_desc, @completion_weeks, @completion_bonus_service, @completion_bonus_price,
+         @created_by)
     `).run({
       client_id: Number(client_id),
       service_name,
@@ -82,6 +85,7 @@ export async function POST(req: NextRequest) {
       completion_weeks:         completion_weeks ? Number(completion_weeks) : null,
       completion_bonus_service: completion_bonus_service || null,
       completion_bonus_price:   completion_bonus_price ? Number(completion_bonus_price) : null,
+      created_by: createdBy,
     })
     pkgId = res.lastInsertRowid
 
