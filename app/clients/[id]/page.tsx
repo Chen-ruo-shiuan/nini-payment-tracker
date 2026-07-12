@@ -2602,8 +2602,18 @@ export default function ClientDetailPage() {
   const renewPct = Math.min(100, Math.round((annualCourseSpending / renewThreshold) * 100))
   const renewGap = Math.max(0, renewThreshold - annualCourseSpending)
 
+  // 升等鎖定期：level_since + 6 個月後，不再接受升等（防止年底衝量取得新一輪長效會籍）
+  // 癒米（基底等級）不適用此規則，只有已有會籍的等級才限制
+  const upgradeLockDate = (() => {
+    if (!client.level_since || level === '癒米') return null
+    const d = new Date(client.level_since + 'T00:00:00')
+    d.setMonth(d.getMonth() + 6)
+    return d.toLocaleDateString('en-CA')
+  })()
+  const isUpgradeLocked = !!upgradeLockDate && todayStr() >= upgradeLockDate
+
   // 升等偵測
-  const canUpgrade = !isPendingUpgrade && !!nextLevel && upgradeGap === 0
+  const canUpgrade = !isPendingUpgrade && !isUpgradeLocked && !!nextLevel && upgradeGap === 0
 
   // 會員資格到期
   const memberExpiry = (() => {
@@ -2794,6 +2804,16 @@ export default function ClientDetailPage() {
                 年度累積 {fmtAmt(annualCourseSpending)}
               </span>
             </div>
+            {isUpgradeLocked && nextLevel && (
+              <div style={{ marginTop: '8px', background: '#f5f2ee', border: '1px solid #d8d0c8', borderRadius: '5px', padding: '7px 10px' }}>
+                <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>
+                  🔒 升等鎖定期（會籍起算滿 6 個月，截止 {upgradeLockDate}）
+                </span>
+                <div style={{ color: '#b4aa9e', fontSize: '0.68rem', marginTop: '2px' }}>
+                  本年度消費不再計入升等，請於會籍到期後下一年度重新累積
+                </div>
+              </div>
+            )}
             {canUpgrade && nextLevel && (
               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f5fbf0', border: '1px solid #9ab89e', borderRadius: '5px', padding: '7px 10px' }}>
                 <span style={{ color: '#2c5c38', fontSize: '0.75rem', fontWeight: 500 }}>
