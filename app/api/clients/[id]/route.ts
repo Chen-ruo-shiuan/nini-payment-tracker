@@ -40,6 +40,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       (SELECT MAX(s.date) FROM sessions s WHERE s.package_id = p.id) AS last_session_date
     FROM packages p WHERE p.client_id = ? ORDER BY p.date DESC
   `).all(id))
+  for (const pkg of packages as { id: number; payments?: unknown[] }[]) {
+    pkg.payments = db.prepare('SELECT id, method, amount FROM package_payments WHERE package_id = ? ORDER BY id').all(pkg.id)
+  }
 
   // Fetch sv_ledger
   const sv_ledger = db.prepare(`

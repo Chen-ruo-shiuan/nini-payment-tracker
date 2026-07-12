@@ -7,15 +7,19 @@ export const runtime = 'nodejs'
 // GET /api/checkouts?client_id=&date=YYYY-MM-DD&limit=20
 export async function GET(req: NextRequest) {
   const db = getDb()
-  const clientId = req.nextUrl.searchParams.get('client_id')
-  const date     = req.nextUrl.searchParams.get('date')
-  const limit    = Number(req.nextUrl.searchParams.get('limit') || '20')
+  const clientId  = req.nextUrl.searchParams.get('client_id')
+  const date      = req.nextUrl.searchParams.get('date')
+  const month     = req.nextUrl.searchParams.get('month')   // YYYY-MM
+  const searchId  = req.nextUrl.searchParams.get('id')      // single checkout id
+  const limit     = Number(req.nextUrl.searchParams.get('limit') || '20')
 
   const conditions: string[] = []
   const binds: (string | number)[] = []
 
-  if (clientId) { conditions.push('co.client_id = ?'); binds.push(clientId) }
-  if (date)     { conditions.push('co.date = ?');      binds.push(date) }
+  if (clientId) { conditions.push('co.client_id = ?');       binds.push(clientId) }
+  if (date)     { conditions.push('co.date = ?');             binds.push(date) }
+  if (month)    { conditions.push("co.date LIKE ?");          binds.push(month + '-%') }
+  if (searchId) { conditions.push('co.id = ?');               binds.push(Number(searchId)) }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   binds.push(limit)

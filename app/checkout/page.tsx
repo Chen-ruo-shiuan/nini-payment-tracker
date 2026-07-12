@@ -57,6 +57,9 @@ export default function CheckoutPage() {
 
   // Daily log
   const [logDate, setLogDate] = useState(today())
+  const [logMonth, setLogMonth] = useState(today().slice(0, 7))
+  const [logViewMode, setLogViewMode] = useState<'day' | 'month'>('day')
+  const [idSearchInput, setIdSearchInput] = useState('')
   const [dailyLog, setDailyLog] = useState<DailyCheckout[]>([])
   const [logLoading, setLogLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -71,24 +74,42 @@ export default function CheckoutPage() {
   const [editInclProduct, setEditInclProduct] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
 
-  const fetchDailyLog = useCallback(async (d: string) => {
+  const fetchLog = useCallback(async (mode: 'day' | 'month', dateOrMonth: string) => {
     setLogLoading(true)
     try {
-      const res = await fetch(`/api/checkouts?date=${d}&limit=100`)
+      const param = mode === 'day' ? `date=${dateOrMonth}&limit=100` : `month=${dateOrMonth}&limit=500`
+      const res = await fetch(`/api/checkouts?${param}`)
       setDailyLog(await res.json())
     } finally {
       setLogLoading(false)
     }
   }, [])
 
-  useEffect(() => { fetchDailyLog(logDate) }, [logDate, fetchDailyLog])
+  const fetchDailyLog = useCallback((d: string) => fetchLog('day', d), [fetchLog])
+
+  useEffect(() => {
+    if (logViewMode === 'day') fetchLog('day', logDate)
+    else fetchLog('month', logMonth)
+  }, [logDate, logMonth, logViewMode, fetchLog])
+
+  async function searchById() {
+    if (!idSearchInput.trim()) return
+    setLogLoading(true)
+    try {
+      const res = await fetch(`/api/checkouts?id=${idSearchInput.trim()}&limit=1`)
+      setDailyLog(await res.json())
+    } finally {
+      setLogLoading(false)
+    }
+  }
 
   async function deleteLog(id: number) {
     if (!confirm('確定刪除這筆結帳紀錄？')) return
     setDeletingId(id)
     await fetch(`/api/checkouts/${id}`, { method: 'DELETE' })
     setDeletingId(null)
-    fetchDailyLog(logDate)
+    if (logViewMode === 'day') fetchLog('day', logDate)
+    else fetchLog('month', logMonth)
   }
 
   function startLogEdit(co: DailyCheckout) {
@@ -133,7 +154,8 @@ export default function CheckoutPage() {
     setSavingEdit(false)
     if (!res.ok) { alert('儲存失敗'); return }
     setEditingLogId(null)
-    fetchDailyLog(logDate)
+    if (logViewMode === 'day') fetchLog('day', logDate)
+    else fetchLog('month', logMonth)
   }
 
   // Today's appointments (quick-select)
@@ -781,22 +803,56 @@ export default function CheckoutPage() {
         </button>
       </form>
 
-      {/* ── 當日紀錄 ── */}
+      {/* ── 結帳紀錄 ── */}
       <div style={{ borderTop: '2px solid #e0d9d0', paddingTop: '20px', marginTop: '8px' }} className="space-y-3">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ color: '#2c2825', fontSize: '1rem', fontWeight: 500, letterSpacing: '0.05em' }}>當日紀錄</h2>
-          <input
-            type="date" value={logDate}
-            onChange={e => setLogDate(e.target.value)}
-            style={{ ...iStyle, width: 'auto', fontSize: '0.85rem', padding: '6px 10px' }}
-          />
+        {/* Header + view mode */}
+        <div className="space-y-2">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ color: '#2c2825', fontSize: '1rem', fontWeight: 500, letterSpacing: '0.05em' }}>結帳紀錄</h2>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {(['day', 'month'] as const).map(mode => (
+                <button key={mode} type="button"
+                  onClick={() => setLogViewMode(mode)}
+                  style={{
+                    background: logViewMode === mode ? '#2c2825' : '#f0ede8',
+                    color: logViewMode === mode ? '#f7f4ef' : '#6b5f54',
+                    border: 'none', borderRadius: '4px',
+                    fontSize: '0.72rem', padding: '4px 10px', cursor: 'pointer',
+                  }}>
+                  {mode === 'day' ? '日' : '月'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Date / Month picker */}
+          {logViewMode === 'day' ? (
+            <input type="date" value={logDate}
+              onChange={e => setLogDate(e.target.value)}
+              style={{ ...iStyle, width: '100%', fontSize: '0.85rem', padding: '6px 10px' }} />
+          ) : (
+            <input type="month" value={logMonth}
+              onChange={e => setLogMonth(e.target.value)}
+              style={{ ...iStyle, width: '100%', fontSize: '0.85rem', padding: '6px 10px' }} />
+          )}
+          {/* ID search */}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <input value={idSearchInput}
+              onChange={e => setIdSearchInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') searchById() }}
+              placeholder="帳單 # 搜尋（輸入流水號後按 Enter）"
+              style={{ ...iStyle, flex: 1, fontSize: '0.82rem', padding: '6px 10px' }} />
+            <button type="button" onClick={searchById}
+              style={{ background: '#6b5f54', color: '#f7f4ef', border: 'none', borderRadius: '5px', fontSize: '0.78rem', padding: '6px 14px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              搜尋
+            </button>
+          </div>
         </div>
 
         {logLoading ? (
           <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>載入中…</p>
         ) : dailyLog.length === 0 ? (
           <p style={{ color: '#c4b8aa', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
-            {logDate} 無結帳紀錄
+            {logViewMode === 'day' ? `${logDate} 無結帳紀錄` : `${logMonth} 無結帳紀錄`}
           </p>
         ) : (() => {
           // Summary by payment method
@@ -849,6 +905,10 @@ export default function CheckoutPage() {
                               </Link>
                             ) : (
                               <span style={{ color: '#9a8f84', fontSize: '0.88rem' }}>散客</span>
+                            )}
+                            <span style={{ color: '#c4b8aa', fontSize: '0.68rem' }}>#{co.id}</span>
+                            {logViewMode === 'month' && (
+                              <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>{co.date}</span>
                             )}
                             <span style={{ color: '#2c2825', fontSize: '0.88rem', fontWeight: 500, marginLeft: 'auto' }}>
                               {fmtAmt(co.total_amount)}

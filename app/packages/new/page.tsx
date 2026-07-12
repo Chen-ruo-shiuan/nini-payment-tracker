@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { PAYMENT_METHODS, ClientWithStats, MembershipLevel } from '@/types'
 import MembershipBadge from '@/components/MembershipBadge'
 
+function uid() { return Math.random().toString(36).slice(2) }
+
 const SERVICE_NAMES = [
   '精細光彩', '原液調理', '泡光氧彗', '雨林頭療',
   '小顏骨氣', '森林癒撥筋', '深皮超導', '全臉粉清',
@@ -45,8 +47,13 @@ function NewPackageForm() {
   const [discountedTotal, setDiscountedTotal] = useState('') // 優惠總價
   const [lastEdited, setLastEdited] = useState<'pct' | 'flat' | 'total' | null>(null)
 
-  // Other fields
-  const [paymentMethod, setPaymentMethod] = useState('現金')
+  // Payment (multi-method support; 分期 is handled as a special single-method case)
+  interface PkgPay { id: string; method: string; amount: string }
+  const [pkgPays, setPkgPays] = useState<PkgPay[]>([{ id: uid(), method: '現金', amount: '' }])
+  const paymentMethod = pkgPays[0]?.method || '現金'  // for backward compat / 分期 detection
+  const setPaymentMethod = (m: string) => setPkgPays(prev => [{ ...prev[0], method: m }, ...prev.slice(1)])
+  const PKG_ROW_METHODS = PAYMENT_METHODS.filter(m => !['核銷', '商品券', '分期'].includes(m))
+
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }))
   const [note, setNote] = useState('')
   const [inclAccum, setInclAccum] = useState(true)
@@ -270,6 +277,11 @@ function NewPackageForm() {
     setSaving(true); setError('')
     try {
       // 1. 建立套組
+      // Build payments array; for 分期 keep legacy single-method field
+      const payLoaded = paymentMethod === '分期'
+        ? [{ method: '分期', amount: prepaid }]
+        : pkgPays.filter(p => p.amount !== '' && Number(p.amount) > 0).map(p => ({ method: p.method, amount: Number(p.amount) }))
+
       const res = await fetch('/api/packages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -281,6 +293,7 @@ function NewPackageForm() {
           unit_price_orig: Number(unitPriceOrig) || 0,
           prepaid_amount: prepaid,
           payment_method: paymentMethod,
+          payments: payLoaded,
           date, note,
           include_in_accumulation: inclAccum,
           include_in_points: inclPoints,
@@ -506,12 +519,78 @@ function NewPackageForm() {
           </div>
         </div>
 
-        {/* ── 付款方式 ── */}
-        <Field label="付款方式">
-          <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} style={iStyle}>
-            {PKG_PAY_METHODS.map(m => <option key={m}>{m}</option>)}
-          </select>
-        </Field>
+        {/* ── 付款方式（多元付款）── */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <label style={{ color: '#9a8f84', fontSize: '0.8rem' }}>付款方式</label>
+            {paymentMethod !== '分期' && (
+              <button type="button"
+                onClick={() => setPkgPays(prev => [...prev, { id: uid(), method: '現金', amount: '' }])}
+                style={{ color: '#6b5f54', fontSize: '0.72rem', background: 'none', border: '1px solid #d9d0c5', borderRadius: '4px', padding: '2px 9px', cursor: 'pointer' }}>
+                + 加入付款
+              </button>
+            )}
+          </div>
+
+          {/* 分期模式：保留原本單選 */}
+          {paymentMethod === '分期' ? (
+            <select value="分期" onChange={e => setPaymentMethod(e.target.value)} style={iStyle}>
+              {PKG_PAY_METHODS.map(m => <option key={m}>{m}</option>)}
+            </select>
+          ) : (
+            <div className="space-y-2">
+              {pkgPays.map((pay, idx) => {
+                const remaining = prepaid - pkgPays.filter((_, i) => i !== idx).reduce((s, p) => s + (Number(p.amount) || 0), 0)
+                return (
+                  <div key={pay.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '6px', alignItems: 'center' }}>
+                    <select value={pay.method}
+                      onChange={e => {
+                        const m = e.target.value
+                        if (m === '分期') {
+                          setPaymentMethod('分期')
+                          setPkgPays([{ id: uid(), method: '分期', amount: String(prepaid) }])
+                        } else {
+                          setPkgPays(prev => prev.map(p => p.id === pay.id ? { ...p, method: m } : p))
+                        }
+                      }}
+                      style={iStyle}>
+                      {PKG_PAY_METHODS.map(m => <option key={m}>{m}</option>)}
+                      <option value="分期">分期</option>
+                    </select>
+                    <div style={{ position: 'relative' }}>
+                      <input value={pay.amount}
+                        onChange={e => setPkgPays(prev => prev.map(p => p.id === pay.id ? { ...p, amount: e.target.value } : p))}
+                        onFocus={() => {
+                          if (pay.amount === '' && remaining > 0)
+                            setPkgPays(prev => prev.map(p => p.id === pay.id ? { ...p, amount: String(remaining) } : p))
+                        }}
+                        type="number" min="0" placeholder={`$ ${remaining.toLocaleString()}`} style={iStyle} />
+                    </div>
+                    {pkgPays.length > 1 && (
+                      <button type="button"
+                        onClick={() => setPkgPays(prev => prev.filter(p => p.id !== pay.id))}
+                        style={{ color: '#c4b8aa', background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', padding: '0 2px' }}>
+                        ×
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+              {/* Payment total vs prepaid check */}
+              {(() => {
+                const payTotal = pkgPays.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+                const diff = prepaid - payTotal
+                if (prepaid <= 0 || pkgPays.length <= 1) return null
+                return (
+                  <div style={{ fontSize: '0.72rem', color: diff === 0 ? '#4a6b52' : '#9a4a4a', background: diff === 0 ? '#edf3eb' : '#fdf0f0', border: `1px solid ${diff === 0 ? '#9ab89e' : '#e8a8a8'}`, borderRadius: '4px', padding: '4px 10px', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>付款合計</span>
+                    <span>{diff === 0 ? `✓ $${payTotal.toLocaleString()} 已全額` : `$${payTotal.toLocaleString()} / 應付 $${prepaid.toLocaleString()}（差 $${Math.abs(diff).toLocaleString()}）`}</span>
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+        </div>
 
         {/* ── 分期設定（付款方式為分期時展開）── */}
         {paymentMethod === '分期' && (

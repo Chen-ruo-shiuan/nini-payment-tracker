@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
   const {
     client_id, service_name, total_sessions,
     unit_price, unit_price_orig, prepaid_amount, payment_method,
+    payments,  // optional: [{method, amount}] for multi-payment
     date, note, include_in_accumulation, include_in_points,
     timing_note, bonus_desc, timing_max_weeks, bonus_active, expiry_date,
     completion_bonus_desc, completion_weeks, completion_bonus_service, completion_bonus_price,
@@ -42,9 +43,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '請輸入堂數' }, { status: 400 })
 
   const finalDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
-  const finalAmount = Number(prepaid_amount) || 0
-  const finalMethod = payment_method || '現金'
   const createdBy = req.headers.get('x-username') || null
+
+  // Normalize payments: accept either a payments array or legacy single payment_method + prepaid_amount
+  const payRows: { method: string; amount: number }[] = Array.isArray(payments) && payments.length > 0
+    ? payments.map((p: { method: string; amount: number }) => ({ method: p.method, amount: Number(p.amount) || 0 }))
+    : [{ method: payment_method || '現金', amount: Number(prepaid_amount) || 0 }]
+  const finalAmount = payRows.reduce((s, p) => s + p.amount, 0)
+  const finalMethod = payRows[0]?.method || '現金'  // for backward-compat column
 
   let pkgId: bigint | number = 0
 
@@ -89,17 +95,17 @@ export async function POST(req: NextRequest) {
     })
     pkgId = res.lastInsertRowid
 
-    // 若以儲值金付款，自動扣除儲值金餘額
-    if (finalMethod === '儲值金' && finalAmount > 0) {
-      db.prepare(`
-        INSERT INTO sv_ledger (client_id, amount, paid_amount, note, date, payment_method, include_in_accumulation)
-        VALUES (?, ?, NULL, ?, ?, NULL, 0)
-      `).run(
-        Number(client_id),
-        -finalAmount,
-        `套組扣款：${service_name}`,
-        finalDate,
-      )
+    // Insert individual payment rows
+    for (const pay of payRows) {
+      if (pay.amount <= 0) continue
+      db.prepare('INSERT INTO package_payments (package_id, method, amount) VALUES (?, ?, ?)').run(pkgId, pay.method, pay.amount)
+      // 若以儲值金付款，自動扣除儲值金餘額
+      if (pay.method === '儲值金' && Number(client_id)) {
+        db.prepare(`
+          INSERT INTO sv_ledger (client_id, amount, paid_amount, note, date, payment_method, include_in_accumulation)
+          VALUES (?, ?, NULL, ?, ?, NULL, 0)
+        `).run(Number(client_id), -pay.amount, `套組扣款：${service_name}`, finalDate)
+      }
     }
 
     // 若勾選列入金米計算，計算並新增點數

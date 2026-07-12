@@ -1228,7 +1228,18 @@ function PackagesTab({ client, refresh }: { client: ClientDetail; refresh: () =>
                       ? <span style={{ marginLeft: '8px', color: '#7a6a9a' }}>開封 {fmtShort(pkg.opened_date)}</span>
                       : <span style={{ marginLeft: '8px', color: '#c4b8aa' }}>未開封</span>
                     }
-                    　{pkg.payment_method}
+                    {/* Payment breakdown */}
+                    {(() => {
+                      const pays = (pkg as typeof pkg & { payments?: { method: string; amount: number }[] }).payments
+                      if (pays && pays.length > 0) {
+                        return pays.map((p, i) => (
+                          <span key={i} style={{ marginLeft: i === 0 ? '8px' : '4px', background: '#f0ebe4', borderRadius: '8px', padding: '1px 6px', fontSize: '0.68rem' }}>
+                            {p.method} {fmtAmt(p.amount)}
+                          </span>
+                        ))
+                      }
+                      return <span style={{ marginLeft: '8px' }}>　{pkg.payment_method}</span>
+                    })()}
                   </div>
                   <div style={{ marginTop: '8px' }}>
                     <div style={{ background: '#f0ebe4', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>

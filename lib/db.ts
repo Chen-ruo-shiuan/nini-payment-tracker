@@ -43,6 +43,7 @@ export function getDb(): Database.Database {
     migrateUsers(db)
     migrateCreatedBy(db)
     migrateInventorySellingPrice(db)
+    migratePackagePayments(db)
   }
   return db
 }
@@ -751,6 +752,29 @@ function migratePackagePointsEarned(db: Database.Database) {
   if (!cols.includes('points_earned')) {
     db.exec(`ALTER TABLE packages ADD COLUMN points_earned INTEGER NOT NULL DEFAULT 0`)
   }
+}
+
+function migratePackagePayments(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS package_payments (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      package_id INTEGER NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
+      method     TEXT NOT NULL,
+      amount     INTEGER NOT NULL DEFAULT 0
+    )
+  `)
+  // Backfill existing packages that have prepaid_amount > 0 but no payment rows yet
+  const pkgs = db.prepare(`
+    SELECT p.id, p.payment_method, p.prepaid_amount
+    FROM packages p
+    WHERE p.prepaid_amount > 0
+      AND NOT EXISTS (SELECT 1 FROM package_payments WHERE package_id = p.id)
+  `).all() as { id: number; payment_method: string; prepaid_amount: number }[]
+  const ins = db.prepare('INSERT INTO package_payments (package_id, method, amount) VALUES (?, ?, ?)')
+  const backfill = db.transaction(() => {
+    for (const pkg of pkgs) ins.run(pkg.id, pkg.payment_method || '現金', pkg.prepaid_amount)
+  })
+  backfill()
 }
 
 function migrateCheckoutEarned(db: Database.Database) {

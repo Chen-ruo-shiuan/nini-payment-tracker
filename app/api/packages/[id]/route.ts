@@ -96,11 +96,25 @@ export async function DELETE(
   } | undefined
   if (!pkg) return NextResponse.json({ error: '找不到套組' }, { status: 404 })
 
+  // Fetch 儲值金 payments to reverse
+  const svPayments = db.prepare(
+    `SELECT amount FROM package_payments WHERE package_id = ? AND method = '儲值金'`
+  ).all(Number(id)) as { amount: number }[]
+
   db.transaction(() => {
     // 還原金米點數
     if (pkg.include_in_points && (pkg.points_earned ?? 0) > 0) {
       db.prepare(`UPDATE clients SET points = MAX(0, points - ?), updated_at = datetime('now') WHERE id = ?`)
         .run(pkg.points_earned, pkg.client_id)
+    }
+    // 還原儲值金
+    for (const pay of svPayments) {
+      if (pay.amount > 0) {
+        db.prepare(`
+          INSERT INTO sv_ledger (client_id, amount, note, date, payment_method, include_in_accumulation)
+          VALUES (?, ?, ?, date('now','localtime'), NULL, 0)
+        `).run(pkg.client_id, pay.amount, `退款：套組刪除 - ${pkg.service_name}`)
+      }
     }
     // Delete any linked installment contracts (when payment_method was 分期)
     if (pkg.payment_method === '分期') {
@@ -111,7 +125,7 @@ export async function DELETE(
         db.prepare('DELETE FROM installment_contracts WHERE id = ?').run(c.id)
       }
     }
-    // Delete package (FK: checkout_items.pkg_id → SET NULL, sessions.package_id → SET NULL)
+    // Delete package (FK: package_payments ON DELETE CASCADE handles cleanup)
     db.prepare('DELETE FROM packages WHERE id = ?').run(id)
   })()
 
