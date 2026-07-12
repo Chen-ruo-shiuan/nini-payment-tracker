@@ -2647,7 +2647,7 @@ export default function ClientDetailPage() {
               })()}
             </div>
             {memberExpiry && level !== '癒米' && (
-              <div style={{ marginTop: '3px' }}>
+              <div style={{ marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
                 {memberExpiry.daysLeft < 0 ? (
                   <span style={{ fontSize: '0.68rem', color: '#9a2020', background: '#fdf0f0', border: '1px solid #e88a8a', borderRadius: '4px', padding: '1px 6px' }}>
                     ⚠ 會籍已過期 {Math.abs(memberExpiry.daysLeft)} 天
@@ -2664,6 +2664,17 @@ export default function ClientDetailPage() {
                   <span style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ede8', border: '1px solid #ddd8d0', borderRadius: '4px', padding: '1px 6px' }}>
                     會籍至 {memberExpiry.expiryDate}
                   </span>
+                )}
+                {upgradeLockDate && nextLevel && (
+                  isUpgradeLocked ? (
+                    <span style={{ fontSize: '0.68rem', color: '#6b5f54', background: '#f0ede8', border: '1px solid #ddd8d0', borderRadius: '4px', padding: '1px 6px' }}>
+                      🔒 升等已截止
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.68rem', color: '#6b5f54', background: '#f0ede8', border: '1px solid #ddd8d0', borderRadius: '4px', padding: '1px 6px' }}>
+                      升等截止 {upgradeLockDate}
+                    </span>
+                  )
                 )}
               </div>
             )}
