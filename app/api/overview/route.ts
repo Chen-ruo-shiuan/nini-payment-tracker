@@ -104,6 +104,12 @@ export async function GET() {
   // ── 客人總數 ─────────────────────────────────────────────────────────────
   const totalClients = (db.prepare('SELECT COUNT(*) AS n FROM clients').get() as { n: number }).n
 
+  // ── 悟癒米今年晉升數 ─────────────────────────────────────────────────────
+  const thisYear = today.slice(0, 4)
+  const wuyumiUpgradesThisYear = (db.prepare(
+    `SELECT COUNT(*) AS n FROM clients WHERE level = '悟癒米' AND level_since LIKE ?`
+  ).get(`${thisYear}-%`) as { n: number }).n
+
   return NextResponse.json({
     // 大數字
     pkg_prepaid:    pkgStats.pkg_prepaid,
@@ -119,6 +125,7 @@ export async function GET() {
     month_total:    monthStats.month_total,
     installment_outstanding: installmentOutstanding,
     total_clients:  totalClients,
+    wuyumi_upgrades_this_year: wuyumiUpgradesThisYear,
     // 列表
     overdue, todayDue, weekDue,
     activePackages,

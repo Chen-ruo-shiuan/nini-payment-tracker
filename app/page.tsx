@@ -27,6 +27,7 @@ interface OverviewData {
   points_redeemed: number
   month_count: number; month_total: number
   installment_outstanding: number; total_clients: number
+  wuyumi_upgrades_this_year?: number
   overdue: DueItem[]; todayDue: DueItem[]; weekDue: DueItem[]
   activePackages: ActivePackage[]
   recentCheckouts: RecentCheckout[]
@@ -755,6 +756,25 @@ export default function OverviewPage() {
         </div>
         <PushSubscribeButton />
       </div>
+
+      {/* ── 悟癒米年度名額提示 ── */}
+      {(data.wuyumi_upgrades_this_year ?? 0) >= 10 && (
+        <div style={{
+          background: (data.wuyumi_upgrades_this_year ?? 0) >= 15 ? '#fdf0f0' : '#fdf8ee',
+          border: `1px solid ${(data.wuyumi_upgrades_this_year ?? 0) >= 15 ? '#e88a8a' : '#e8c96a'}`,
+          borderLeft: `4px solid ${(data.wuyumi_upgrades_this_year ?? 0) >= 15 ? '#c43030' : '#c8940a'}`,
+          borderRadius: '6px', padding: '10px 14px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: (data.wuyumi_upgrades_this_year ?? 0) >= 15 ? '#9a2020' : '#7a5a00' }}>
+              {(data.wuyumi_upgrades_this_year ?? 0) >= 15 ? '🚫' : '⚠'} 悟癒米名額　{data.wuyumi_upgrades_this_year} / 15 位
+            </span>
+            <span style={{ color: '#9a8f84', fontSize: '0.75rem' }}>
+              {(data.wuyumi_upgrades_this_year ?? 0) >= 15 ? '今年名額已滿，請確認後再升等' : '今年名額即將達到上限'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── 流失客預警 ── */}
       {dormant.length > 0 && (

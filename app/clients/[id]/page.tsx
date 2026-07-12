@@ -2497,6 +2497,8 @@ export default function ClientDetailPage() {
   const [client, setClient] = useState<ClientDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('時間軸')
+  const [upgradeLoading, setUpgradeLoading] = useState(false)
+  const [wuyumiCount, setWuyumiCount] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -2514,6 +2516,48 @@ export default function ClientDetailPage() {
     if (!confirm(`確定要刪除「${client?.name}」？此操作無法復原。`)) return
     await fetch(`/api/clients/${id}`, { method: 'DELETE' })
     router.push('/clients')
+  }
+
+  async function doUpgrade(nextLv: MembershipLevel) {
+    if (!client) return
+    if (nextLv === '悟癒米') {
+      const res = await fetch(`/api/clients/level-upgrades?year=${new Date().getFullYear()}`)
+      const data = await res.json() as { count: number; cap: number }
+      setWuyumiCount(data.count)
+      if (data.count >= data.cap) {
+        if (!confirm(`⚠ 今年悟癒米名額已滿（${data.count}/${data.cap} 位）。\n確定仍要幫「${client.name}」升等悟癒米？`)) return
+      } else if (data.count >= data.cap - 1) {
+        if (!confirm(`⚠ 今年悟癒米剩餘 1 個名額（${data.count}/${data.cap} 位）。\n確定升等「${client.name}」為悟癒米？`)) return
+      } else {
+        if (!confirm(`確認升等「${client.name}」為 ${nextLv}？`)) return
+      }
+    } else {
+      if (!confirm(`確認升等「${client.name}」為 ${nextLv}？`)) return
+    }
+    setUpgradeLoading(true)
+    try {
+      await fetch(`/api/clients/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: client.name,
+          phone: client.phone,
+          note: client.note,
+          level: nextLv,
+          level_since: todayStr(),
+          birthday: client.birthday,
+          next_appointment: client.next_appointment,
+          allergy_note: client.allergy_note,
+          medical_note: client.medical_note,
+          skin_note: client.skin_note,
+          referred_by_id: client.referred_by_id,
+          referral_source: client.referral_source,
+        }),
+      })
+      await load()
+    } finally {
+      setUpgradeLoading(false)
+    }
   }
 
   if (loading) return <div style={{ color: '#c4b8aa', textAlign: 'center', padding: '60px 0' }}>載入中…</div>
@@ -2558,6 +2602,20 @@ export default function ClientDetailPage() {
   const renewPct = Math.min(100, Math.round((annualCourseSpending / renewThreshold) * 100))
   const renewGap = Math.max(0, renewThreshold - annualCourseSpending)
 
+  // 升等偵測
+  const canUpgrade = !isPendingUpgrade && !!nextLevel && upgradeGap === 0
+
+  // 會員資格到期
+  const memberExpiry = (() => {
+    if (level === '癒米' || !client.level_since) return null
+    const d = new Date(client.level_since + 'T00:00:00')
+    d.setFullYear(d.getFullYear() + 1)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const daysLeft = Math.round((d.getTime() - today.getTime()) / 86400000)
+    return { expiryDate: d.toLocaleDateString('en-CA'), daysLeft }
+  })()
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -2581,6 +2639,27 @@ export default function ClientDetailPage() {
                 )
               })()}
             </div>
+            {memberExpiry && level !== '癒米' && (
+              <div style={{ marginTop: '3px' }}>
+                {memberExpiry.daysLeft < 0 ? (
+                  <span style={{ fontSize: '0.68rem', color: '#9a2020', background: '#fdf0f0', border: '1px solid #e88a8a', borderRadius: '4px', padding: '1px 6px' }}>
+                    ⚠ 會籍已過期 {Math.abs(memberExpiry.daysLeft)} 天
+                  </span>
+                ) : memberExpiry.daysLeft <= 30 ? (
+                  <span style={{ fontSize: '0.68rem', color: '#9a2020', background: '#fdf0f0', border: '1px solid #e88a8a', borderRadius: '4px', padding: '1px 6px' }}>
+                    ⚠ 會籍 {memberExpiry.daysLeft} 天後到期（{memberExpiry.expiryDate}）
+                  </span>
+                ) : memberExpiry.daysLeft <= 60 ? (
+                  <span style={{ fontSize: '0.68rem', color: '#7a5a00', background: '#fdf8ee', border: '1px solid #e8c96a', borderRadius: '4px', padding: '1px 6px' }}>
+                    會籍 {memberExpiry.daysLeft} 天後到期（{memberExpiry.expiryDate}）
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.68rem', color: '#9a8f84', background: '#f0ede8', border: '1px solid #ddd8d0', borderRadius: '4px', padding: '1px 6px' }}>
+                    會籍至 {memberExpiry.expiryDate}
+                  </span>
+                )}
+              </div>
+            )}
             {client.phone && <div style={{ color: '#9a8f84', fontSize: '0.82rem', marginTop: '2px' }}>{client.phone}</div>}
             {client.note && <div style={{ color: '#6b5f54', fontSize: '0.8rem', marginTop: '4px' }}>{client.note}</div>}
             {client.birthday && <div style={{ color: '#b4aa9e', fontSize: '0.75rem', marginTop: '2px' }}>🎂 {client.birthday.replace('-', '月').replace(/(\d+)$/, '$1日')}</div>}
@@ -2715,6 +2794,29 @@ export default function ClientDetailPage() {
                 年度累積 {fmtAmt(annualCourseSpending)}
               </span>
             </div>
+            {canUpgrade && nextLevel && (
+              <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f5fbf0', border: '1px solid #9ab89e', borderRadius: '5px', padding: '7px 10px' }}>
+                <span style={{ color: '#2c5c38', fontSize: '0.75rem', fontWeight: 500 }}>
+                  ✓ 可升等 {nextLevel}
+                  {nextLevel === '悟癒米' && wuyumiCount !== null && (
+                    <span style={{ color: wuyumiCount >= 15 ? '#9a2020' : wuyumiCount >= 14 ? '#c47030' : '#5a8060', marginLeft: '6px', fontSize: '0.7rem' }}>
+                      （今年已 {wuyumiCount}/15 位）
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={() => nextLevel && doUpgrade(nextLevel)}
+                  disabled={upgradeLoading}
+                  style={{
+                    background: upgradeLoading ? '#c4d9c8' : '#4a8060',
+                    color: '#fff', border: 'none', borderRadius: '4px',
+                    padding: '4px 12px', fontSize: '0.72rem', cursor: upgradeLoading ? 'default' : 'pointer',
+                    fontWeight: 500,
+                  }}>
+                  {upgradeLoading ? '處理中…' : '確認升等'}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div style={{ background: '#fdf5e0', border: '1px solid #e0c055', borderRadius: '6px', padding: '10px 12px', marginTop: '8px' }}>
