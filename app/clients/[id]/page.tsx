@@ -2840,28 +2840,23 @@ export default function ClientDetailPage() {
           </div>
         ) : (
           <div style={{ background: '#fdf5e0', border: '1px solid #e0c055', borderRadius: '6px', padding: '10px 12px', marginTop: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <span style={{ color: '#7a5a00', fontSize: '0.72rem', letterSpacing: '0.06em' }}>
-                悟癒米　年度累積進度
-              </span>
-              <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>
-                {fmtAmt(annualCourseSpending)} / {fmtAmt(renewThreshold)}
-              </span>
-            </div>
-            <div style={{ background: '#e8d89e', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-              <div style={{
-                background: renewPct >= 100 ? '#c8a000' : '#e0c055',
-                width: `${renewPct}%`, height: '100%', borderRadius: '4px',
-                transition: 'width 0.4s',
-              }} />
-            </div>
-            <div style={{ marginTop: '4px', color: '#9a8f84', fontSize: '0.68rem' }}>
-              {isPendingUpgrade
-                ? `✓ 已達悟癒米升等門檻，待升等 ${client.level_since}`
-                : renewGap > 0
-                  ? `還差 ${fmtAmt(renewGap)} 達甜癒米門檻（明年年費基準）`
-                  : '✓ 已達甜癒米門檻，明年年費有保障'}
-            </div>
+            {isPendingUpgrade ? (
+              <div style={{ color: '#7a5a00', fontSize: '0.72rem' }}>
+                ✓ 已達悟癒米升等門檻，待升等 {client.level_since}
+              </div>
+            ) : (
+              <>
+                <div style={{ color: '#7a5a00', fontSize: '0.72rem', letterSpacing: '0.06em', fontWeight: 500 }}>
+                  悟癒米　最高等級
+                </div>
+                <div style={{ color: '#9a8f84', fontSize: '0.68rem', marginTop: '5px', lineHeight: 1.6 }}>
+                  會籍有效至 {memberExpiry?.expiryDate ?? '—'}
+                </div>
+                <div style={{ color: '#b4aa9e', fontSize: '0.65rem', marginTop: '2px', lineHeight: 1.5 }}>
+                  到期後如需續等悟癒米，須於到期當年度重新累積 {fmtAmt(LEVEL_THRESHOLDS['悟癒米'])}
+                </div>
+              </>
+            )}
           </div>
         )}
         <AppointmentSection clientId={id} />
