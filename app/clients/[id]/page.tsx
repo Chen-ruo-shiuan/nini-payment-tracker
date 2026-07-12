@@ -2591,11 +2591,8 @@ export default function ClientDetailPage() {
   const nextLevel = NEXT_LEVEL[progressLevel]
   const nextThreshold = nextLevel ? LEVEL_THRESHOLDS[nextLevel] : null
   const upgradeGap = nextThreshold ? Math.max(0, nextThreshold - annualCourseSpending) : 0
-  // 進度條：只計算「目前等級門檻 → 下個等級門檻」的帶內進度
-  const currentThreshold = LEVEL_THRESHOLDS[progressLevel]
-  const bandSize = nextThreshold ? nextThreshold - currentThreshold : 1
-  const bandProgress = Math.max(0, annualCourseSpending - currentThreshold)
-  const upgradePct = nextThreshold ? Math.min(100, Math.round((bandProgress / bandSize) * 100)) : 100
+  // 進度條：從 $0 到下一等級絕對門檻，與「還差」文字使用同一尺標
+  const upgradePct = nextThreshold ? Math.min(100, Math.round((annualCourseSpending / nextThreshold) * 100)) : 100
 
   // 悟癒米：顯示甜癒米門檻的年度累積進度（明年年費基準）
   const renewThreshold = LEVEL_THRESHOLDS['甜癒米']  // 38,000
@@ -2784,7 +2781,7 @@ export default function ClientDetailPage() {
                 升等進度　{progressLevel} → {nextLevel}
               </span>
               <span style={{ color: '#9a8f84', fontSize: '0.72rem' }}>
-                {fmtAmt(bandProgress)} / {fmtAmt(bandSize)}
+                {fmtAmt(annualCourseSpending)} / {fmtAmt(nextThreshold ?? 0)}
               </span>
             </div>
             <div style={{ background: '#e0d9d0', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
