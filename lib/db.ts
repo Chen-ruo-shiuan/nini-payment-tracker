@@ -45,6 +45,7 @@ export function getDb(): Database.Database {
     migrateInventorySellingPrice(db)
     migratePackagePayments(db)
     migrateVisitLogs(db)
+    migrateVisitLogPaymentDetails(db)
   }
   return db
 }
@@ -843,4 +844,16 @@ function migrateVisitLogs(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_visit_log_items_visit ON visit_log_items(visit_log_id);
   `)
+}
+
+// ─── 遷移：visit_logs 新增 payment_status（未收費／已收費／定金）與 payment_method 欄位 ──
+function migrateVisitLogPaymentDetails(db: Database.Database) {
+  const cols = (db.prepare('PRAGMA table_info(visit_logs)').all() as { name: string }[]).map(c => c.name)
+  if (!cols.includes('payment_method')) {
+    db.exec(`ALTER TABLE visit_logs ADD COLUMN payment_method TEXT`)
+  }
+  if (!cols.includes('payment_status')) {
+    db.exec(`ALTER TABLE visit_logs ADD COLUMN payment_status TEXT NOT NULL DEFAULT '未收費'`)
+    db.exec(`UPDATE visit_logs SET payment_status = CASE WHEN paid = 1 THEN '已收費' ELSE '未收費' END`)
+  }
 }

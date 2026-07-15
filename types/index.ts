@@ -245,6 +245,11 @@ export interface Expense {
 export const VISIT_LOG_ITEM_TYPES = ['服務', '產品', '拿預訂'] as const
 export type VisitLogItemType = typeof VISIT_LOG_ITEM_TYPES[number]
 
+export const VISIT_LOG_PAYMENT_STATUSES = ['未收費', '已收費', '定金'] as const
+export type VisitLogPaymentStatus = typeof VISIT_LOG_PAYMENT_STATUSES[number]
+
+export const VISIT_LOG_PAY_METHODS = ['匯款', '現金', 'LINE Pay', '儲值金', '金米'] as const
+
 export interface VisitLogItem {
   id: number
   visit_log_id: number
@@ -258,7 +263,9 @@ export interface VisitLog {
   client_name: string
   date: string
   service: string  // 舊欄位，改由 items 摘要自動帶入，僅供相容顯示用
-  paid: number      // 0 | 1
+  paid: number      // 0 | 1，由 payment_status 推導，僅供相容顯示用
+  payment_status: VisitLogPaymentStatus
+  payment_method: string | null
   amount: number | null
   next_visit_date: string | null
   note: string | null

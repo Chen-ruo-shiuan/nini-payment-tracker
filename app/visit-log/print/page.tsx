@@ -24,8 +24,9 @@ function VisitLogPrintContent() {
   }, [date, from, to])
 
   const rangeLabel = date ? date : from && to ? `${from} ～ ${to}` : '全部'
-  const paidCount = visits.filter(v => v.paid).length
-  const paidTotal = visits.filter(v => v.paid).reduce((s, v) => s + (v.amount || 0), 0)
+  const isPaidStatus = (v: VisitLogWithClient) => (v.payment_status || (v.paid ? '已收費' : '未收費')) !== '未收費'
+  const paidCount = visits.filter(isPaidStatus).length
+  const paidTotal = visits.filter(isPaidStatus).reduce((s, v) => s + (v.amount || 0), 0)
 
   return (
     <div style={{ background: '#fff', color: '#000', minHeight: '100vh' }}>
@@ -55,7 +56,7 @@ function VisitLogPrintContent() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
             <thead>
               <tr>
-                {['日期', '客人', '項目', '已收費', '金額', '下次預約', '備註'].map(h => (
+                {['日期', '客人', '項目', '付款狀態', '付款方式', '金額', '下次預約', '備註'].map(h => (
                   <th key={h} style={{ border: '1px solid #999', padding: '6px 8px', background: '#f0f0f0', textAlign: 'left' }}>{h}</th>
                 ))}
               </tr>
@@ -68,8 +69,9 @@ function VisitLogPrintContent() {
                   <td style={{ border: '1px solid #999', padding: '6px 8px' }}>
                     {(v.items?.length ? v.items : []).map(i => `[${i.category}] ${i.label}`).join('、') || v.service}
                   </td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center' }}>{v.paid ? '✓' : ''}</td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'right' }}>{v.paid && v.amount != null ? fmtAmt(v.amount) : ''}</td>
+                  <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center' }}>{v.payment_status || (v.paid ? '已收費' : '未收費')}</td>
+                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.payment_method || ''}</td>
+                  <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'right' }}>{isPaidStatus(v) && v.amount != null ? fmtAmt(v.amount) : ''}</td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.next_visit_date || ''}</td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.note || ''}</td>
                 </tr>
@@ -79,7 +81,7 @@ function VisitLogPrintContent() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px', fontSize: '0.85rem' }}>
             <span>共 {visits.length} 筆</span>
-            <span>已收費 {paidCount} 筆　合計 {fmtAmt(paidTotal)}</span>
+            <span>已收款 {paidCount} 筆　合計 {fmtAmt(paidTotal)}</span>
           </div>
         </>
       )}

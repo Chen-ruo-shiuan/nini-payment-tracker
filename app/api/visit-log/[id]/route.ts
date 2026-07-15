@@ -13,15 +13,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!row) return NextResponse.json({ error: '找不到記錄' }, { status: 404 })
 
   const body = await req.json()
-  const { client_id, client_name, date, items, paid, amount, next_visit_date, note } = body
+  const { client_id, client_name, date, items, payment_status, payment_method, amount, next_visit_date, note } = body
 
   const validItems = ((items ?? []) as Item[]).filter(i => i.label?.trim())
+  const status: string = payment_status || '未收費'
+  const isPaid = status !== '未收費'
 
   if (!date)                return NextResponse.json({ error: '請選擇日期' },     { status: 400 })
   if (!client_name?.trim()) return NextResponse.json({ error: '請輸入客人姓名' }, { status: 400 })
   if (!validItems.length)   return NextResponse.json({ error: '請新增至少一個項目' }, { status: 400 })
-  if (paid && (!amount || Number(amount) <= 0))
+  if (isPaid && (!amount || Number(amount) <= 0))
                              return NextResponse.json({ error: '請輸入金額' },     { status: 400 })
+  if (isPaid && !payment_method)
+                             return NextResponse.json({ error: '請選擇付款方式' }, { status: 400 })
 
   const serviceSummary = validItems.map(i => i.label.trim()).join('、')
 
@@ -29,7 +33,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     db.prepare(`
       UPDATE visit_logs
       SET client_id = @client_id, client_name = @client_name, date = @date, service = @service,
-          paid = @paid, amount = @amount, next_visit_date = @next_visit_date, note = @note,
+          paid = @paid, payment_status = @payment_status, payment_method = @payment_method,
+          amount = @amount, next_visit_date = @next_visit_date, note = @note,
           updated_at = datetime('now')
       WHERE id = @id
     `).run({
@@ -38,8 +43,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       client_name: client_name.trim(),
       date,
       service: serviceSummary,
-      paid: paid ? 1 : 0,
-      amount: paid ? Number(amount) : null,
+      paid: isPaid ? 1 : 0,
+      payment_status: status,
+      payment_method: isPaid ? payment_method : null,
+      amount: isPaid ? Number(amount) : null,
       next_visit_date: next_visit_date || null,
       note: note || null,
     })
