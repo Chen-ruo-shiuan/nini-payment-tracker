@@ -10,7 +10,7 @@ interface Item  { id: string; category: string; label: string; price: string; qt
 interface Pay   { id: string; method: string; amount: string }
 interface PkgOption { id: number; service_name: string; remaining: number; unit_price: number; bonus_desc: string | null; timing_note: string | null; bonus_active: number }
 
-const PRESET_SERVICES  = ['精細光彩', '原液調理', '泡光氧彗', '小顏骨氣', '雨林頭療', '森林癒撥筋']
+const PRESET_SERVICES  = ['精細光彩', '原液調理', '泡光氧彗', '小顏骨氣', '雨林頭療', '森林癒撥筋', '光澤•護洗癒']
 const PRESET_ADDONS    = ['全臉粉清', '深皮超導', '光波嫩膚', '臭氧離子']
 
 // ─── Item memory (label + price per category) ─────────────────────────────────

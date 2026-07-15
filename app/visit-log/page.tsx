@@ -22,7 +22,7 @@ interface Appt {
 }
 
 // 服務項目下拉建議，比照結帳頁常用服務／加購
-const PRESET_SERVICE_OPTIONS = ['精細光彩', '原液調理', '泡光氧彗', '小顏骨氣', '雨林頭療', '森林癒撥筋', '全臉粉清', '深皮超導', '光波嫩膚', '臭氧離子']
+const PRESET_SERVICE_OPTIONS = ['精細光彩', '原液調理', '泡光氧彗', '小顏骨氣', '雨林頭療', '森林癒撥筋', '光澤•護洗癒', '全臉粉清', '深皮超導', '光波嫩膚', '臭氧離子']
 
 function todayLocal() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
