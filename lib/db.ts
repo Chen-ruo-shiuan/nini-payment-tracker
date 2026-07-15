@@ -831,5 +831,16 @@ function migrateVisitLogs(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_visit_logs_date   ON visit_logs(date);
     CREATE INDEX IF NOT EXISTS idx_visit_logs_client ON visit_logs(client_id);
+
+    -- ═══════════════════════════════
+    --  VISIT LOG ITEMS（每日紀錄：服務／產品／拿預訂 明細）
+    -- ═══════════════════════════════
+    CREATE TABLE IF NOT EXISTS visit_log_items (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      visit_log_id  INTEGER NOT NULL REFERENCES visit_logs(id) ON DELETE CASCADE,
+      category      TEXT NOT NULL DEFAULT '服務',
+      label         TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_visit_log_items_visit ON visit_log_items(visit_log_id);
   `)
 }

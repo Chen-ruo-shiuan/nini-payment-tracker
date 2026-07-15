@@ -242,13 +242,23 @@ export interface Expense {
 // ═══════════════════════════════
 //  Visit Log (每日紀錄)
 // ═══════════════════════════════
+export const VISIT_LOG_ITEM_TYPES = ['服務', '產品', '拿預訂'] as const
+export type VisitLogItemType = typeof VISIT_LOG_ITEM_TYPES[number]
+
+export interface VisitLogItem {
+  id: number
+  visit_log_id: number
+  category: string
+  label: string
+}
+
 export interface VisitLog {
   id: number
   client_id: number | null
   client_name: string
   date: string
-  service: string
-  paid: number                  // 0 | 1
+  service: string  // 舊欄位，改由 items 摘要自動帶入，僅供相容顯示用
+  paid: number      // 0 | 1
   amount: number | null
   next_visit_date: string | null
   note: string | null
@@ -258,6 +268,7 @@ export interface VisitLog {
 
 export interface VisitLogWithClient extends VisitLog {
   client_level: MembershipLevel | null
+  items: VisitLogItem[]
 }
 
 // ═══════════════════════════════

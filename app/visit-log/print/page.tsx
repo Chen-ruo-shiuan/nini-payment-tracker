@@ -55,7 +55,7 @@ function VisitLogPrintContent() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
             <thead>
               <tr>
-                {['日期', '客人', '服務項目', '已收費', '金額', '下次預約', '備註'].map(h => (
+                {['日期', '客人', '項目', '已收費', '金額', '下次預約', '備註'].map(h => (
                   <th key={h} style={{ border: '1px solid #999', padding: '6px 8px', background: '#f0f0f0', textAlign: 'left' }}>{h}</th>
                 ))}
               </tr>
@@ -65,7 +65,9 @@ function VisitLogPrintContent() {
                 <tr key={v.id}>
                   <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.date}</td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.client_name}</td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.service}</td>
+                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>
+                    {(v.items?.length ? v.items : []).map(i => `[${i.category}] ${i.label}`).join('、') || v.service}
+                  </td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center' }}>{v.paid ? '✓' : ''}</td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'right' }}>{v.paid && v.amount != null ? fmtAmt(v.amount) : ''}</td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.next_visit_date || ''}</td>

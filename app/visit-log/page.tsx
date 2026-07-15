@@ -2,9 +2,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import MembershipBadge from '@/components/MembershipBadge'
-import { VisitLogWithClient, ClientWithStats, MembershipLevel } from '@/types'
+import { VisitLogWithClient, VisitLogItem, ClientWithStats, MembershipLevel, VISIT_LOG_ITEM_TYPES } from '@/types'
 
 interface PickedClient { id: number; name: string; level: MembershipLevel | null }
+interface Item { category: string; label: string }
 
 interface Appt {
   id: number
@@ -20,9 +21,17 @@ function todayLocal() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
 }
 
+function uid() { return Math.random().toString(36).slice(2) }
+
 const inputStyle: React.CSSProperties = {
   width: '100%', background: '#faf8f5', border: '1px solid #e0d9d0',
   borderRadius: '6px', color: '#2c2825', fontSize: '0.9rem', outline: 'none', padding: '9px 12px',
+}
+
+const itemTagStyle: Record<string, { bg: string; color: string }> = {
+  '服務':  { bg: '#f0ebe4', color: '#6b5f54' },
+  '產品':  { bg: '#e8f0fc', color: '#2d4f9a' },
+  '拿預訂': { bg: '#fdf5e0', color: '#7a5a00' },
 }
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -31,7 +40,8 @@ function Label({ children }: { children: React.ReactNode }) {
 
 const fmtAmt = (n: number) => `$ ${n.toLocaleString()}`
 
-const emptyForm = { service: '', paid: false, amount: '', next_visit_date: '', note: '' }
+const emptyForm = { paid: false, amount: '', next_visit_date: '', note: '' }
+const emptyItems: (Item & { id: string })[] = [{ id: uid(), category: '服務', label: '' }]
 
 export default function VisitLogPage() {
   const [date, setDate] = useState(todayLocal())
@@ -53,6 +63,7 @@ export default function VisitLogPage() {
   const [showDropdown, setShowDropdown] = useState(false)
 
   const [form, setForm] = useState(emptyForm)
+  const [items, setItems] = useState(emptyItems)
 
   // Print range
   const [showRange, setShowRange] = useState(false)
@@ -90,8 +101,22 @@ export default function VisitLogPage() {
     setForm(prev => ({ ...prev, [k]: v }))
   }
 
+  function addItemRow() {
+    setItems(prev => [...prev, { id: uid(), category: '服務', label: '' }])
+  }
+  function updateItemRow(id: string, field: 'category' | 'label', value: string) {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i))
+  }
+  function removeItemRow(id: string) {
+    setItems(prev => {
+      const next = prev.filter(i => i.id !== id)
+      return next.length ? next : [{ id: uid(), category: '服務', label: '' }]
+    })
+  }
+
   function resetForm() {
     setForm(emptyForm)
+    setItems([{ id: uid(), category: '服務', label: '' }])
     setSelectedClient(null)
     setClientSearch('')
     setShowDropdown(false)
@@ -101,6 +126,7 @@ export default function VisitLogPage() {
   function quickAddFromAppt(a: Appt) {
     setEditingId(null)
     setForm(emptyForm)
+    setItems([{ id: uid(), category: '服務', label: '' }])
     setSelectedClient({ id: a.client_id, name: a.client_name, level: a.client_level as MembershipLevel })
     setClientSearch(a.client_name)
     setShowForm(true)
@@ -116,7 +142,7 @@ export default function VisitLogPage() {
         client_id: selectedClient?.id ?? null,
         client_name,
         date,
-        service: form.service,
+        items: items.map(i => ({ category: i.category, label: i.label })),
         paid: form.paid,
         amount: form.amount ? Number(form.amount) : undefined,
         next_visit_date: form.next_visit_date || null,
@@ -149,8 +175,10 @@ export default function VisitLogPage() {
     setEditingId(v.id)
     setSelectedClient(v.client_id ? { id: v.client_id, name: v.client_name, level: v.client_level } : null)
     setClientSearch(v.client_name)
+    setItems(v.items.length
+      ? v.items.map(i => ({ id: uid(), category: i.category, label: i.label }))
+      : [{ id: uid(), category: '服務', label: '' }])
     setForm({
-      service: v.service,
       paid: !!v.paid,
       amount: v.amount != null ? String(v.amount) : '',
       next_visit_date: v.next_visit_date || '',
@@ -274,10 +302,29 @@ export default function VisitLogPage() {
             )}
           </div>
 
-          <div className="space-y-1">
-            <Label>服務項目 *</Label>
-            <input value={form.service} onChange={e => set('service', e.target.value)}
-              placeholder="例：臉部保養、淋巴引流" style={inputStyle} />
+          <div>
+            <Label>今日項目 *</Label>
+            <div className="space-y-2">
+              {items.map(item => (
+                <div key={item.id} style={{ display: 'flex', gap: '6px' }}>
+                  <select value={item.category} onChange={e => updateItemRow(item.id, 'category', e.target.value)}
+                    style={{ ...inputStyle, width: '92px', flexShrink: 0, padding: '9px 6px' }}>
+                    {VISIT_LOG_ITEM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <input value={item.label} onChange={e => updateItemRow(item.id, 'label', e.target.value)}
+                    placeholder={item.category === '產品' ? '例：精華液' : item.category === '拿預訂' ? '例：化妝品組' : '例：泡光氧彗'}
+                    style={inputStyle} />
+                  <button type="button" onClick={() => removeItemRow(item.id)}
+                    style={{ color: '#c4b8aa', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px', flexShrink: 0 }}>
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={addItemRow}
+              style={{ marginTop: '6px', color: '#6b5f54', background: 'none', border: '1px dashed #c4b8aa', borderRadius: '6px', fontSize: '0.8rem', padding: '6px 12px', cursor: 'pointer', width: '100%' }}>
+              ＋ 新增項目
+            </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: form.paid ? '1fr 1fr' : '1fr', gap: '10px' }}>
@@ -358,9 +405,18 @@ export default function VisitLogPage() {
                       color: v.paid ? '#4a7a5a' : '#9a8f84',
                     }}>{v.paid ? '已收費' : '未收費'}</span>
                   </div>
-                  <div style={{ color: '#6b5f54', fontSize: '0.85rem', marginTop: '4px' }}>{v.service}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '6px' }}>
+                    {(v.items?.length ? v.items : [{ id: 0, category: '服務', label: v.service } as VisitLogItem]).map((it, idx) => {
+                      const style = itemTagStyle[it.category] ?? itemTagStyle['服務']
+                      return (
+                        <span key={it.id || idx} style={{ background: style.bg, color: style.color, fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px' }}>
+                          [{it.category}] {it.label}
+                        </span>
+                      )
+                    })}
+                  </div>
                   {v.next_visit_date && (
-                    <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '3px' }}>下次預約：{v.next_visit_date}</div>
+                    <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '6px' }}>下次預約：{v.next_visit_date}</div>
                   )}
                   {v.note && (
                     <div style={{ color: '#9a8f84', fontSize: '0.78rem', marginTop: '3px' }}>{v.note}</div>
