@@ -240,6 +240,27 @@ export interface Expense {
 }
 
 // ═══════════════════════════════
+//  Visit Log (每日紀錄)
+// ═══════════════════════════════
+export interface VisitLog {
+  id: number
+  client_id: number | null
+  client_name: string
+  date: string
+  service: string
+  paid: number                  // 0 | 1
+  amount: number | null
+  next_visit_date: string | null
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface VisitLogWithClient extends VisitLog {
+  client_level: MembershipLevel | null
+}
+
+// ═══════════════════════════════
 //  Dashboard
 // ═══════════════════════════════
 export interface DashboardInstallment {

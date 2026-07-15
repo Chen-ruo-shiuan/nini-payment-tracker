@@ -44,6 +44,7 @@ export function getDb(): Database.Database {
     migrateCreatedBy(db)
     migrateInventorySellingPrice(db)
     migratePackagePayments(db)
+    migrateVisitLogs(db)
   }
   return db
 }
@@ -811,4 +812,24 @@ function migrateUsers(db: Database.Database) {
     `).run(hashPassword(pw))
     console.log('[DB] 已建立老闆帳號 owner，密碼使用 AUTH_PASSWORD 環境變數')
   }
+}
+
+function migrateVisitLogs(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS visit_logs (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id         INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+      client_name       TEXT NOT NULL,
+      date              TEXT NOT NULL,
+      service           TEXT NOT NULL,
+      paid              INTEGER NOT NULL DEFAULT 0,
+      amount            INTEGER,
+      next_visit_date   TEXT,
+      note              TEXT,
+      created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_visit_logs_date   ON visit_logs(date);
+    CREATE INDEX IF NOT EXISTS idx_visit_logs_client ON visit_logs(client_id);
+  `)
 }

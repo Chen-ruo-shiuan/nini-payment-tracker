@@ -40,7 +40,7 @@ export default function NavBar() {
     <>
       {/* Top header */}
       <header style={{ background: '#faf8f5', borderBottom: '1px solid #e0d9d0' }}
-        className="sticky top-0 z-40">
+        className="sticky top-0 z-40 no-print">
         <div className="max-w-xl mx-auto px-5 h-11 flex items-center justify-between">
           <span style={{ color: '#9a8f84', fontSize: '0.7rem', letterSpacing: '0.15em' }}>
             NINI の 療癒所
@@ -51,6 +51,10 @@ export default function NavBar() {
             )}
           </span>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <Link href="/visit-log"
+              style={{ color: pathname.startsWith('/visit-log') ? '#2c2825' : '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
+              🗒 紀錄
+            </Link>
             <Link href="/appointments"
               style={{ color: pathname.startsWith('/appointments') ? '#2c2825' : '#c4b8aa', fontSize: '0.68rem', letterSpacing: '0.06em' }}>
               📅 預約
@@ -92,7 +96,7 @@ export default function NavBar() {
 
       {/* Bottom tab bar */}
       <nav style={{ background: '#faf8f5', borderTop: '1px solid #e0d9d0' }}
-        className="fixed bottom-0 left-0 right-0 z-40 pb-safe">
+        className="fixed bottom-0 left-0 right-0 z-40 pb-safe no-print">
         <div className="max-w-xl mx-auto" style={{ display: 'grid', gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
           {tabs.map(t => {
             const active = isActive(t.href)
