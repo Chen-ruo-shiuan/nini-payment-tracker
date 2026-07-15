@@ -6,6 +6,21 @@ import { VisitLogWithClient } from '@/types'
 
 const fmtAmt = (n: number) => `$ ${n.toLocaleString()}`
 
+const COLS = [
+  { label: '日期',   width: '9%' },
+  { label: '客人',   width: '9%' },
+  { label: '項目',   width: '27%' },
+  { label: '付款狀態', width: '8%' },
+  { label: '付款方式', width: '14%' },
+  { label: '金額',   width: '9%' },
+  { label: '下次預約', width: '10%' },
+  { label: '備註',   width: '14%' },
+]
+
+const cellStyle: React.CSSProperties = {
+  border: '1px solid #333', padding: '6px 8px', verticalAlign: 'top', lineHeight: 1.5,
+}
+
 function VisitLogPrintContent() {
   const searchParams = useSearchParams()
   const date = searchParams.get('date')
@@ -30,7 +45,7 @@ function VisitLogPrintContent() {
 
   return (
     <div style={{ background: '#fff', color: '#000', minHeight: '100vh' }}>
-      <div className="no-print" style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <div className="no-print" style={{ display: 'flex', gap: '10px', marginBottom: '20px', maxWidth: '190mm', marginLeft: 'auto', marginRight: 'auto' }}>
         <Link href="/visit-log"
           style={{ color: '#6b5f54', fontSize: '0.85rem', border: '1px solid #e0d9d0', borderRadius: '6px', padding: '9px 14px' }}>
           ← 返回
@@ -41,52 +56,64 @@ function VisitLogPrintContent() {
         </button>
       </div>
 
-      <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-        <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>NiNi の 皮膚療癒所</div>
-        <div style={{ fontSize: '0.95rem', marginTop: '4px' }}>每日紀錄</div>
-        <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '2px' }}>{rangeLabel}</div>
-      </div>
+      <div style={{ maxWidth: '190mm', margin: '0 auto', padding: '0 4mm' }}>
+        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+          <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>NiNi の 皮膚療癒所</div>
+          <div style={{ fontSize: '0.95rem', marginTop: '4px' }}>每日紀錄</div>
+          <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '2px' }}>{rangeLabel}</div>
+        </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: '#888' }}>載入中…</div>
-      ) : visits.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: '#888' }}>此區間無紀錄</div>
-      ) : (
-        <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-            <thead>
-              <tr>
-                {['日期', '客人', '項目', '付款狀態', '付款方式', '金額', '下次預約', '備註'].map(h => (
-                  <th key={h} style={{ border: '1px solid #999', padding: '6px 8px', background: '#f0f0f0', textAlign: 'left' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visits.map(v => (
-                <tr key={v.id}>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.date}</td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.client_name}</td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>
-                    {(v.items?.length ? v.items : []).map(i => `[${i.category}] ${i.label}`).join('、') || v.service}
-                  </td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center' }}>{v.payment_status || (v.paid ? '已收費' : '未收費')}</td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>
-                    {(v.payments?.length ? v.payments.map(p => `${p.method} ${fmtAmt(p.amount)}`).join('、') : v.payment_method) || ''}
-                  </td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'right' }}>{isPaidStatus(v) && v.amount != null ? fmtAmt(v.amount) : ''}</td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.next_visit_date || ''}</td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.note || ''}</td>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#888' }}>載入中…</div>
+        ) : visits.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#888' }}>此區間無紀錄</div>
+        ) : (
+          <>
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: '0.78rem' }}>
+              <colgroup>
+                {COLS.map(c => <col key={c.label} style={{ width: c.width }} />)}
+              </colgroup>
+              <thead>
+                <tr>
+                  {COLS.map(c => (
+                    <th key={c.label} style={{ ...cellStyle, background: '#f0f0f0', textAlign: 'left' }}>{c.label}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visits.map(v => {
+                  const items = v.items?.length ? v.items : (v.service ? [{ id: 0, category: '服務', label: v.service }] : [])
+                  return (
+                    <tr key={v.id}>
+                      <td style={cellStyle}>{v.date}</td>
+                      <td style={cellStyle}>{v.client_name}</td>
+                      <td style={cellStyle}>
+                        {items.map((it, idx) => (
+                          <div key={idx}>{`[${it.category}] ${it.label}`}</div>
+                        ))}
+                      </td>
+                      <td style={{ ...cellStyle, textAlign: 'center' }}>{v.payment_status || (v.paid ? '已收費' : '未收費')}</td>
+                      <td style={cellStyle}>
+                        {v.payments?.length
+                          ? v.payments.map((p, idx) => <div key={idx}>{`${p.method} ${fmtAmt(p.amount)}`}</div>)
+                          : (v.payment_method || '')}
+                      </td>
+                      <td style={{ ...cellStyle, textAlign: 'right' }}>{isPaidStatus(v) && v.amount != null ? fmtAmt(v.amount) : ''}</td>
+                      <td style={cellStyle}>{v.next_visit_date || ''}</td>
+                      <td style={cellStyle}>{v.note || ''}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px', fontSize: '0.85rem' }}>
-            <span>共 {visits.length} 筆</span>
-            <span>已收款 {paidCount} 筆　合計 {fmtAmt(paidTotal)}</span>
-          </div>
-        </>
-      )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px', fontSize: '0.82rem' }}>
+              <span>共 {visits.length} 筆</span>
+              <span>已收款 {paidCount} 筆　合計 {fmtAmt(paidTotal)}</span>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }

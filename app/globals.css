@@ -20,8 +20,16 @@ input, select, textarea, button {
   font-family: inherit;
 }
 
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
 @media print {
   .no-print { display: none !important; }
   main { padding: 0 !important; max-width: none !important; }
   body { background: #fff !important; }
+  table { page-break-inside: auto; }
+  tr { page-break-inside: avoid; page-break-after: auto; }
+  thead { display: table-header-group; }
 }
