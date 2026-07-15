@@ -70,7 +70,9 @@ function VisitLogPrintContent() {
                     {(v.items?.length ? v.items : []).map(i => `[${i.category}] ${i.label}`).join('、') || v.service}
                   </td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center' }}>{v.payment_status || (v.paid ? '已收費' : '未收費')}</td>
-                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.payment_method || ''}</td>
+                  <td style={{ border: '1px solid #999', padding: '6px 8px' }}>
+                    {(v.payments?.length ? v.payments.map(p => `${p.method} ${fmtAmt(p.amount)}`).join('、') : v.payment_method) || ''}
+                  </td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'right' }}>{isPaidStatus(v) && v.amount != null ? fmtAmt(v.amount) : ''}</td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.next_visit_date || ''}</td>
                   <td style={{ border: '1px solid #999', padding: '6px 8px' }}>{v.note || ''}</td>

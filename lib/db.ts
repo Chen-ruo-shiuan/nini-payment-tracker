@@ -46,6 +46,7 @@ export function getDb(): Database.Database {
     migratePackagePayments(db)
     migrateVisitLogs(db)
     migrateVisitLogPaymentDetails(db)
+    migrateVisitLogPayments(db)
   }
   return db
 }
@@ -856,4 +857,28 @@ function migrateVisitLogPaymentDetails(db: Database.Database) {
     db.exec(`ALTER TABLE visit_logs ADD COLUMN payment_status TEXT NOT NULL DEFAULT '未收費'`)
     db.exec(`UPDATE visit_logs SET payment_status = CASE WHEN paid = 1 THEN '已收費' ELSE '未收費' END`)
   }
+}
+
+// ─── 遷移：visit_logs 付款方式改為多筆（可混合儲值金+現金等）──────────────────
+function migrateVisitLogPayments(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS visit_log_payments (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      visit_log_id  INTEGER NOT NULL REFERENCES visit_logs(id) ON DELETE CASCADE,
+      method        TEXT NOT NULL,
+      amount        INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_visit_log_payments_visit ON visit_log_payments(visit_log_id);
+  `)
+  // Backfill: turn each existing single payment_method/amount into one payment row
+  const rows = db.prepare(`
+    SELECT id, payment_method, amount FROM visit_logs
+    WHERE payment_status != '未收費' AND amount > 0
+      AND NOT EXISTS (SELECT 1 FROM visit_log_payments WHERE visit_log_id = visit_logs.id)
+  `).all() as { id: number; payment_method: string | null; amount: number }[]
+  const ins = db.prepare('INSERT INTO visit_log_payments (visit_log_id, method, amount) VALUES (?, ?, ?)')
+  const backfill = db.transaction(() => {
+    for (const r of rows) ins.run(r.id, r.payment_method || '現金', r.amount)
+  })
+  backfill()
 }

@@ -257,6 +257,13 @@ export interface VisitLogItem {
   label: string
 }
 
+export interface VisitLogPayment {
+  id: number
+  visit_log_id: number
+  method: string
+  amount: number
+}
+
 export interface VisitLog {
   id: number
   client_id: number | null
@@ -265,8 +272,8 @@ export interface VisitLog {
   service: string  // 舊欄位，改由 items 摘要自動帶入，僅供相容顯示用
   paid: number      // 0 | 1，由 payment_status 推導，僅供相容顯示用
   payment_status: VisitLogPaymentStatus
-  payment_method: string | null
-  amount: number | null
+  payment_method: string | null  // 舊欄位，改由 payments 摘要自動帶入，僅供相容顯示用
+  amount: number | null          // 由 payments 加總自動帶入
   next_visit_date: string | null
   note: string | null
   created_at: string
@@ -275,6 +282,7 @@ export interface VisitLog {
 
 export interface VisitLogWithClient extends VisitLog {
   client_level: MembershipLevel | null
+  payments: VisitLogPayment[]
   items: VisitLogItem[]
 }
 

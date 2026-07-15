@@ -53,7 +53,9 @@ function Label({ children }: { children: React.ReactNode }) {
 
 const fmtAmt = (n: number) => `$ ${n.toLocaleString()}`
 
-const emptyForm = { payment_status: '未收費' as string, payment_method: '', amount: '', next_visit_date: '', note: '' }
+interface Payment { method: string; amount: string }
+
+const emptyForm = { payment_status: '未收費' as string, next_visit_date: '', note: '' }
 
 export default function VisitLogPage() {
   const [date, setDate] = useState(todayLocal())
@@ -82,6 +84,7 @@ export default function VisitLogPage() {
 
   const [form, setForm] = useState(emptyForm)
   const [items, setItems] = useState<(Item & { id: string })[]>([{ id: uid(), category: '服務', label: '' }])
+  const [payments, setPayments] = useState<(Payment & { id: string })[]>([{ id: uid(), method: '', amount: '' }])
 
   // Print range
   const [showRange, setShowRange] = useState(false)
@@ -132,9 +135,23 @@ export default function VisitLogPage() {
     })
   }
 
+  function addPaymentRow() {
+    setPayments(prev => [...prev, { id: uid(), method: '', amount: '' }])
+  }
+  function updatePaymentRow(id: string, field: 'method' | 'amount', value: string) {
+    setPayments(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p))
+  }
+  function removePaymentRow(id: string) {
+    setPayments(prev => {
+      const next = prev.filter(p => p.id !== id)
+      return next.length ? next : [{ id: uid(), method: '', amount: '' }]
+    })
+  }
+
   function resetForm() {
     setForm(emptyForm)
     setItems([{ id: uid(), category: '服務', label: '' }])
+    setPayments([{ id: uid(), method: '', amount: '' }])
     setSelectedClient(null)
     setClientSearch('')
     setShowDropdown(false)
@@ -145,6 +162,7 @@ export default function VisitLogPage() {
     setEditingId(null)
     setForm(emptyForm)
     setItems([{ id: uid(), category: '服務', label: '' }])
+    setPayments([{ id: uid(), method: '', amount: '' }])
     setSelectedClient({ id: a.client_id, name: a.client_name, level: a.client_level as MembershipLevel })
     setClientSearch(a.client_name)
     setShowForm(true)
@@ -162,8 +180,7 @@ export default function VisitLogPage() {
         date,
         items: items.map(i => ({ category: i.category, label: i.label })),
         payment_status: form.payment_status,
-        payment_method: form.payment_method || undefined,
-        amount: form.amount ? Number(form.amount) : undefined,
+        payments: payments.map(p => ({ method: p.method, amount: p.amount })),
         next_visit_date: form.next_visit_date || null,
         note: form.note || null,
       }
@@ -197,10 +214,11 @@ export default function VisitLogPage() {
     setItems(v.items.length
       ? v.items.map(i => ({ id: uid(), category: i.category, label: i.label }))
       : [{ id: uid(), category: '服務', label: '' }])
+    setPayments(v.payments?.length
+      ? v.payments.map(p => ({ id: uid(), method: p.method, amount: String(p.amount) }))
+      : [{ id: uid(), method: '', amount: '' }])
     setForm({
       payment_status: v.payment_status || (v.paid ? '已收費' : '未收費'),
-      payment_method: v.payment_method || '',
-      amount: v.amount != null ? String(v.amount) : '',
       next_visit_date: v.next_visit_date || '',
       note: v.note || '',
     })
@@ -376,19 +394,32 @@ export default function VisitLogPage() {
           </div>
 
           {form.payment_status !== '未收費' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <div className="space-y-1">
-                <Label>付款方式 *</Label>
-                <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)} style={inputStyle}>
-                  <option value="">請選擇</option>
-                  {VISIT_LOG_PAY_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+            <div>
+              <Label>付款方式 *（可拆多筆，例如儲值金 + 現金）</Label>
+              <div className="space-y-2">
+                {payments.map(pay => (
+                  <div key={pay.id} style={{ display: 'flex', gap: '6px' }}>
+                    <select value={pay.method} onChange={e => updatePaymentRow(pay.id, 'method', e.target.value)}
+                      style={{ ...inputStyle, flex: 1 }}>
+                      <option value="">請選擇</option>
+                      {VISIT_LOG_PAY_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <input type="number" value={pay.amount} onChange={e => updatePaymentRow(pay.id, 'amount', e.target.value)}
+                      placeholder="金額" min="1" style={{ ...inputStyle, width: '110px', flexShrink: 0 }} />
+                    <button type="button" onClick={() => removePaymentRow(pay.id)}
+                      style={{ color: '#c4b8aa', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px', flexShrink: 0 }}>
+                      ×
+                    </button>
+                  </div>
+                ))}
               </div>
-              <div className="space-y-1">
-                <Label>金額 *</Label>
-                <input type="number" value={form.amount} onChange={e => set('amount', e.target.value)}
-                  placeholder="0" min="1" style={inputStyle} />
-              </div>
+              <button type="button" onClick={addPaymentRow}
+                style={{ marginTop: '6px', color: '#6b5f54', background: 'none', border: '1px dashed #c4b8aa', borderRadius: '6px', fontSize: '0.8rem', padding: '6px 12px', cursor: 'pointer', width: '100%' }}>
+                ＋ 新增付款方式
+              </button>
+              <p style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '6px', textAlign: 'right' }}>
+                合計 {fmtAmt(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0))}
+              </p>
             </div>
           )}
 
@@ -443,7 +474,7 @@ export default function VisitLogPage() {
                       <span style={{
                         fontSize: '0.68rem', padding: '2px 8px', borderRadius: '10px',
                         background: statusStyle.bg, color: statusStyle.color,
-                      }}>{status}{v.payment_method ? `・${v.payment_method}` : ''}</span>
+                      }}>{status}</span>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '6px' }}>
                       {(v.items?.length ? v.items : [{ id: 0, category: '服務', label: v.service } as VisitLogItem]).map((it, idx) => {
@@ -455,6 +486,15 @@ export default function VisitLogPage() {
                         )
                       })}
                     </div>
+                    {isPaidStatus(status) && v.payments?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '4px' }}>
+                        {v.payments.map(p => (
+                          <span key={p.id} style={{ color: '#9a4a4a', fontSize: '0.72rem', background: '#fdf0f0', padding: '2px 8px', borderRadius: '4px' }}>
+                            {p.method} {fmtAmt(p.amount)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {v.next_visit_date && (
                       <div style={{ color: '#9a8f84', fontSize: '0.75rem', marginTop: '6px' }}>下次預約：{v.next_visit_date}</div>
                     )}
