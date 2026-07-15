@@ -9,7 +9,7 @@ import {
 
 interface PickedClient { id: number; name: string; level: MembershipLevel | null }
 interface Item { category: string; label: string }
-interface InventoryItem { id: number; name: string }
+interface InventoryItem { id: number; name: string; spec: string | null; unit: string }
 
 interface Appt {
   id: number
@@ -237,7 +237,7 @@ export default function VisitLogPage() {
         {PRESET_SERVICE_OPTIONS.map(s => <option key={s} value={s} />)}
       </datalist>
       <datalist id="inventory-options">
-        {inventory.map(i => <option key={i.id} value={i.name} />)}
+        {inventory.map(i => <option key={i.id} value={i.spec ? `${i.name} ${i.spec}` : i.name} />)}
       </datalist>
 
       {/* Header */}
