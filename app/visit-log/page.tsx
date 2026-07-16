@@ -351,6 +351,9 @@ export default function VisitLogPage() {
 
           <div>
             <Label>今日項目 *</Label>
+            <p style={{ color: '#9a8f84', fontSize: '0.72rem', marginTop: '-2px', marginBottom: '6px' }}>
+              可直接輸入任何名稱，下拉只是建議清單，不會限制選項
+            </p>
             <div className="space-y-2">
               {items.map(item => (
                 <div key={item.id} style={{ display: 'flex', gap: '6px' }}>
@@ -360,7 +363,7 @@ export default function VisitLogPage() {
                   </select>
                   <input value={item.label} onChange={e => updateItemRow(item.id, 'label', e.target.value)}
                     list={item.category === '服務' ? 'service-options' : 'inventory-options'}
-                    placeholder={item.category === '產品' ? '例：精華液' : item.category === '拿預訂' ? '例：化妝品組' : '例：泡光氧彗'}
+                    placeholder={item.category === '產品' ? '自行輸入，例：精華液' : item.category === '拿預訂' ? '自行輸入，例：化妝品組' : '自行輸入，例：泡光氧彗'}
                     style={inputStyle} />
                   <button type="button" onClick={() => removeItemRow(item.id)}
                     style={{ color: '#c4b8aa', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px', flexShrink: 0 }}>
