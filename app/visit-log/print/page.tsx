@@ -49,7 +49,6 @@ function VisitLogPrintContent() {
     .filter(m => m !== '商品券')
     .map(m => ({ method: m, total: cashPayments.filter(p => p.method === m).reduce((s, p) => s + p.amount, 0) }))
     .filter(m => m.total > 0)
-  const hasVoucher = visits.some(v => (v.payments || []).some(p => p.method === '商品券'))
 
   return (
     <div style={{ background: '#fff', color: '#000', minHeight: '100vh' }}>
@@ -133,11 +132,6 @@ function VisitLogPrintContent() {
                 {methodTotals.map(m => (
                   <span key={m.method}>{m.method} {fmtAmt(m.total)}</span>
                 ))}
-              </div>
-            )}
-            {hasVoucher && (
-              <div style={{ textAlign: 'right', fontSize: '0.7rem', color: '#888', marginTop: '2px' }}>
-                （商品券已於購買時預收，不列入合計）
               </div>
             )}
           </>
