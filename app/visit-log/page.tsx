@@ -207,7 +207,7 @@ export default function VisitLogPage() {
     load()
   }
 
-  function startEdit(v: VisitLogWithClient) {
+  function startEdit(v: VisitLogWithClient, forceStatus?: string) {
     setEditingId(v.id)
     setSelectedClient(v.client_id ? { id: v.client_id, name: v.client_name, level: v.client_level } : null)
     setClientSearch(v.client_name)
@@ -218,11 +218,15 @@ export default function VisitLogPage() {
       ? v.payments.map(p => ({ id: uid(), method: p.method, amount: String(p.amount) }))
       : [{ id: uid(), method: '', amount: '' }])
     setForm({
-      payment_status: v.payment_status || (v.paid ? '已收費' : '未收費'),
+      payment_status: forceStatus || v.payment_status || (v.paid ? '已收費' : '未收費'),
       next_visit_date: v.next_visit_date || '',
       note: v.note || '',
     })
     setShowForm(true)
+  }
+
+  function quickCharge(v: VisitLogWithClient) {
+    startEdit(v, '已收費')
   }
 
   const isPaidStatus = (s: string) => s !== '未收費'
@@ -479,6 +483,12 @@ export default function VisitLogPage() {
                         fontSize: '0.68rem', padding: '2px 8px', borderRadius: '10px',
                         background: statusStyle.bg, color: statusStyle.color,
                       }}>{status}</span>
+                      {!isPaidStatus(status) && (
+                        <button onClick={() => quickCharge(v)}
+                          style={{ fontSize: '0.68rem', padding: '2px 10px', borderRadius: '10px', background: '#2c2825', color: '#f7f4ef', border: 'none', cursor: 'pointer' }}>
+                          收費
+                        </button>
+                      )}
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '6px' }}>
                       {(v.items?.length ? v.items : [{ id: 0, category: '服務', label: v.service } as VisitLogItem]).map((it, idx) => {

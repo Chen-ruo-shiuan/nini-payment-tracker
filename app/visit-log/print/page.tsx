@@ -42,12 +42,11 @@ function VisitLogPrintContent() {
   const isPaidStatus = (v: VisitLogWithClient) => (v.payment_status || (v.paid ? '已收費' : '未收費')) !== '未收費'
   const paidCount = visits.filter(isPaidStatus).length
 
-  // 商品券已於預購時收款，當天不重複計入合計／方式統計
-  const cashPayments = visits.flatMap(v => (v.payments || []).filter(p => p.method !== '商品券'))
-  const paidTotal = cashPayments.reduce((s, p) => s + p.amount, 0)
+  // 商品券已於預購時收款，合計不重複計入，但仍列出各方式統計供追蹤
+  const allPayments = visits.flatMap(v => v.payments || [])
+  const paidTotal = allPayments.filter(p => p.method !== '商品券').reduce((s, p) => s + p.amount, 0)
   const methodTotals = VISIT_LOG_PAY_METHODS
-    .filter(m => m !== '商品券')
-    .map(m => ({ method: m, total: cashPayments.filter(p => p.method === m).reduce((s, p) => s + p.amount, 0) }))
+    .map(m => ({ method: m, total: allPayments.filter(p => p.method === m).reduce((s, p) => s + p.amount, 0) }))
     .filter(m => m.total > 0)
 
   return (
