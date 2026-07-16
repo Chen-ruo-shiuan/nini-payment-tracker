@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!row) return NextResponse.json({ error: '找不到記錄' }, { status: 404 })
 
   const body = await req.json()
-  const { client_id, client_name, date, items, payment_status, payments, next_visit_date, note } = body
+  const { client_id, client_name, date, items, payment_status, payments, estimated_amount, next_visit_date, note } = body
 
   const validItems = ((items ?? []) as Item[]).filter(i => i.label?.trim())
   const status: string = payment_status || '未收費'
@@ -48,7 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       paid: isPaid ? 1 : 0,
       payment_status: status,
       payment_method: isPaid ? paymentSummary : null,
-      amount: isPaid ? paymentTotal : null,
+      amount: isPaid ? paymentTotal : (estimated_amount != null && estimated_amount !== '' ? Number(estimated_amount) : null),
       next_visit_date: next_visit_date || null,
       note: note || null,
     })

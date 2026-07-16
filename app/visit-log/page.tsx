@@ -55,7 +55,7 @@ const fmtAmt = (n: number) => `$ ${n.toLocaleString()}`
 
 interface Payment { method: string; amount: string }
 
-const emptyForm = { payment_status: '未收費' as string, next_visit_date: '', note: '' }
+const emptyForm = { payment_status: '未收費' as string, next_visit_date: '', note: '', estimatedAmount: '' }
 
 export default function VisitLogPage() {
   const [date, setDate] = useState(todayLocal())
@@ -181,6 +181,7 @@ export default function VisitLogPage() {
         items: items.map(i => ({ category: i.category, label: i.label })),
         payment_status: form.payment_status,
         payments: payments.map(p => ({ method: p.method, amount: p.amount })),
+        estimated_amount: form.payment_status === '未收費' && form.estimatedAmount ? Number(form.estimatedAmount) : undefined,
         next_visit_date: form.next_visit_date || null,
         note: form.note || null,
       }
@@ -216,11 +217,12 @@ export default function VisitLogPage() {
       : [{ id: uid(), category: '服務', label: '' }])
     setPayments(v.payments?.length
       ? v.payments.map(p => ({ id: uid(), method: p.method, amount: String(p.amount) }))
-      : [{ id: uid(), method: '', amount: '' }])
+      : [{ id: uid(), method: '', amount: v.amount != null ? String(v.amount) : '' }])
     setForm({
       payment_status: forceStatus || v.payment_status || (v.paid ? '已收費' : '未收費'),
       next_visit_date: v.next_visit_date || '',
       note: v.note || '',
+      estimatedAmount: !v.payments?.length && v.amount != null ? String(v.amount) : '',
     })
     setShowForm(true)
   }
@@ -431,6 +433,14 @@ export default function VisitLogPage() {
             </div>
           )}
 
+          {form.payment_status === '未收費' && (
+            <div className="space-y-1">
+              <Label>預估金額（選填，供未收費時參考，之後收費不會自動加總）</Label>
+              <input type="number" value={form.estimatedAmount} onChange={e => set('estimatedAmount', e.target.value)}
+                placeholder="0" min="0" style={{ ...inputStyle, width: 'auto', minWidth: '160px' }} />
+            </div>
+          )}
+
           <div className="space-y-1">
             <Label>下次預約日期</Label>
             <input type="date" value={form.next_visit_date} onChange={e => set('next_visit_date', e.target.value)}
@@ -517,8 +527,12 @@ export default function VisitLogPage() {
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, marginLeft: '8px' }}>
-                    {isPaidStatus(status) && v.amount != null && (
-                      <span style={{ color: '#9a4a4a', fontSize: '0.95rem', fontWeight: 500 }}>{fmtAmt(v.amount)}</span>
+                    {v.amount != null && (
+                      isPaidStatus(status) ? (
+                        <span style={{ color: '#9a4a4a', fontSize: '0.95rem', fontWeight: 500 }}>{fmtAmt(v.amount)}</span>
+                      ) : (
+                        <span style={{ color: '#9a8f84', fontSize: '0.85rem' }}>{fmtAmt(v.amount)}（預估）</span>
+                      )
                     )}
                     <button onClick={() => startEdit(v)}
                       style={{ color: '#9a8f84', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', padding: '2px' }}>

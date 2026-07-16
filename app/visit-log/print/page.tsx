@@ -112,7 +112,7 @@ function VisitLogPrintContent() {
                               {fmtAmt(v.amount ?? 0)}
                             </div>
                           </>
-                        ) : (isPaidStatus(v) && v.amount != null ? fmtAmt(v.amount) : '')}
+                        ) : (v.amount != null ? fmtAmt(v.amount) + (isPaidStatus(v) ? '' : '（預估）') : '')}
                       </td>
                       <td style={cellStyle}>{v.next_visit_date || ''}</td>
                       <td style={cellStyle}>{v.note || ''}</td>
