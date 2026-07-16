@@ -20,9 +20,9 @@ export async function GET(req: NextRequest) {
   `
 
   const rows = date
-    ? db.prepare(`${base} WHERE v.date = ? ORDER BY v.date DESC, v.id DESC`).all(date)
+    ? db.prepare(`${base} WHERE v.date = ? ORDER BY v.id ASC`).all(date)
     : from && to
-      ? db.prepare(`${base} WHERE v.date BETWEEN ? AND ? ORDER BY v.date DESC, v.id DESC`).all(from, to)
+      ? db.prepare(`${base} WHERE v.date BETWEEN ? AND ? ORDER BY v.date ASC, v.id ASC`).all(from, to)
       : db.prepare(`${base} ORDER BY v.date DESC, v.id DESC LIMIT 200`).all()
 
   for (const v of rows as { id: number; items?: unknown[]; payments?: unknown[] }[]) {
