@@ -226,7 +226,8 @@ export default function VisitLogPage() {
   }
 
   const isPaidStatus = (s: string) => s !== '未收費'
-  const paidTotal = visits.filter(v => isPaidStatus(v.payment_status)).reduce((s, v) => s + (v.amount || 0), 0)
+  // 商品券已於購買時預收，當天不重複計入合計
+  const paidTotal = visits.reduce((s, v) => s + (v.payments || []).filter(p => p.method !== '商品券').reduce((s2, p) => s2 + p.amount, 0), 0)
   const loggedClientIds = new Set(visits.map(v => v.client_id).filter(Boolean))
   const pendingAppts = appts.filter(a => !loggedClientIds.has(a.client_id))
 

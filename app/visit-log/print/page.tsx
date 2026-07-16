@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { VisitLogWithClient } from '@/types'
+import { VisitLogWithClient, VISIT_LOG_PAY_METHODS } from '@/types'
 
 const fmtAmt = (n: number) => `$${n.toLocaleString()}`
 
@@ -41,7 +41,15 @@ function VisitLogPrintContent() {
   const rangeLabel = date ? date : from && to ? `${from} ～ ${to}` : '全部'
   const isPaidStatus = (v: VisitLogWithClient) => (v.payment_status || (v.paid ? '已收費' : '未收費')) !== '未收費'
   const paidCount = visits.filter(isPaidStatus).length
-  const paidTotal = visits.filter(isPaidStatus).reduce((s, v) => s + (v.amount || 0), 0)
+
+  // 商品券已於預購時收款，當天不重複計入合計／方式統計
+  const cashPayments = visits.flatMap(v => (v.payments || []).filter(p => p.method !== '商品券'))
+  const paidTotal = cashPayments.reduce((s, p) => s + p.amount, 0)
+  const methodTotals = VISIT_LOG_PAY_METHODS
+    .filter(m => m !== '商品券')
+    .map(m => ({ method: m, total: cashPayments.filter(p => p.method === m).reduce((s, p) => s + p.amount, 0) }))
+    .filter(m => m.total > 0)
+  const hasVoucher = visits.some(v => (v.payments || []).some(p => p.method === '商品券'))
 
   return (
     <div style={{ background: '#fff', color: '#000', minHeight: '100vh' }}>
@@ -120,6 +128,18 @@ function VisitLogPrintContent() {
               <span>共 {visits.length} 筆</span>
               <span>已收款 {paidCount} 筆　合計 {fmtAmt(paidTotal)}</span>
             </div>
+            {methodTotals.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', marginTop: '4px', fontSize: '0.78rem', color: '#444' }}>
+                {methodTotals.map(m => (
+                  <span key={m.method}>{m.method} {fmtAmt(m.total)}</span>
+                ))}
+              </div>
+            )}
+            {hasVoucher && (
+              <div style={{ textAlign: 'right', fontSize: '0.7rem', color: '#888', marginTop: '2px' }}>
+                （商品券已於購買時預收，不列入合計）
+              </div>
+            )}
           </>
         )}
       </div>
