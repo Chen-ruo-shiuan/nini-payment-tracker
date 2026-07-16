@@ -4,17 +4,17 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { VisitLogWithClient } from '@/types'
 
-const fmtAmt = (n: number) => `$ ${n.toLocaleString()}`
+const fmtAmt = (n: number) => `$${n.toLocaleString()}`
 
 const COLS = [
-  { label: '日期',   width: '9%' },
-  { label: '客人',   width: '9%' },
-  { label: '項目',   width: '27%' },
-  { label: '付款狀態', width: '8%' },
-  { label: '付款方式', width: '14%' },
-  { label: '金額',   width: '9%' },
-  { label: '下次預約', width: '10%' },
-  { label: '備註',   width: '14%' },
+  { label: '日期',   width: '8%' },
+  { label: '客人',   width: '7%' },
+  { label: '項目',   width: '24%' },
+  { label: '付款狀態', width: '7%' },
+  { label: '付款方式', width: '22%' },
+  { label: '金額',   width: '13%' },
+  { label: '下次預約', width: '9%' },
+  { label: '備註',   width: '10%' },
 ]
 
 const cellStyle: React.CSSProperties = {
@@ -94,9 +94,9 @@ function VisitLogPrintContent() {
                       </td>
                       <td style={{ ...cellStyle, textAlign: 'center' }}>{v.payment_status || (v.paid ? '已收費' : '未收費')}</td>
                       <td style={cellStyle}>
-                        {v.payments?.length
+                        {v.payments && v.payments.length > 1
                           ? v.payments.map((p, idx) => <div key={idx}>{`${p.method} ${fmtAmt(p.amount)}`}</div>)
-                          : (v.payment_method || '')}
+                          : (v.payments?.[0]?.method || v.payment_method || '')}
                       </td>
                       <td style={{ ...cellStyle, textAlign: 'right' }}>{isPaidStatus(v) && v.amount != null ? fmtAmt(v.amount) : ''}</td>
                       <td style={cellStyle}>{v.next_visit_date || ''}</td>
