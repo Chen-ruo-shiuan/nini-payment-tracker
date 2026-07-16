@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const validItems = ((items ?? []) as Item[]).filter(i => i.label?.trim())
   const status: string = payment_status || '未收費'
   const isPaid = status !== '未收費'
-  const validPayments = ((payments ?? []) as Payment[]).filter(p => p.method && Number(p.amount) > 0)
+  const validPayments = ((payments ?? []) as Payment[]).filter(p => p.method && p.amount !== '' && p.amount != null && Number(p.amount) >= 0)
 
   if (!date)                return NextResponse.json({ error: '請選擇日期' },     { status: 400 })
   if (!client_name?.trim()) return NextResponse.json({ error: '請輸入客人姓名' }, { status: 400 })

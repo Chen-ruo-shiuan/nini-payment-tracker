@@ -248,7 +248,7 @@ export type VisitLogItemType = typeof VISIT_LOG_ITEM_TYPES[number]
 export const VISIT_LOG_PAYMENT_STATUSES = ['未收費', '已收費', '定金'] as const
 export type VisitLogPaymentStatus = typeof VISIT_LOG_PAYMENT_STATUSES[number]
 
-export const VISIT_LOG_PAY_METHODS = ['匯款', '現金', 'LINE Pay', '儲值金', '金米'] as const
+export const VISIT_LOG_PAY_METHODS = ['匯款', '現金', 'LINE Pay', '儲值金', '金米', '商品券'] as const
 
 export interface VisitLogItem {
   id: number

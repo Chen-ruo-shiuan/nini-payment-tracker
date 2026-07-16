@@ -408,7 +408,7 @@ export default function VisitLogPage() {
                       {VISIT_LOG_PAY_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                     <input type="number" value={pay.amount} onChange={e => updatePaymentRow(pay.id, 'amount', e.target.value)}
-                      placeholder="金額" min="1" style={{ ...inputStyle, width: '110px', flexShrink: 0 }} />
+                      placeholder="金額" min="0" style={{ ...inputStyle, width: '110px', flexShrink: 0 }} />
                     <button type="button" onClick={() => removePaymentRow(pay.id)}
                       style={{ color: '#c4b8aa', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px', flexShrink: 0 }}>
                       ×
